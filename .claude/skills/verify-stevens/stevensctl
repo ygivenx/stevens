@@ -292,7 +292,7 @@ def cmd_api(argv):
     if '--help' in argv or '--as' not in argv:
         print('stevensctl api: drive the app HTTP surface as a role.\n')
         print('Usage: stevensctl api --as Associate|Partner SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
-        print('Surfaces: health, state, ingest. --field prints one JSON path; --until polls')
+        print('Surfaces: health, state, ingest, extract. --field prints one JSON path; --until polls')
         print('until that path is truthy (30s); --save stores the body under evidence.\n')
         print('Examples:')
         print('  stevensctl api --as Associate state --expect 200 --field events --save state.json')
@@ -313,9 +313,9 @@ def cmd_api(argv):
             surface = argv[i]
             break
         i += 1
-    methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest')}
+    methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest'), 'extract': ('POST', '/api/extract')}
     if surface not in methods:
-        print('unknown surface: %s (health, state, ingest).' % surface, file=sys.stderr)
+        print('unknown surface: %s (health, state, ingest, extract).' % surface, file=sys.stderr)
         return 2
     method, path = methods[surface]
     expect = int(argv[argv.index('--expect') + 1]) if '--expect' in argv else None
@@ -426,7 +426,7 @@ def main(argv):
         print('  doctor    check tools, key, models, ports')
         print('  stack     up|down|logs|restart|status')
         print('  seed      stage fixtures + fresh ledger')
-        print('  api       drive HTTP as a role (health, state, ingest)')
+        print('  api       drive HTTP as a role (health, state, ingest, extract)')
         print('  browser   run|snapshot UI flows (day 6)')
         print('  test      typecheck + vitest + build (day 3)')
         print('  evidence  dir|list')
