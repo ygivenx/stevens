@@ -110,4 +110,49 @@ describe('state filter', () => {
     expect(filtered.draft.sentences[0].citations[0]).toMatchObject({ quote: 'THEIRS-INDIA-JULIET' });
     expect(filtered.draft.sentences[1].citations[0]).toMatchObject({ quote: OWNER_ONLY });
   });
+
+  it('keeps the bridge reason for the owner and drops it for anyone else', () => {
+    const manifest = {
+      callId: 'c', purpose: 'bridge' as const, viewerRole: 'Associate' as const, model: 'm', stageKey: 'k',
+      included: [
+        { sourceId: 'mine1', access: 'visible' as const, ruleId: 'r-personal-owner' },
+        { sourceId: 'team1', access: 'visible' as const, ruleId: 'r-team-associate' },
+      ],
+      withheld: [], webSearch: false, tokens: { raw: 1, assembled: 2 },
+    };
+    const bridge: LedgerEvent = {
+      at: '2026-10-27T00:00:04Z', type: 'bridge.judged',
+      bridge: { id: 'b-1', personalClaimId: 'c-mine', workClaimId: 'c-team', relation: 'context', reason: 'MINE-GOLF-HOTEL proves the point' },
+      candidate: ['c-mine', 'c-team'], manifest,
+      api: { model: 'm', responseId: 'r', usage: { costUsd: 0 }, stageKey: 'k' },
+    };
+    const mine: LedgerEvent[] = [...EVENTS, extracted('team1', [{ id: 'c-team', sourceId: 'team1', entity: 'e', quote: 'TEAM-ALPHA-BRAVO' }]), bridge];
+    const ownerBody = JSON.stringify(filterState(mine, 'Associate'));
+    expect(ownerBody).toContain('MINE-GOLF-HOTEL proves the point');
+    expect(ownerBody).toContain('c-mine');
+    const otherBody = JSON.stringify(filterState(mine, 'Partner'));
+    expect(otherBody).not.toContain('MINE-GOLF-HOTEL');
+    expect(otherBody).not.toContain('proves the point');
+    expect(otherBody).not.toContain('"personalClaimId":"c-mine"');
+    const other = filterState(mine, 'Partner').find((e) => e.type === 'bridge.judged');
+    if (other?.type !== 'bridge.judged') throw new Error('bridge missing');
+    expect(other.bridge).toBeNull();
+  });
+
+  it('withholds non-visible candidate ids on bridges', () => {
+    const manifest = {
+      callId: 'c', purpose: 'bridge' as const, viewerRole: 'Associate' as const, model: 'm', stageKey: 'k',
+      included: [], withheld: [], webSearch: false, tokens: { raw: 0, assembled: 0 },
+    };
+    const bridge: LedgerEvent = {
+      at: '2026-10-27T00:00:04Z', type: 'bridge.judged', bridge: null,
+      candidate: ['c-mine', 'c-team'], manifest,
+      api: { model: 'm', responseId: 'r', usage: { costUsd: 0 }, stageKey: 'k' },
+    };
+    const mine: LedgerEvent[] = [...EVENTS, extracted('team1', [{ id: 'c-team', sourceId: 'team1', entity: 'e', quote: 'TEAM-ALPHA-BRAVO' }]), bridge];
+    const other = filterState(mine, 'Partner').find((e) => e.type === 'bridge.judged');
+    if (other?.type !== 'bridge.judged') throw new Error('bridge missing');
+    expect(other.candidate).toContain('withheld');
+    expect(JSON.stringify(other)).not.toContain('c-mine');
+  });
 });

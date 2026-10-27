@@ -11,7 +11,7 @@ The server owns the boundary: a Hono app on :8787 holds the vaults, policy, asse
 | server-state | GET /api/state returns the viewer-filtered ledger projection for the X-Viewer-Role caller | api-only | API | - | 2026-10-27 | `server/boundary/filter.ts`, `/tmp/stevens-verify/day4/evidence/assoc2.json` |
 | server-actions | POST ingest, ask, release, approve, and reject run the pipeline and gates for the calling viewer | api-only | API | - | 2026-10-27 | `server/index.ts` |
 | server-media | GET /api/media/:sourceId serves fixture media only after a policy check; fixtures are never served statically | api-only | API | - | 2026-10-27 | `server/index.ts` |
-| server-events | GET /api/events streams pipeline progress over server-sent events | api-only | API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day2/evidence/sse-clean.out` |
+| server-events | GET /api/events sends only empty `changed` signals over server-sent events | api-only | API | - | 2026-10-27 | `server/index.ts`, `server/routes.test.ts` |
 
 ## How to get to it (user POV)
 
@@ -34,4 +34,4 @@ Preconditions: baseline.
 - Voice is not on the Responses API: `fetch` plus `FormData` to `POST /v1/asr/transcribe` with DIARIZATION mode (SPEC.md § Meta API wiring).
 - `server-state` drops non-visible sources entirely: text, title, and id never reach that viewer (SPEC.md § Contracts).
 - `seed` truncates the ledger, so an SSE stream open across a reseed sees inconsistent offsets; reseed with no watchers.
-- **Known defect (found 2026-10-27, open):** `GET /api/events` ignores `X-Viewer-Role` and streams raw ledger events, so an Associate's stream carries the full text of the partner-only conflicts memo and the wall note (`server/index.ts:36`). The client only uses the stream as a ping (`web/src/api.ts:55`). Fix in SPEC.md v3 day 9a: send only `changed` with `data: {}`.
+- Day 9a fix: `GET /api/events` sends only `event: changed` with `data: {}` and never ledger text (`server/index.ts`); covered by `server/routes.test.ts`. The client only uses the stream as a ping (`web/src/api.ts:55`).

@@ -20,7 +20,7 @@ import { filterState, indexEvents } from './boundary/filter.js';
 import { fakeMode } from './meta/client.js';
 import { releaseClaim } from './boundary/release.js';
 
-const app = new Hono();
+export const app = new Hono();
 
 function viewerRole(header: string | undefined): Role {
   return header === 'Partner' ? 'Partner' : 'Associate';
@@ -38,23 +38,21 @@ app.get('/api/events', (c) => {
   c.header('Cache-Control', 'no-cache');
   c.header('Connection', 'keep-alive');
   const encoder = new TextEncoder();
-  let sent = 0;
+  let count = readAll().length;
   let timer: ReturnType<typeof setInterval> | null = null;
+  const changed = () => encoder.encode(`event: changed\ndata: {}\n\n`);
   const stream = new ReadableStream({
     start(controller) {
-      const push = () => {
-        const events = readAll();
-        while (sent < events.length) {
-          const event = events[sent];
-          controller.enqueue(encoder.encode(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`));
-          sent += 1;
-        }
-      };
-      push();
+      controller.enqueue(changed());
       timer = setInterval(() => {
         try {
-          push();
-          controller.enqueue(encoder.encode(': ping\n\n'));
+          const next = readAll().length;
+          if (next !== count) {
+            count = next;
+            controller.enqueue(changed());
+          } else {
+            controller.enqueue(encoder.encode(': ping\n\n'));
+          }
         } catch {
           if (timer) clearInterval(timer);
         }
@@ -183,5 +181,7 @@ app.use('/*', serveStatic({ root: './dist-web' }));
 app.get('*', serveStatic({ path: './dist-web/index.html' }));
 
 const port = Number(process.env.PORT ?? 8787);
-serve({ fetch: app.fetch, port });
-console.log('stevens server on :' + port);
+if (!process.env.VITEST) {
+  serve({ fetch: app.fetch, port });
+  console.log('stevens server on :' + port);
+}
