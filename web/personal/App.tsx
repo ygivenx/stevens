@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play } from 'lucide-react';
+import { Play, CalendarDays, Library, Share2, Building2, Ear, Sparkles, Send } from 'lucide-react';
 import type { Claim, Draft, SourceRef } from '../../shared/data.js';
 import {
   getState, getBundle, askQuestion, shareClaim, getReceipts,
@@ -67,22 +67,57 @@ export default function App() {
     return map;
   }, [state]);
 
+  const navItems: { key: Route; label: string; icon: typeof CalendarDays }[] = [
+    { key: 'today', label: 'Today', icon: CalendarDays },
+    { key: 'captures', label: 'Captures', icon: Library },
+    { key: 'shared', label: 'Shared', icon: Share2 },
+  ];
   return (
-    <div className="mx-auto max-w-5xl px-5 pb-24">
+    <div className="min-h-screen">
+      <div className="mx-auto flex max-w-6xl gap-8 px-5 pb-28">
+        <aside className="sticky top-6 hidden h-fit w-60 shrink-0 self-start lg:block">
+          <div className="rounded-[14px] border border-hairline bg-paper/90 p-5 shadow-[0_10px_30px_-18px_rgba(28,26,21,0.25)] backdrop-blur">
+            <p className="eyebrow text-brass">A chief of staff</p>
+            <h1 className="mt-1 font-display text-4xl tracking-tight">Stevens</h1>
+            <p className="mt-0.5 font-display text-base italic text-smoke">yours</p>
+            <div className="divider-fade mt-4" />
+            <nav className="mt-4 space-y-1" aria-label="Sections">
+              {navItems.map((item) => (
+                <button
+                  key={item.key}
+                  data-testid={'nav-' + item.key}
+                  onClick={() => go(item.key)}
+                  className={
+                    'flex w-full items-center gap-2.5 rounded-full px-3.5 py-2 text-sm font-semibold transition-all ' +
+                    (route === item.key ? 'bg-ink text-paper shadow-sm' : 'text-smoke hover:bg-ivory hover:text-ink')
+                  }
+                >
+                  <item.icon size={15} aria-hidden />
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            <div className="mt-4 rounded-xl bg-ivory/80 p-3 text-[11px] leading-relaxed text-smoke">
+              Your notebook stays yours. The firm&apos;s secrets stay the firm&apos;s.
+            </div>
+          </div>
+        </aside>
+        <div className="min-w-0 flex-1">
       <TopBar state={state} />
-      {error !== '' && <p className="mt-3 text-sm text-oxblood">{error}</p>}
-      <nav className="mb-6 flex gap-6 border-b border-hairline" aria-label="Sections">
-        {(['today', 'captures', 'shared'] as Route[]).map((name) => (
+      {error !== '' && <p className="mt-3 rounded-lg border border-oxblood/20 bg-oxblood-soft/50 px-3 py-2 text-sm text-oxblood">{error}</p>}
+      <nav className="mb-6 flex gap-2 border-b border-hairline lg:hidden" aria-label="Sections">
+        {navItems.map((item) => (
           <button
-            key={name}
-            data-testid={'nav-' + name}
-            onClick={() => go(name)}
+            key={item.key}
+            data-testid={'nav-' + item.key + '-m'}
+            onClick={() => go(item.key)}
             className={
-              'border-b-2 px-1 pb-2 font-display text-lg capitalize ' +
-              (route === name ? 'border-brass text-ink' : 'border-transparent text-smoke hover:text-ink')
+              'flex flex-1 items-center justify-center gap-1.5 border-b-2 px-1 pb-2.5 pt-1 text-sm font-semibold ' +
+              (route === item.key ? 'border-brass text-ink' : 'border-transparent text-smoke')
             }
           >
-            {name === 'today' ? 'Today' : name === 'captures' ? 'Captures' : 'Shared'}
+            <item.icon size={14} aria-hidden />
+            {item.label}
           </button>
         ))}
       </nav>
@@ -101,9 +136,25 @@ export default function App() {
         {route === 'captures' && <CapturesView state={state} onShare={(claimId, dealId) => setShareFor({ claimId, dealId })} onToast={setToast} />}
         {route === 'shared' && <SharedView state={state} claimsById={claimsById} />}
       </main>
-      <footer className="mt-10 border-t border-hairline pt-4 text-xs text-smoke">
-        <p>Your notebook stays yours. The firm&apos;s secrets stay the firm&apos;s. <span className="font-semibold">Stevens drafts; the human decides.</span></p>
+      <footer className="mt-10 border-t border-hairline pt-4 text-xs leading-relaxed text-smoke">
+        <p>Your notebook stays yours. The firm&apos;s secrets stay the firm&apos;s. <span className="font-semibold text-ink/80">Stevens drafts; the human decides.</span></p>
       </footer>
+        </div>
+      </div>
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-hairline bg-paper/95 backdrop-blur lg:hidden" aria-label="Sections">
+        <div className="mx-auto flex max-w-6xl">
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={() => go(item.key)}
+              className={'flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-semibold ' + (route === item.key ? 'text-ink' : 'text-smoke')}
+            >
+              <item.icon size={17} aria-hidden />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </nav>
       {receiptsFor && <ReceiptsDrawer draftId={receiptsFor} onClose={() => setReceiptsFor(null)} />}
       {shareFor && state && (
         <ShareSheet
@@ -126,16 +177,18 @@ export default function App() {
 
 function TopBar({ state }: { state: PersonalState | null }) {
   return (
-    <header className="pb-4 pt-8">
-      <p className="text-xs font-bold uppercase tracking-[0.24em] text-brass">A chief of staff</p>
-      <h1 className="mt-1 font-display text-5xl tracking-tight">Stevens</h1>
-      <p className="mt-1 font-display text-lg italic text-smoke">yours</p>
-      <div className="mt-4 h-px bg-brass/60" />
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
+    <header className="pb-5 pt-8">
+      <div className="lg:hidden">
+        <p className="eyebrow text-brass">A chief of staff</p>
+        <h1 className="mt-1 font-display text-4xl tracking-tight">Stevens <span className="font-display text-xl italic text-smoke">yours</span></h1>
+      </div>
+      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[14px] border border-hairline bg-paper/90 px-4 py-3 shadow-[0_10px_30px_-20px_rgba(28,26,21,0.3)] backdrop-blur lg:mt-0">
+        <div className="flex items-center gap-2.5">
           <Avatar name="Alex Rivera" />
-          <span className="text-sm font-semibold">Alex Rivera · Associate</span>
-          <span className="rounded-md border border-hairline px-2 py-0.5 text-xs text-smoke">Simulated sign-in</span>
+          <div className="leading-tight">
+            <p className="text-sm font-bold">Alex Rivera · Associate</p>
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-smoke">Simulated sign-in</p>
+          </div>
         </div>
         <div className="flex-1" />
         {state && <StatusLine line={state.status.line} busy={state.status.busy} />}
@@ -165,9 +218,10 @@ function TodayView({ state, claimsById, sourcesById, onAsk, onShare, onReceipts,
   const meetings = state.meetings;
   return (
     <div className="space-y-6">
-      <div>
-        <p className="font-display text-xl">{dateLine}</p>
-        <p className="mt-1 text-sm text-smoke">
+      <div className="rounded-[14px] border border-hairline bg-paper/90 p-5 shadow-[0_10px_30px_-20px_rgba(28,26,21,0.3)]">
+        <p className="eyebrow text-brass">Wednesday briefing</p>
+        <p className="mt-1 font-display text-[26px] leading-tight">{dateLine}</p>
+        <p className="mt-1 text-sm font-medium text-smoke">
           {meetings.length === 0 ? 'Nothing needs you in the next 24 hours' : meetings.length + ' meeting needs you'}
         </p>
       </div>
@@ -243,20 +297,25 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
   }
 
   return (
-    <Card testid="meeting-card">
-      <div className="flex flex-wrap items-center gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-brass">{meeting.company} · second meeting</p>
-          <h2 className="mt-1 font-display text-2xl">{meeting.title}</h2>
-          <p className="mt-1 text-sm text-smoke">{formatMeetingTime(meeting.startsAt)}</p>
+    <Card testid="meeting-card" lift>
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brass-soft text-brass-deep">
+          <CalendarDays size={19} aria-hidden />
         </div>
-        <div className="flex-1" />
-        <div className="flex -space-x-2">
-          {team.map((member) => (
-            <Avatar key={member.id} name={member.name} />
-          ))}
+        <div className="min-w-0 flex-1">
+          <p className="eyebrow text-brass">{meeting.company} · second meeting</p>
+          <h2 className="mt-1 font-display text-[26px] leading-tight">{meeting.title}</h2>
+          <p className="mt-1 text-sm font-medium text-smoke">{formatMeetingTime(meeting.startsAt)}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex -space-x-2">
+            {team.map((member) => (
+              <Avatar key={member.id} name={member.name} />
+            ))}
+          </div>
         </div>
       </div>
+      <div className="divider-fade mt-5" />
       {!brief && (
         <div className="mt-5">
           <Skeleton label="Preparing your brief…" />
@@ -264,6 +323,10 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
       )}
       {brief && (
         <div className="mt-5 space-y-6">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} aria-hidden className="text-brass" />
+            <Kicker>Before you walk in</Kicker>
+          </div>
           {(brief.bridges ?? []).map((bridge) => (
             <BridgeBlock
               key={bridge.id}
@@ -279,8 +342,11 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
           <BriefFooter brief={brief} now={state.now} onReceipts={() => onReceipts(brief.id)} />
         </div>
       )}
-      <div className="mt-6 border-t border-hairline pt-5">
-        <Kicker>Ask about {meeting.company}</Kicker>
+      <div className="mt-6 rounded-xl border border-hairline bg-ivory/60 p-4">
+        <div className="flex items-center gap-2">
+          <Send size={13} aria-hidden className="text-brass" />
+          <Kicker>Ask about {meeting.company}</Kicker>
+        </div>
         <div className="mt-2 flex flex-wrap gap-2">
           <input
             data-testid="ask-input"
@@ -324,38 +390,42 @@ function BridgeBlock({ bridge, dealId, claimsById, sourcesById, onShare }: {
   const workSource = sourcesById.get(work.sourceId);
   const relationWord = bridge.relation === 'contradicts' ? 'Contradicts' : bridge.relation === 'supports' ? 'Supports' : 'Different definitions';
   return (
-    <div data-testid="bridge" className="rounded-md border border-hairline bg-ivory/60 p-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <Kicker>The deck says</Kicker>
-          <p className="mt-2 font-display text-[17px] leading-relaxed">“{work.quote}”</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+    <div data-testid="bridge" className="overflow-hidden rounded-xl border border-hairline bg-paper">
+      <div className="grid md:grid-cols-2">
+        <div className="border-b border-hairline bg-navy-soft/40 p-5 md:border-b-0 md:border-r">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-navy">
+            <Building2 size={13} aria-hidden /> The deck says
+          </p>
+          <p className="mt-2.5 font-display text-[17px] italic leading-relaxed">“{work.quote}”</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Chip tone="enterprise">{sourceChip(workSource)}</Chip>
-            {workSource && <span className="text-xs text-smoke">{workSource.title}</span>}
           </div>
+          {workSource && <p className="mt-1.5 text-xs font-medium text-smoke">{workSource.title}</p>}
           {workSource?.kind === 'deck-photo' && (
-            <img src={firmMediaUrl(workSource.id)} alt={workSource.title} className="mt-3 max-h-48 rounded-md border border-hairline" loading="lazy" />
+            <img src={firmMediaUrl(workSource.id)} alt={workSource.title} className="mt-3 max-h-48 w-full rounded-lg border border-hairline object-cover" loading="lazy" />
           )}
         </div>
-        <div>
-          <Kicker>You heard</Kicker>
-          <p className="mt-2 font-display text-[17px] leading-relaxed">“{personal.quote}”</p>
-          <p className="mt-2 text-xs text-smoke">{provenanceLine(personal, personalSource)}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="bg-oxblood-soft/30 p-5">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-oxblood">
+            <Ear size={13} aria-hidden /> You heard
+          </p>
+          <p className="mt-2.5 font-display text-[17px] italic leading-relaxed">“{personal.quote}”</p>
+          <p className="mt-2 text-xs font-medium text-smoke">{provenanceLine(personal, personalSource)}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <Chip tone="personal">Your notebook · Only you</Chip>
             <AudioReplay personal={personal} />
-            <button
-              onClick={() => onShare(personal.id, dealId)}
-              data-testid="share-button"
-              className="rounded-md bg-brass px-3 py-1.5 text-xs font-bold text-paper hover:bg-brass-deep"
-            >
-              Share with the firm
-            </button>
           </div>
+          <button
+            onClick={() => onShare(personal.id, dealId)}
+            data-testid="share-button"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-ink px-3.5 py-2 text-xs font-bold text-paper shadow-sm transition-all hover:-translate-y-px hover:bg-brass-deep"
+          >
+            <Share2 size={12} aria-hidden /> Share with the firm
+          </button>
         </div>
       </div>
-      <div className="mt-3 border-t border-hairline pt-3">
-        <p className="text-sm"><span className="font-bold text-brass-deep">{relationWord}.</span> <span className="text-ink/90">{bridge.reason}</span></p>
+      <div className="border-t border-hairline bg-ivory/70 px-5 py-3.5">
+        <p className="text-sm leading-relaxed"><span className="mr-1.5 inline-flex items-center rounded-full bg-brass px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-paper">{relationWord}</span> <span className="text-ink/90">{bridge.reason}</span></p>
       </div>
     </div>
   );
@@ -614,6 +684,7 @@ function CaptureCard({ item, bundle, onShare }: {
   bundle: ItemBundle | null;
   onShare: (claimId: string, dealId: string) => void;
 }) {
+  void onShare;
   if (item.status === 'failed') return <Card><FailedLine message={item.error ?? 'Could not read this file.'} /></Card>;
   if (!bundle) return <Card><Skeleton label={item.kind === 'audio' ? 'Transcribing…' : item.kind === 'photo' ? 'Reading the photo…' : 'Finding what matters…'} /></Card>;
   if (item.kind === 'audio' || item.kind === 'video') return <TranscriptCard bundle={bundle} />;
