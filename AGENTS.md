@@ -4,163 +4,132 @@ Project rules for Muse Code (and any coding agent) working in this repo.
 
 ## What this is
 
-Stevens is a chief-of-staff agent. It links what you learn off the clock (talks, readings, conference captures from Ray-Ban Meta glasses) to work decisions, under one access rule enforced in code on the server (SPEC.md § The access rule):
-- personal data never reaches the firm unless its owner releases it;
-- enterprise sources are `visible`, `privy` or `excluded` per user. It is a solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission is due **Wed Nov 4, 2026, 9 PM ET**.
+Stevens is a chief-of-staff agent. It links what you learn off the clock (talks, readings, notes, Ray-Ban Meta glasses captures) to work decisions, under one access rule enforced in code (SPEC.md § The access rule):
+- personal data never reaches the firm unless its owner releases it, and in v3 it lives in a separate process, **Stevens · yours**, that the firm process never reads;
+- enterprise sources are `visible`, `privy` or `excluded` per user, derived from each source system's ACL.
+
+It is a solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission is due **Wed Nov 4, 2026, 9 PM ET**.
 
 ## Read first, in this order
 
-1. `SPEC.md`: source of truth for product, models, contracts, build order and validation. If anything else disagrees, SPEC.md wins.
+1. `SPEC.md` (v3): source of truth for product, interaction model, UI, models, contracts, build order and validation. If anything else disagrees, SPEC.md wins.
 2. `.agents/skills/meta-ecosystem/SKILL.md`: Meta Model API facts (model IDs, wiring, pricing).
 3. `RESEARCH.md`: background only.
 4. `../hackthon-readme.txt`: the official hackathon rules (outside the repo; read-only).
 
-## Phase 0: docs first, no app code
+## Status
 
-Write no app code (`server/`, `web/`, `shared/`, `package.json`, Vite) in this phase.
+- **v2.1, days 1–8: done** on `main` (one server, one ledger, tabbed UI). Phase 0 (docs first, verification scaffold, Pages site) is recorded in git history.
+- **Two known leaks on `main` at `0f84ea3`:** `/api/events` streams raw ledger events (privy and excluded text) to any viewer, and `bridge.judged` reaches non-owners with its `reason`, which PR #8's bridges card renders. Day 9a fixes both before anything else.
+- **v3, days 9a–16: planned** (SPEC.md § Build order). **Stop and ask the user to review SPEC.md v3 before writing v3 app code.** Day 9a may start as soon as the user approves it.
 
-**Status (Oct 27):** days 1–7 done on `main` (spec, scaffold, ledger, extraction, boundary, pipeline, UI, honesty pass); day 8 is video buffer. The refresh checklist below is kept as the record of what phase 0 verified:
-- update the feature-map areas to the v2.1 list below;
-- update `verify-stevens` (its `SKILL.md` and `references/cli-contract.md`), which still describe v2:
-  - Hono server on :8787 holds the key (there is no `/api/meta/*` proxy);
-  - `seed` writes to the server-only `fixtures/` and `data/ledger.jsonl` (not `public/fixtures/`);
-  - paths are `server/`, `web/` and `shared/` (not `src/`);
-- re-render the feature map;
-- update `docs/index.html` (the access rule, server architecture, revised demo, the stretch).
-
-1. **Scaffold verification with the user skill `project-verify-kit`:**
-   ```bash
-   ~/.agents/skills/project-verify-kit/bin/scaffold --repo . --name stevens --title "Stevens" --cli stevensctl --codex
-   ```
-   `--codex` symlinks the two skills into `.agents/skills/` so Muse Code sees them. Then follow that skill's steps 1–4, adapted as below:
-   - **Feature map:** one `features/<area>.md` per SPEC area:
-     - `capture`, `extraction`, `bridge`;
-     - `policy` (rules table + exhaustive test);
-     - `assembler` (manifests, token budget);
-     - `privy` (verdict channel, escalation, fail closed);
-     - `release` (personal → firm gate);
-     - `drafts` (brief + answer), `inspector`, `approval`;
-     - `ledger` (durable pipeline, replay), `server` (API, media route, SSE);
-     - `chat` (stretch; grade `deferred` until its go/no-go).
-
-     Nothing is built yet, so extend the rubric with a lowest grade, `planned`: in SPEC.md, no code; the evidence is the SPEC.md section. Every other row starts as `planned`. Make sure `render-map` accepts the new grade and exits 0.
-   - **CLI contract** (`references/cli-contract.md`), mapped to this project:
-     - **Applicable commands:**
-       - `doctor`: node, uv and ffmpeg are present; `MODEL_API_KEY` is set; `GET /v1/models` lists the SPEC models.
-       - `stack up|down|logs|restart|status`: `npm run dev` (UI :5173 + server :8787).
-       - `seed`: fixtures and a fresh `data/ledger.jsonl`.
-       - `api` (as `Associate` or `Partner`, sent as `X-Viewer-Role`), `browser run|snapshot`, `test`, `evidence dir|list`, `cleanup`, `report`.
-       - A failure-injection fake for the Meta API (`normal|empty|fail|garbage|slow` plus a call counter).
-     - **Explicit skips:** `db query`, `ci status`, `aws status`, and `parity check` (until CI or a deploy exists).
-
-     Write the contract now. Implement each command when its day in SPEC's build order arrives, not in phase 0.
-   - **Skill step 5** adds two lines to CLAUDE.md. In this repo, put them in this file under **Verification** below.
-2. **Build the GitHub Pages site in `docs/`:**
-   - `docs/index.html`: a self-contained static page (no framework, no build step) covering:
-     - the thesis;
-     - the 3-minute demo;
-     - the access rule;
-     - the model table;
-     - what is real vs simulated;
-     - build status by day;
-     - links to the repo, SPEC.md and the feature map.
-
-     Take content from SPEC.md; do not invent claims. The status shows everything as planned.
-   - `docs/feature-map.html`: generated by `render-map --out docs/feature-map.html`.
-3. **Stop and ask the user to review the site and the feature map before writing any app code.** Creating the GitHub repo, pushing, and enabling Pages (Settings → Pages → Source: GitHub Actions; `.github/workflows/pages.yml` deploys `docs/`) are public actions. Do them only with the user's explicit go-ahead.
-
-After phase 0, follow SPEC.md's build order one day at a time. A day is done when its exit check passes. At the end of each day:
+Each day is its own branch and PR. A day is done when its exit check passes. At the end of each day:
 - update the feature-map grades, with evidence;
 - re-run `render-map --out docs/feature-map.html`;
-- update the status on `docs/index.html`.
+- update the status on `docs/index.html`;
+- report total API spend.
 
 ## Hard rules
 
-- **No comments in code.** This covers every `.ts`, `.tsx`, `.css`, `.html` and script file you write:
+- **No comments in code.** This covers every `.ts`, `.tsx`, `.css`, `.html`, `.sql` and script file you write:
   - no inline comments, no docblocks, no TODOs; use clear names instead;
   - rationale goes in SPEC.md, the feature map or commit messages;
   - SPEC.md's "Field rules" are documentation; never copy them into code;
   - files copied verbatim from the project-verify-kit templates stay as they are;
   - `--help` text is not a comment, and it is required.
-- **The server owns the boundary.**
-  - `MODEL_API_KEY` exists only in `.env.local` and the server process. It never appears in `web/`, `shared/`, the browser bundle, `docs/`, logs or evidence.
-  - The browser calls only Stevens' own `/api/*`, never Meta.
-  - Vaults, policy, the assembler and the ledger live in `server/`.
+- **The firm never holds personal data.**
+  - Nothing under `server/firm/` imports from `server/personal/`, and the firm process never reads `data/personal/`.
+  - Nothing under `server/personal/` imports from `server/firm/`; it reaches the firm only through `server/personal/firm-client.ts` over the agent API.
+  - `server/common/` imports neither.
+  - The import-boundary test and the "firm suite passes with `data/personal/` absent" test must stay green.
+- **The servers own the boundary.**
+  - `MODEL_API_KEY`, `STEVENS_AGENT_TOKEN`, `READWISE_TOKEN` and `SEC_USER_AGENT` exist only in `.env.local` and the server processes. They never appear in `web/`, `shared/`, a browser bundle, `docs/`, logs or evidence.
+  - Each browser app calls only its own server's `/api/*`, never Meta and never the other server.
 - **Policy is data.**
-  - Access decisions come only from the rules table in `server/boundary/rules.ts` via `policy()`.
+  - Access decisions come only from the rules table in `server/common/boundary/rules.ts` via `policy()`.
+  - Classifications come only from the ACL map in `server/firm/connectors/acl-map.ts`. An unknown or empty ACL maps to `wall`.
   - Never write `if (role === …)` access logic anywhere else.
-  - Every rule change updates the exhaustive policy test.
-- **Every model call goes through `server/boundary/assemble.ts`.** Never build a prompt anywhere else.
+  - Every rule or ACL-map change updates its exhaustive test.
+- **Every model call goes through `server/common/boundary/assemble.ts`.** Never build a prompt anywhere else, in either process.
 - **Privy text never reaches a viewer.** Text from a `privy` or `excluded` source never goes into a prompt whose output that viewer sees.
   - Privy knowledge reaches a viewer only as a `Verdict`, which has no string fields.
+  - `/agent/context` returns only `visible` sources; the personal assembler rejects anything else.
   - Never rely on a prompt instruction to keep a secret.
 - **Personal data never reaches the firm unless released.**
-  - Escalations, approved decisions and every response to a non-owner pass through `server/boundary/release.ts`.
-  - Only the owner can release a quote, and each release is a `personal.released` event.
-  - Nothing in enterprise code paths writes to the personal vault.
-- **Fail closed.** When the privy step or the release gate cannot complete, the result is `hold` + escalate, or the response is withheld. Never fall back to showing content.
-- **Durable pipeline.**
-  - Every stage call has a stage key and is reused if it already completed.
-  - Events are appended to the ledger before the UI hears of them.
-  - Failed attempts are logged with usage.
-  - Replay never re-calls the API.
+  - The only path is `server/personal/share.ts` (outbound, owner only, one quote) → `POST /agent/releases` → `server/firm/release.ts` (inbound, zod-validated).
+  - Escalations carry no content. Bridges and their reasons never leave the personal process.
+  - Nothing in firm code paths writes to the personal process or `data/personal/`.
+- **SSE carries no data.** `/api/events` sends only `event: changed` with `data: {}`. Clients refetch `/api/state`.
+- **Stevens is never run by hand.** No UI control starts a pipeline stage; triggers do (SPEC.md § Interaction model). Dev endpoints exist only behind `STEVENS_DEV=1`, for `stevensctl`, and nothing in `web/` calls them.
+- **No ids or pipeline vocabulary in the product UI.** Ids, stage keys, model names and the words pipeline/stage/ledger/manifest/claim/vault appear only in the Receipts drawer.
+- **Fail closed.** When the privy step, the firm or a release gate cannot complete, the result is `hold` + escalate (queued if the firm is down), or the response is withheld. Never fall back to showing content.
+- **Durable pipeline**, in each process:
+  - every stage call has a stage key and is reused if it already completed;
+  - events are appended to that process's ledger before its database is updated and before any UI hears of them;
+  - each database is a projection rebuildable from its ledger and fixtures with zero API calls;
+  - failed attempts are logged with usage; replay never re-calls the API.
 - `web_search` is off for any call whose manifest includes enterprise data.
 - Every displayed sentence passes the runtime citation resolver, and Fact quotes are verbatim.
+- `Claim.at`, `speaker`, `startMs` and `endMs` are set by code from the segment, never by the model.
 - Log `model`, `responseId`, `usage` and `stageKey` for every real call, inside its ledger event.
 - Model IDs come from `GET /v1/models`. Never invent one; Glimmer is not on the API.
 - Simulated surfaces show `Simulated — <reason>`. The real call is always the primary path.
-- **Fixtures** live in the server-only `fixtures/` directory, never `public/`, and are never served statically; media goes through `GET /api/media/:sourceId`. All data is fictional.
+- **Data.** Fixtures live in the server-only `fixtures/` directory, never `public/`, and are never served statically; media goes through each server's media route. All personal and firm-internal data is fictional. The only real data is public SEC Form D filings, which never appear in a fictional deal record or memo.
 
 ## Scope guard
 
-These are not in this build:
-- SAM 3.1, unless the SPEC day-1 condition triggers;
+Allowed in v3 (new): SQLite through the built-in `node:sqlite` (exactly two files, `personal.db` and `firm.db`, plain SQL); a second Hono process; the Readwise API; a one-time SEC Form D download script; `lucide-react`.
+
+Not in this build:
+- Postgres, ORMs, vector stores, MCP servers or clients;
+- real CRM, Google Drive or other SaaS connectors;
+- SAM 3.1, unless the SPEC condition triggers;
 - a learning ranker or protected time;
 - Modal;
 - streaming ASR or live glasses streaming (Device Access Toolkit);
 - auth/SSO;
 - Muse Image;
 - pi-durable, except for the gated stretch chat (pinned to exactly `1.4.0`);
-- agent frameworks, memory frameworks, vector stores, databases.
+- agent frameworks and memory frameworks.
 
 If a task seems to need one of these, stop and ask. The stretch chat starts only after its go/no-go (SPEC.md § Stretch) and the user's confirmation.
 
 ## Credits
 
 - Iterate prompts on `muse-spark-1.3`.
-- Try `muse-spark-1.3-contributor` (the cheaper tier) for claim extraction during the day-1 A/B, and keep it if the quality holds.
-- Call `muse-wonder-1.0` only for real passes, and only after it wins the day-1 A/B.
-- Reuse cached responses from the ledger.
+- Extraction runs on `muse-spark-1.3-contributor` (it held quality in the day-1 A/B).
+- Call `muse-wonder-1.0` only for real passes (bridge, privy, writers, decision).
+- Reuse cached responses from the ledgers; drop the same fixture twice and it must cost nothing.
+- Cap video keyframes at 4 per clip.
 - Report total spend at the end of each day.
 
-## Planned layout
+## Layout (v3)
 
-- `shared/data.ts`: SPEC contracts, imported by server and UI.
-- `server/index.ts`: Hono app (:8787), Stevens API routes, SSE.
-- `server/meta/client.ts`: Meta API client (Responses API + Voice).
-- `server/boundary/{rules,policy,assemble,release}.ts`: the rules table, lookup, context assembler and release gate.
-- `server/pipeline/{extract,bridge,draft,privy}.ts`: the pipeline stages.
-- `server/ledger/`, `server/resolver/`.
-- `web/`: Vite + React + Tailwind + shadcn/ui (:5173; proxies `/api` to the server, adds no key).
-- `fixtures/{personal,enterprise}/`: server-only fixtures.
-- `data/ledger.jsonl`: the runtime ledger (gitignored).
+- `shared/data.ts`: SPEC contracts, imported by both servers and both apps.
+- `server/common/`: `meta/client.ts`, `ledger/store.ts`, `db.ts` (`node:sqlite` helper), `clock.ts`, `boundary/{rules,policy,assemble}.ts`, `resolver/`.
+- `server/firm/`: `index.ts` (Hono :8787), `db/schema.sql`, `connectors/{connector,crm,formd,acl-map}.ts`, `agent-auth.ts`, `context.ts`, `privy.ts`, `escalation.ts`, `release.ts`, `decision.ts`, `filter.ts`.
+- `server/personal/`: `index.ts` (Hono :8788), `db/schema.sql`, `adapters/{adapter,inbox,readwise,notes}.ts`, `normalize/{audio,photo,video,highlight,note}.ts`, `ingest.ts`, `extract.ts`, `triggers.ts`, `bridge.ts`, `brief.ts`, `answer.ts`, `share.ts`, `firm-client.ts`.
+- `web/ui/`: shared components and tokens. `web/personal/`: Stevens · yours (:5173 → :8788). `web/firm/`: Stevens · firm (:5174 → :8787). `web/demo.html`: the two-screen harness (dev only).
+- `fixtures/personal/{inbox/,readwise-export.json,notes/}`, `fixtures/enterprise/{crm.json,formd/,…media}`: server-only fixtures.
+- `scripts/import-formd.ts`: the one-time Form D import.
+- `data/personal/{personal.db,ledger.jsonl,inbox/,notes/}`, `data/firm/{firm.db,ledger.jsonl}`: runtime state (gitignored).
 - `docs/`: the Pages site.
 - `.claude/skills/{verify-stevens,stevens-feature-map}`: the verification skills, symlinked into `.agents/skills/`.
 
 ## Commands
 
-- `npm run dev`: UI + server together; `npm start`: the server serves the built UI.
-- `npx tsc --noEmit`, `npm run build`, `npm test` (vitest: policy, assembler, release gate, resolver and resume tests).
-- `muse voice transcribe <file.wav|m4a>`: a quick check of glasses audio before the API is wired.
+- `npm run dev`: both servers and both UIs (:8787, :8788, :5173, :5174); `npm start`: each server serves its built UI.
+- `npx tsc --noEmit`, `npm run build`, `npm test` (vitest: policy, ACL map, assembler, release gates, resolver, resume, import boundary, ingestion, triggers).
+- `muse voice transcribe <file.wav|m4a>`: a quick check of glasses audio outside the app.
 - The verify CLI: see Verification.
 
 ## Verification
 
 - Use the stevens-feature-map skill (`.claude/skills/stevens-feature-map/`) before answering product questions.
-- Use `stevensctl` (the verify-stevens skill, contract in `.claude/skills/verify-stevens/references/cli-contract.md`) for verification.
+- Use `stevensctl` (the verify-stevens skill, contract in `.claude/skills/verify-stevens/references/cli-contract.md`) for verification. Implement each new v3 command on the SPEC day that first needs it.
 
 ## Working style
 
-- When reality contradicts SPEC.md (for example, the Voice response shape), update SPEC.md in the same change and tell the user.
+- When reality contradicts SPEC.md (for example, the Readwise or Form D data shapes), update SPEC.md in the same change and tell the user.
 - If an approach fails twice, stop and report instead of looping.
-- Git: commit only when the user asks. Keep the history honest: new work only, small commits per step.
+- Git: commit only when the user asks. Keep the history honest: new work only, small commits per step. Merging a PR or pushing to `main` needs the user's explicit go-ahead.
