@@ -69,17 +69,17 @@ No rule requires using every Meta model; Stage One is pass/fail on *reasonable* 
 | --- | --- | --- | --- |
 | Talk audio, voice note → transcript | `muse-voice-transcribe-1.0` (batch) | – | **Gate 1.** Speaker labels + timestamps are the citation anchors; $0.18/hr. |
 | Slide photo, deck photo → verbatim text | `muse-spark-1.3` vision | `low` | **Gate 2.** Verbatim text is stored so Fact quotes can be checked. |
-| Text → structured claims | `muse-spark-1.3` (or `-contributor` if the A/B holds) | `low` | JSON output; cheap; most calls. |
+| Text → structured claims | `muse-spark-1.3-contributor` (identical extraction quality to Spark in the day-1 A/B) | `low` | JSON output; cheap; most calls. |
 | Bridge judge: does a personal claim bear on a work claim? | `muse-wonder-1.0` | `high` | The judged reasoning; code prefilters candidates, so few calls. |
 | Privy step | `muse-wonder-1.0` | `high` | Sees the privy sources that code matched by entity; returns only a `Verdict` (no strings). One call per question. |
 | Brief + answer writing | `muse-wonder-1.0` | `high` | Sees visible sources, the viewer's own personal claims and the `Verdict`; never privy text. |
 
-- **Wonder is unverified until day 1.**
+- **Wonder (day-1 A/B decided Oct 27: keep).**
   - Pricing is ~$4 in / $20 out per 1M tokens per secondary sources (vs Spark $1.25 / $4.25).
   - Image/audio input is reported inconsistently, so Wonder gets text only.
-  - Day 1 A/B: the same bridge and privy prompts on Wonder and on Spark `high`. Keep Wonder only if it wins; the fallback is Spark 1.3 `high`.
+  - A/B: the same bridge and privy prompts on Wonder and on Spark `high`. Wonder won narrowly on the bridge (it named the net-vs-gross basis; Spark's reason was vaguer) and tied on privy (both `hold` + Partner, no leak). Keep Wonder for bridge, privy, and writers; the fallback stays Spark 1.3 `high`.
 - **Credit discipline:** iterate prompts on Spark; every completed stage is cached by its stage key and never paid for twice; run Wonder only for real passes; log usage on every attempt, failed ones included.
-- **SAM 3.1 — stretch only.** Legitimate job: crop the projector screen out of a wide audience photo before Spark reads it. Build it only if day 1 shows Spark misreads the uncropped photo; otherwise it is decoration, and judges punish fake depth.
+- **SAM 3.1 — stretch only.** Legitimate job: crop the projector screen out of a wide audience photo before Spark reads it. Build it only if day 1 shows Spark misreads the uncropped photo; otherwise it is decoration, and judges punish fake depth. Day-1 placeholders were clean renders and read fine, which proves nothing about wide-angle shots; re-test with a real glasses photo on day 2 and default to no SAM.
 - **Not used:** Muse Image (nothing to generate). Glimmer is narrated only, as the production path of processing the personal vault on-device so it never touches the API.
 
 ## Architecture
@@ -217,9 +217,10 @@ Field rules (documentation only; code carries no comments, per AGENTS.md):
 ## Meta API wiring
 
 - **Key handling:** the server calls `https://api.meta.ai/v1` with `MODEL_API_KEY` from `.env.local` (gitignored). The key exists only in the server process. In dev, Vite proxies `/api` to Hono, and the proxy adds no key. `npm start` serves the built UI from Hono, so the built app works too.
-- **Spark and Wonder:** OpenAI JS SDK (`server/meta/client.ts`) over the Responses API; `developer` message for standing rules. Whether Meta honors JSON-schema output is checked on day 1; zod validates every structured response either way.
-- **Voice Transcribe** is not Responses/Chat. Its endpoint, upload format and timestamp/speaker response shape are verified live on day 1, and the client's signature is designed after the spike.
-- **Model IDs** are checked against `GET /v1/models` at startup. Validation accepts any logged model that is in that list, so the 1.3 → 1.2 → 1.1 fallback passes.
+- **Spark and Wonder:** OpenAI JS SDK (`server/meta/client.ts`) over the Responses API; `developer` message for standing rules. Day 1 confirmed strict JSON-schema output is honored (Responses `text.format`); zod still validates every structured response.
+- **Voice Transcribe** is not Responses/Chat. Day 1 verified: `POST /v1/asr/transcribe` takes multipart `request` JSON (`model`, `audioEncoding: WAV`, `mode: DIARIZATION`) plus the `audio` clip, and returns `sessionId`, the full transcript, and `turns[]` with turn-level `startMs`/`endMs` plus speaker labels (A/B) — no word-level timestamps. WAV only, 10 minutes and 32 MB max. `/v1/audio/transcriptions` 404s for API keys and the Responses API rejects the voice model, so the client stays `fetch` + `FormData`. The day-1 clip was studio-clean TTS, not glasses-mic audio; the real-mic test rides with the day-2 final fixtures.
+- **Model IDs** are checked against `GET /v1/models` at startup. Validation accepts any logged model that is in that list, so the 1.3 → 1.2 → 1.1 fallback passes. Day 1 confirmed all nine listed IDs, including every SPEC model.
+- **Day-1 gate log (Oct 27, placeholders):** Voice `sessionId voyager/transcribe/085F3C8A6E3D460D9283B18F7DD45078` (22.6 s, 3 turns, speakers A/B); Spark vision `resp_6ae01c0965a69e95b93d4b2d` (slide) and `resp_6ae01c0c7e17305cdae8493b` (deck); bridge A/B `resp_6ae01c25972becf62da7441a` (Spark) vs `resp_6ae01c312e4ecd5575214646` (Wonder); privy A/B `resp_6ae01c3719973ce2e6344136`/`resp_6ae01c4278aeb4a832f7450b` (Spark) vs `resp_6ae01c3fcca070e1edd0441a`/`resp_6ae01c4b6ec8acde32d94368` (Wonder); extraction `resp_6ae01c592553ed2da38646f8` (Spark) vs `resp_6ae01c5c96b781cb26c04f26` (contributor); schema probe `resp_6ae01c164f546c9f92d84ee3`. Total day-1 API spend ≈ $0.10 of the $150 credits.
 - **Failure contract:** on a missing key or an API error, use the cached fixture response with a visible `Simulated — <reason>` badge, and the demo continues. The boundary never degrades: failures fail closed.
 
 ## Fixtures (fictional, committed)
@@ -267,7 +268,7 @@ Cut if behind, in this order: the stretch, SAM, Wonder (use Spark), article high
   - **One conversation per (viewer, draft),** never forked across roles.
   - **Tools:** `search_claims(query)` and `get_quote(claimId)` resolve through the same policy, so even the agent's own tool calls return only what the viewer may see. Privy content is never a tool result.
   - **The first answer stays on the fixed pipeline,** and the citation resolver applies to every chat sentence.
-  - **Go only if** the day-1 tool-calling check passed **and** day 5's exit check passed by the end of Sat Oct 31.
+  - **Go only if** the day-1 tool-calling check passed (it did on Oct 27: a `get_quote` call round-tripped through pi-ai's Meta provider to Spark 1.3) **and** day 5's exit check passed by the end of Sat Oct 31.
 - **Preference learning (design only).** A future `preference.learned` event would store a Partner's edit as a versioned note that later drafts cite. Not built in this hackathon.
 
 ## Validation
@@ -299,7 +300,7 @@ Cut if behind, in this order: the stretch, SAM, Wonder (use Spark), article high
   - agent or memory frameworks; vector stores.
 - **Risks:**
   - Both gates share one key/region (US-first preview), so the day-1 spike is the preflight.
-  - The Voice endpoint shape is unknown until day 1, and glasses-mic audio of a distant speaker may transcribe poorly. Fallback: a phone near the speaker for audio, glasses for the video.
+  - The Voice endpoint is verified (`POST /v1/asr/transcribe`, day 1), but glasses-mic audio of a distant speaker may still transcribe poorly; the real-mic test rides with the day-2 fixtures. Fallback: a phone near the speaker for audio, glasses for the video.
   - Wonder price/availability is unverified and A/B gated.
   - `privy` leaks existence and direction by design (accepted; walls are `excluded`).
   - The weak-model risk is contained because the boundary, verdict channel and citations are enforced in code, and failures fail closed.
