@@ -35,6 +35,16 @@ export function sentenceResolves(
   return true;
 }
 
+export function dedupe(citations: Citation[]): Citation[] {
+  const seen = new Set<string>();
+  return citations.filter((c) => {
+    const key = JSON.stringify(c);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function resolveSentences(
   sentences: Sentence[],
   claims: Map<string, Claim>,

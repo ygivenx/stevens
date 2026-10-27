@@ -34,7 +34,8 @@ export function assemble(
     included.push(entry);
     rawTokens += estimateTokens(source.text);
     const mine = claims.filter((c) => c.sourceId === source.id);
-    parts.push(`[${source.vault}:${source.id}] ${source.title}\n${source.text}\nClaims: ${mine.map((c) => c.id).join(', ')}`);
+    const quoted = mine.map((c) => `${c.id} (entity ${c.entity}${c.metric ? `, ${c.metric}=${c.value ?? '?'}` : ''}): "${c.quote}"`).join('\n');
+    parts.push(`[${source.vault}:${source.id}] ${source.title}\n${source.text}\nClaims:\n${quoted}`);
   }
   if (verdict && (purpose === 'brief' || purpose === 'answer')) {
     parts.push(`Privy verdict: ${verdict.verdict} routeTo=${verdict.routeTo ?? 'none'}`);

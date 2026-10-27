@@ -1,16 +1,16 @@
 # Privy
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
-The privy step is the agent↔viewer boundary at answer time: Wonder reasons over the privy sources that code matched by entity and returns only a `Verdict` with no string fields. An Associate's answer recommends "hold until Partner review" without ever learning why, and an escalation is drafted to a Partner. Failures fail closed. Day 5 build. Overall maturity: everything planned.
+The privy step is the agent↔viewer boundary at answer time: Wonder reasons over the privy sources that code matched by entity and returns only a `Verdict` with no string fields. An Associate's answer recommends "hold until Partner review" without ever learning why, and an escalation is drafted to a Partner. Failures fail closed. Day 5 built and drove it live. Overall maturity: everything api-only.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| privy-verdict | The privy step sees code-matched privy sources and returns exactly a verdict (proceed, hold, or decline plus routing); one call per question | planned | API | - | not driven | SPEC.md § Models, SPEC.md § Contracts |
-| privy-escalation | A hold verdict produces an escalation draft to a Partner carrying no content; with the conflicts memo removed there is no escalation | planned | UI+API | - | not driven | SPEC.md § Contracts, SPEC.md § Validation |
-| privy-fail-closed | A privy step that fails validation twice yields hold routed to a Partner, flagged as failed closed | planned | API | - | not driven | SPEC.md § Server components, SPEC.md § Validation |
+| privy-verdict | The privy step sees code-matched privy sources and returns exactly a verdict (proceed, hold, or decline plus routing); one call per question | api-only | API | - | 2026-10-27 | `server/pipeline/ask.ts`, `/tmp/stevens-verify/day5/evidence/answer2.json` |
+| privy-escalation | A hold verdict produces an escalation draft to a Partner carrying no content; with the conflicts memo removed there is no escalation | api-only | UI+API | - | 2026-10-27 | `server/pipeline/ask.ts`, `server/pipeline/pipeline.test.ts` |
+| privy-fail-closed | A privy step that fails validation twice yields hold routed to a Partner, flagged as failed closed | api-only | API | - | 2026-10-27 | `server/pipeline/ask.ts` |
 
 ## How to get to it (user POV)
 
@@ -24,9 +24,9 @@ Planned UI; no build exists yet. Intended path:
 
 Preconditions: baseline.
 
-- **privy-verdict**: ask with the conflicts memo present → `stevensctl api --as Associate answer --expect 200 --field '.verdict'` → `hold` routed to Partner with no memo text in the response.
-- **privy-escalation**: ask with and without the memo → `stevensctl api --as Associate answer --field '.escalation'` → escalation event with no content; rerun with the memo removed → `proceed` and no escalation.
-- **privy-fail-closed**: force the privy step to fail → `stevensctl meta fake --mode garbage && stevensctl api --as Associate answer --field '.verdict'` → `hold` with `failedClosed: true` and a `Simulated — privy check failed` label; then `stevensctl meta fake --mode normal`.
+- **privy-verdict**: ask with the conflicts memo present → `stevensctl api --as Associate ask --data '{"question":"Should we take the second Helios meeting?"}' --field '.verdict'` → `hold` routed to Partner with no memo text in the response.
+- **privy-escalation**: ask with and without a match → the Helios ask escalates with no content; an unmatched ask yields `proceed` and no escalation (unit-covered in `pipeline.test.ts`).
+- **privy-fail-closed**: force the privy step to fail → `stevensctl meta fake --mode garbage` then ask → `hold` with `failedClosed: true` (the `Simulated` label renders day 7); then `meta fake --mode normal`.
 
 ## Gotchas
 

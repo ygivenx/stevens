@@ -2,14 +2,14 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-Extraction turns captured text (transcripts, photo text, documents) into structured claims via Spark at low effort with JSON output, and the runtime citation resolver guards everything Stevens displays: every sentence needs a citation, Fact quotes must be verbatim, and failing sentences are dropped and counted. Day 3 built and drove it live: 23 claims extracted, every quote resolving. Overall maturity: claims api-only, resolver stub until drafts call it.
+Extraction turns captured text (transcripts, photo text, documents) into structured claims via Spark at low effort with JSON output, and the runtime citation resolver guards everything Stevens displays: every sentence needs a citation, Fact quotes must be verbatim, and failing sentences are dropped and counted. Day 3 built and drove it live: 23 claims extracted, every quote resolving. Overall maturity: everything api-only.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
 | extraction-claims | Transcript and photo text become structured claims (entity, metric, value, verbatim quote, timestamp, speaker) | api-only | API | - | 2026-10-27 | `server/pipeline/extract.ts`, `/tmp/stevens-verify/day3/evidence/extract-live.json` |
-| extraction-resolver | Every displayed sentence resolves ≥1 citation; Fact quotes are verbatim substrings; unsupported sentences are dropped and counted | stub | UI+API | - | not driven | `server/resolver/resolve.ts`, `server/resolver/resolve.test.ts` |
+| extraction-resolver | Every displayed sentence resolves ≥1 citation; Fact quotes are verbatim substrings; unsupported sentences are dropped and counted | api-only | UI+API | - | 2026-10-27 | `server/resolver/resolve.ts`, `/tmp/stevens-verify/day5/evidence/brief2.json` |
 
 ## How to get to it (user POV)
 
@@ -24,7 +24,7 @@ Planned UI; no build exists yet. Intended path:
 Preconditions: baseline.
 
 - **extraction-claims**: ingest then extract → `stevensctl api --as Associate ingest --expect 200` then `api --as Associate extract --expect 200` → 23 claims; every quote resolves against its source text.
-- **extraction-resolver**: run the unit suite → `npm test` → 7 resolver tests pass (fake quotes dropped); live sentence checks need day-5 drafts.
+- **extraction-resolver**: write then read the brief → `api --as Associate brief` → kept sentences resolve, failures counted in `droppedSentences`.
 
 ## Gotchas
 

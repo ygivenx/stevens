@@ -62,11 +62,15 @@ def port_free(port):
     return True
 
 
-def http_json(method, path, role=None, timeout=30):
+def http_json(method, path, role=None, timeout=30, data=None):
     headers = {}
     if role:
         headers['X-Viewer-Role'] = role
-    req = urllib.request.Request('http://localhost:8787' + path, headers=headers, method=method)
+    body = None
+    if data is not None:
+        body = json.dumps(data).encode()
+        headers['Content-Type'] = 'application/json'
+    req = urllib.request.Request('http://localhost:8787' + path, data=body, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.status, json.load(resp)
 
@@ -292,7 +296,8 @@ def cmd_api(argv):
     if '--help' in argv or '--as' not in argv:
         print('stevensctl api: drive the app HTTP surface as a role.\n')
         print('Usage: stevensctl api --as Associate|Partner SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
-        print('Surfaces: health, state, ingest, extract, release/<id>, media/<id>. --field prints one JSON path; --until polls')
+        print('Surfaces: health, state, ingest, extract, bridge, brief, ask, switch, release/<id>, approve/<id>, reject/<id>, media/<id>.')
+        print('--field prints one JSON path; --until polls until it is truthy (30s); --data sends a JSON body; --save stores it.')
         print('until that path is truthy (30s); --save stores the body under evidence.\n')
         print('Examples:')
         print('  stevensctl api --as Associate state --expect 200 --field events --save state.json')
@@ -302,7 +307,7 @@ def cmd_api(argv):
     if role not in ('Associate', 'Partner'):
         print('--as must be Associate or Partner.', file=sys.stderr)
         return 2
-    skip = {'--as', '--expect', '--field', '--save', '--until', '--instance'}
+    skip = {'--as', '--expect', '--field', '--save', '--until', '--instance', '--data'}
     surface = None
     i = 0
     while i < len(argv):
@@ -313,22 +318,25 @@ def cmd_api(argv):
             surface = argv[i]
             break
         i += 1
-    methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest'), 'extract': ('POST', '/api/extract')}
+    methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest'), 'extract': ('POST', '/api/extract'), 'bridge': ('POST', '/api/bridge'), 'brief': ('POST', '/api/brief'), 'ask': ('POST', '/api/ask'), 'switch': ('POST', '/api/switch')}
     raw = False
     if surface in methods:
         method, path = methods[surface]
     elif surface and surface.startswith('release/'):
         method, path = 'POST', '/api/' + surface
+    elif surface and (surface.startswith('approve/') or surface.startswith('reject/')):
+        method, path = 'POST', '/api/' + surface
     elif surface and surface.startswith('media/'):
         method, path = 'GET', '/api/' + surface
         raw = True
     else:
-        print('unknown surface: %s (health, state, ingest, extract, release/<id>, media/<id>).' % surface, file=sys.stderr)
+        print('unknown surface: %s (health, state, ingest, extract, bridge, brief, ask, switch, release/<id>, approve/<id>, reject/<id>, media/<id>).' % surface, file=sys.stderr)
         return 2
     expect = int(argv[argv.index('--expect') + 1]) if '--expect' in argv else None
     field = argv[argv.index('--field') + 1] if '--field' in argv else None
     save = argv[argv.index('--save') + 1] if '--save' in argv else None
     until = argv[argv.index('--until') + 1] if '--until' in argv else None
+    data = json.loads(argv[argv.index('--data') + 1]) if '--data' in argv else None
     name = instance_name(argv) or 'default'
     plus('%s %s as %s' % (method, path, role))
     if raw:
@@ -346,7 +354,7 @@ def cmd_api(argv):
     deadline = time.time() + 30
     while True:
         try:
-            status, body = http_json(method, path, role, timeout=120)
+            status, body = http_json(method, path, role, timeout=300, data=data)
         except urllib.error.HTTPError as e:
             try:
                 body = json.load(e)
@@ -473,7 +481,7 @@ def main(argv):
         print('  doctor    check tools, key, models, ports')
         print('  stack     up|down|logs|restart|status')
         print('  seed      stage fixtures + fresh ledger')
-        print('  api       drive HTTP as a role (health, state, ingest, extract, release, media)')
+        print('  api       drive HTTP as a role (all surfaces; ask needs --data)')
         print('  browser   run|snapshot UI flows (day 6)')
         print('  test      typecheck + vitest + build')
         print('  evidence  dir|list')

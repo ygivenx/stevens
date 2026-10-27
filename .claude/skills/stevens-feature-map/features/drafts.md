@@ -1,15 +1,15 @@
 # Drafts
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
-Drafts are what Stevens writes: the unprompted brief for the next Helios meeting and the Q&A answer to "Should we take the second meeting?", both built from visible sources, the viewer's own personal claims, and the privy verdict — never privy text. The brief carries the churn bridge; the Associate answer recommends hold until Partner review. Day 5 build on top of the bridge. Overall maturity: everything planned.
+Drafts are what Stevens writes: the unprompted brief for the next Helios meeting and the Q&A answer to "Should we take the second meeting?", both built from visible sources, the viewer's own personal claims, and the privy verdict — never privy text. The brief carries the churn bridge; the Associate answer recommends hold until Partner review. Day 5 built and drove it live: 7-sentence brief, hold answer with escalation. Overall maturity: everything api-only.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| drafts-brief | Unprompted brief carries the churn bridge with 2 Fact citations and the "ask how they define churn" inference; the personal quote is chipped visible to you only | planned | UI+API | - | not driven | SPEC.md § Demo, SPEC.md § Validation |
-| drafts-answer | Asked answer uses visible data plus the privy verdict and recommends hold with an escalation when the conflicts memo applies | planned | UI+API | - | not driven | SPEC.md § Demo |
+| drafts-brief | Unprompted brief carries the churn bridge with 2 Fact citations and the "ask how they define churn" inference; the personal quote is chipped visible to you only | api-only | UI+API | - | 2026-10-27 | `server/pipeline/draft.ts`, `/tmp/stevens-verify/day5/evidence/brief2.json` |
+| drafts-answer | Asked answer uses visible data plus the privy verdict and recommends hold with an escalation when the conflicts memo applies | api-only | UI+API | - | 2026-10-27 | `server/pipeline/ask.ts`, `/tmp/stevens-verify/day5/evidence/answer2.json` |
 
 ## How to get to it (user POV)
 
@@ -23,11 +23,11 @@ Planned UI; no build exists yet. Intended path:
 
 Preconditions: baseline.
 
-- **drafts-brief**: drive the brief flow → `stevensctl browser run brief` → brief shows the churn bridge with one Personal Fact and one Enterprise Fact.
-- **drafts-answer**: ask as Associate → `stevensctl api --as Associate answer --expect 200 --field '.sentences'` → cited answer recommending hold plus the escalation.
+- **drafts-brief**: write the brief → `stevensctl api --as Associate brief --expect 200` → cross-vault bridge sentences with 0 dropped (chip renders day 6).
+- **drafts-answer**: ask as Associate → `stevensctl api --as Associate ask --data '{"question":"..."}' --expect 200` → cited answer recommending hold plus the escalation.
 
 ## Gotchas
 
-- Brief and answer writing run on Wonder at high effort only if Wonder wins the day 1 A/B; otherwise Spark `high` (SPEC.md § Models).
+- Brief and answer writing run on Wonder at high effort after its day-1 A/B win (SPEC.md § Models).
 - Writer calls see visible sources, the viewer's own personal claims, and the `Verdict`; never privy text (SPEC.md § Server components).
 - Every displayed sentence needs ≥1 citation; an injected unsupported sentence is dropped and counted (SPEC.md § Validation).
