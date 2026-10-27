@@ -2,15 +2,15 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-The server owns the boundary: a Hono app on :8787 holds the vaults, policy, assembler, pipeline, ledger, and every Meta call, and the browser receives only viewer-filtered JSON. `MODEL_API_KEY` exists only in `.env.local` and the server process. The Vite UI on :5173 proxies `/api` to the server and adds no key; `npm start` serves the built UI from the server. Day 2 wired real state and events and drove them live: `/api/state` projects the ledger, `/api/events` replays it and follows appends, `POST /api/ingest` runs the pipeline. Overall maturity: state and events api-only, actions stub, media planned.
+The server owns the boundary: a Hono app on :8787 holds the vaults, policy, assembler, pipeline, ledger, and every Meta call, and the browser receives only viewer-filtered JSON. `MODEL_API_KEY` exists only in `.env.local` and the server process. The Vite UI on :5173 proxies `/api` to the server and adds no key; `npm start` serves the built UI from the server. Day 4 filtered state per viewer and added the release and media routes. Overall maturity: state, events, and media api-only; actions stub until ask/approve land.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| server-state | GET /api/state returns the viewer-filtered ledger projection for the X-Viewer-Role caller | api-only | API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day2/evidence/state1.json` |
+| server-state | GET /api/state returns the viewer-filtered ledger projection for the X-Viewer-Role caller | api-only | API | - | 2026-10-27 | `server/boundary/filter.ts`, `/tmp/stevens-verify/day4/evidence/assoc2.json` |
 | server-actions | POST ingest, ask, release, approve, and reject run the pipeline and gates for the calling viewer | stub | API | - | not driven | `server/index.ts` |
-| server-media | GET /api/media/:sourceId serves fixture media only after a policy check; fixtures are never served statically | planned | API | - | not driven | SPEC.md § Stevens API, SPEC.md § Contracts |
+| server-media | GET /api/media/:sourceId serves fixture media only after a policy check; fixtures are never served statically | api-only | API | - | 2026-10-27 | `server/index.ts` |
 | server-events | GET /api/events streams pipeline progress over server-sent events | api-only | API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day2/evidence/sse-clean.out` |
 
 ## How to get to it (user POV)
@@ -32,5 +32,5 @@ Preconditions: baseline.
 - Contracts live in `shared/data.ts`, imported by server and UI (SPEC.md § Architecture).
 - Model IDs are checked against `GET /v1/models` at startup (SPEC.md § Meta API wiring).
 - Voice is not on the Responses API: `fetch` plus `FormData` to `POST /v1/asr/transcribe` with DIARIZATION mode (SPEC.md § Meta API wiring).
-- `server-state` is unfiltered until the day-4 policy lands: both roles read the full ledger projection today (`server/index.ts`).
+- `server-state` drops non-visible sources entirely: text, title, and id never reach that viewer (SPEC.md § Contracts).
 - `seed` truncates the ledger, so an SSE stream open across a reseed sees inconsistent offsets; reseed with no watchers.
