@@ -1,0 +1,20 @@
+from PIL import Image, ImageDraw
+
+slide = Image.new('RGB', (1280, 720), (24, 32, 54))
+d = ImageDraw.Draw(slide)
+d.rectangle([80, 60, 1200, 660], outline=(120, 160, 220), width=3)
+d.text((140, 120), 'Mid-Market SaaS Benchmarks 2026', fill=(255, 255, 255))
+d.text((140, 220), 'Logo churn: 6-8% annually', fill=(140, 220, 140))
+d.text((140, 300), 'Net churn under 2% = check the definition', fill=(255, 220, 120))
+d.text((140, 380), 'Source: fictional conference talk', fill=(140, 140, 160))
+d.text((140, 560), 'Speaker 2, Oct 20 talk', fill=(120, 160, 220))
+slide.save('slide.jpg', quality=90)
+
+deck = Image.new('RGB', (1280, 720), (38, 20, 20))
+d = ImageDraw.Draw(deck)
+d.rectangle([80, 60, 1200, 660], outline=(220, 150, 120), width=3)
+d.text((140, 120), 'Helios — Series B Deck (fictional)', fill=(255, 255, 255))
+d.text((140, 220), 'Net churn: 1.8%', fill=(255, 200, 120))
+d.text((140, 300), 'NDR: 118%   Logo retention: 96%', fill=(200, 220, 255))
+d.text((140, 380), 'Mid-market motion, Q3 2026', fill=(160, 160, 160))
+deck.save('deck.jpg', quality=88)

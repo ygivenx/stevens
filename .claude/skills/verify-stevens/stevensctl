@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+import json
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import urllib.request
+
+EXPECTED_MODELS = ['muse-voice-transcribe-1.0', 'muse-spark-1.3', 'muse-wonder-1.0']
+ROOT = os.path.dirname(os.path.abspath(__file__ + '/../../..'))
+PENDING = {
+    'stack': 'day 2', 'seed': 'day 2', 'api': 'days 2-6', 'browser': 'days 2-6',
+    'test': 'day 3', 'evidence': 'day 7', 'cleanup': 'day 7', 'report': 'day 7', 'meta': 'day 1',
+}
+
+
+def plus(line):
+    print('+ ' + line)
+
+
+def fail(message):
+    print('FAIL: ' + message)
+    return 1
+
+
+def check_tool(name, want, fix):
+    path = shutil.which(name)
+    if not path:
+        return fail('%s is missing; %s' % (name, fix))
+    if name == 'node':
+        out = subprocess.run([path, '--version'], capture_output=True, text=True)
+        major = int(out.stdout.strip().lstrip('v').split('.')[0])
+        if major < 20:
+            return fail('node %s is below 20; %s' % (out.stdout.strip(), fix))
+        print('ok: node %s at %s' % (out.stdout.strip(), path))
+    else:
+        print('ok: %s at %s' % (name, path))
+    return 0
+
+
+def read_key():
+    env_path = os.path.join(ROOT, '.env.local')
+    if not os.path.exists(env_path):
+        return None
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith('MODEL_API_KEY='):
+                return line.strip().split('=', 1)[1]
+    return None
+
+
+def check_port(port):
+    s = socket.socket()
+    try:
+        s.bind(('127.0.0.1', port))
+        s.close()
+        print('ok: port %d free' % port)
+    except OSError:
+        print('ok: port %d in use (verify it is this instance before stack up)' % port)
+
+
+def cmd_doctor(argv):
+    if '--help' in argv:
+        print('stevensctl doctor: check tools and credentials.\n')
+        print('Checks node 20+, uv, ffmpeg; MODEL_API_KEY in .env.local (never printed);')
+        print('GET /v1/models lists the SPEC models; ports 5173 and 8787 state.\n')
+        print('Examples:')
+        print('  stevensctl doctor')
+        return 0
+    rc = 0
+    rc |= check_tool('node', '20+', 'install node 20 or newer')
+    rc |= check_tool('uv', 'any', 'install uv from docs.astral.sh/uv')
+    rc |= check_tool('ffmpeg', 'any', 'install ffmpeg')
+    key = read_key()
+    if not key:
+        rc |= fail('MODEL_API_KEY is not set in .env.local; add MODEL_API_KEY=<key>')
+    else:
+        print('ok: MODEL_API_KEY is set (%d chars, not shown)' % len(key))
+        plus('GET https://api.meta.ai/v1/models')
+        try:
+            req = urllib.request.Request(
+                'https://api.meta.ai/v1/models',
+                headers={'Authorization': 'Bearer ' + key},
+            )
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                listed = [m['id'] for m in json.load(resp)['data']]
+            missing = [m for m in EXPECTED_MODELS if m not in listed]
+            if missing:
+                rc |= fail('GET /v1/models lacks %s; check the key region' % ', '.join(missing))
+            else:
+                print('ok: GET /v1/models lists %s' % ', '.join(EXPECTED_MODELS))
+        except Exception as e:
+            rc |= fail('GET /v1/models failed (%s); check network and key' % e)
+    check_port(5173)
+    check_port(8787)
+    if rc == 0:
+        print('doctor: PASS')
+    return rc
+
+
+def cmd_pending(name, argv):
+    if '--help' in argv:
+        print('stevensctl %s: not implemented until %s (see references/cli-contract.md).' % (name, PENDING[name]))
+        return 0
+    print('stevensctl %s is not implemented until %s.' % (name, PENDING[name]), file=sys.stderr)
+    return 2
+
+
+def main(argv):
+    if not argv or argv[0] in ('--help', '-h', 'help'):
+        print('stevensctl: verify Stevens end to end.\n')
+        print('Usage: stevensctl <command> [options]\n')
+        print('Commands:')
+        print('  doctor    check tools, key, models, ports')
+        print('  stack     up|down|logs|restart|status (day 2)')
+        print('  seed      stage fixtures + fresh ledger (day 2)')
+        print('  api       drive HTTP as a role (days 2-6)')
+        print('  browser   run|snapshot UI flows (days 2-6)')
+        print('  test      typecheck + vitest + build (day 3)')
+        print('  evidence  dir|list (day 7)')
+        print('  cleanup   stop this instance (day 7)')
+        print('  report    print the report shape (day 7)')
+        print('  meta      fake|fail injection (day 1)\n')
+        print('Examples:')
+        print('  stevensctl doctor')
+        print('  stevensctl doctor --help')
+        return 0
+    name = argv[0]
+    if name == 'doctor':
+        return cmd_doctor(argv[1:])
+    if name in PENDING:
+        return cmd_pending(name, argv[1:])
+    print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

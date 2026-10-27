@@ -28,15 +28,16 @@ The server enforces the rule, so the browser never receives anything you may not
 | Model | Job |
 | --- | --- |
 | `muse-voice-transcribe-1.0` | Talk audio → transcript with speakers and timestamps |
-| `muse-spark-1.3` | Slide and deck photos → text; text → structured claims |
-| `muse-wonder-1.0` | Links personal claims to work claims; the privy verdict; writes the brief and answer (if it beats Spark in testing) |
+| `muse-spark-1.3` | Slide and deck photos → text |
+| `muse-spark-1.3-contributor` | Text → structured claims (day-1 A/B: identical quality to Spark) |
+| `muse-wonder-1.0` | Links personal claims to work claims; the privy verdict; writes the brief and answer (day-1 A/B: narrow win over Spark) |
 
 ## Real vs simulated
 
 - **Real:** the Meta model calls, and the Ray-Ban Meta captures (pre-recorded, not streamed).
 - **Simulated and labeled:** the VC firm and its data (fictional), the staged talk, sign-in (a role switcher), and permission scopes modeled on Meta's Personal Agent Protocol.
 
-## Run (once the app is scaffolded)
+## Run
 
 Requires Node 20+ and a Meta Model API key.
 
@@ -54,7 +55,10 @@ Open http://localhost:5173. The Stevens server (:8787) holds the key and is the 
 - `AGENTS.md`: rules for coding agents
 - `RESEARCH.md`: background research
 - `docs/`: project site and feature map (GitHub Pages)
+- `server/`, `web/`, `shared/`: Hono API, Vite UI, shared contracts
+- `spikes/day1/`: day-1 spike log with rerun commands
+- `.claude/skills/verify-stevens/stevensctl`: verification CLI (`doctor` works, the rest lands with its day)
 
 ## Not in scope
 
-Real auth/SSO, live CRM sync, fine-tuning, live glasses streaming, SAM segmentation.
+Real auth/SSO, live CRM sync, fine-tuning, live glasses streaming, SAM segmentation (unless the day-2 photo test triggers it).

@@ -33,11 +33,11 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-None. No branches besides `main`, no PRs.
+`day1-spikes-and-scaffold`: day-1 scaffold, spikes, SPEC results, `stevensctl doctor` (open PR to `main`).
 
 ## Test evidence
 
-"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Phase 0: no tests exist and no code exists, so every row is `planned` with a SPEC.md section as evidence, except the stretch chat which is `deferred` until its go/no-go. No CI exists; `stevensctl` has no `ci status` until CI does.
+"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 1: the scaffold exists, so `server-state` is `stub` with `server/index.ts` as evidence; every other row stays `planned` with a SPEC.md section as evidence, except the stretch chat which is `deferred` until its go/no-go. No CI exists; `stevensctl` has no `ci status` until CI does.
 
 ## Baseline preconditions for driving
 
@@ -120,7 +120,7 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 | [inspector.md](inspector.md) | Boundary inspector over every model call | Associate, Partner | planned |
 | [approval.md](approval.md) | Role switch + approve/reject with logging | Associate, Partner | planned |
 | [ledger.md](ledger.md) | Durable pipeline ledger + replay | all | planned |
-| [server.md](server.md) | Stevens API, media route, SSE | all | planned |
+| [server.md](server.md) | Stevens API, media route, SSE | all | stub |
 | [chat.md](chat.md) | Follow-up chat (gated stretch) | Associate, Partner | deferred |
 
 ## Sweep order
