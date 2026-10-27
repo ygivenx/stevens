@@ -40,6 +40,7 @@ export function filterState(events: LedgerEvent[], viewer: Role): LedgerEvent[] 
       return [];
     }
     if (event.type === 'claims.extracted') {
+      if (event.itemId) return [event];
       const kept = event.claims.filter((c) => claimVisible(c, sources, viewer, events));
       if (kept.length === 0) return [];
       return [{ ...event, claims: kept }];

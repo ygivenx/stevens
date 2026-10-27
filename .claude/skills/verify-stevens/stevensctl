@@ -275,6 +275,10 @@ def cmd_seed(argv):
     for processdir in ('firm', 'personal'):
         os.makedirs(os.path.join(datadir, processdir), exist_ok=True)
         open(os.path.join(datadir, processdir, 'ledger.jsonl'), 'w').close()
+        with open(os.path.join(datadir, processdir, 'meta-calls.json'), 'w') as f:
+            json.dump({'count': 0}, f)
+        with open(os.path.join(datadir, processdir, 'meta-fake.json'), 'w') as f:
+            json.dump({'mode': 'normal'}, f)
     with open(os.path.join(datadir, 'meta-calls.json'), 'w') as f:
         json.dump({'count': 0}, f)
     with open(os.path.join(datadir, 'meta-fake.json'), 'w') as f:
@@ -412,22 +416,24 @@ def cmd_meta(argv):
         print('  stevensctl meta fake --mode normal')
         return 0
     if argv[0] == 'calls':
-        path = os.path.join(ROOT, 'data', 'meta-calls.json')
-        count = 0
-        if os.path.exists(path):
-            with open(path) as f:
-                count = json.load(f).get('count', 0)
-        print('meta calls: %d' % count)
+        total = 0
+        for processdir in ('firm', 'personal'):
+            path = os.path.join(ROOT, 'data', processdir, 'meta-calls.json')
+            if os.path.exists(path):
+                with open(path) as f:
+                    total += json.load(f).get('count', 0)
+        print('meta calls: %d' % total)
         return 0
     if argv[0] == 'fake' and '--mode' in argv:
         mode = argv[argv.index('--mode') + 1]
         if mode not in FAKE_MODES:
             print('unknown mode: %s (%s).' % (mode, '|'.join(FAKE_MODES)), file=sys.stderr)
             return 2
-        datadir = os.path.join(ROOT, 'data')
-        os.makedirs(datadir, exist_ok=True)
-        with open(os.path.join(datadir, 'meta-fake.json'), 'w') as f:
-            json.dump({'mode': mode}, f)
+        for processdir in ('firm', 'personal'):
+            processdatadir = os.path.join(ROOT, 'data', processdir)
+            os.makedirs(processdatadir, exist_ok=True)
+            with open(os.path.join(processdatadir, 'meta-fake.json'), 'w') as f:
+                json.dump({'mode': mode}, f)
         print('meta fake: %s' % mode)
         return 0
     print('unknown meta command (see stevensctl meta --help).', file=sys.stderr)
@@ -552,6 +558,36 @@ def cmd_report(argv):
     return 0
 
 
+def cmd_drop(argv):
+    if '--help' in argv or not argv:
+        print('stevensctl drop: land a glasses capture in the personal inbox.\n')
+        print('Usage: stevensctl drop talk|slide\n')
+        print('Copies the staged fixture into data/personal/inbox/; the watcher')
+        print('ingests it with no UI action.\n')
+        print('Examples:')
+        print('  stevensctl drop talk')
+        print('  stevensctl drop slide')
+        return 0
+    name = argv[0]
+    fixtures = {'talk': 'talk.wav', 'slide': 'slide.jpg'}
+    if name not in fixtures:
+        print('unknown capture: %s (talk|slide).' % name, file=sys.stderr)
+        return 2
+    if not stack_healthy():
+        print('drop refuses: the local stack is not up (run stevensctl stack up first).', file=sys.stderr)
+        return 2
+    src = os.path.join(ROOT, 'fixtures', 'personal', fixtures[name])
+    if not os.path.exists(src):
+        return fail('fixture %s is missing; cannot drop' % fixtures[name])
+    inbox = os.path.join(ROOT, 'data', 'personal', 'inbox')
+    os.makedirs(inbox, exist_ok=True)
+    dest = os.path.join(inbox, fixtures[name])
+    plus('cp %s -> %s' % (src, dest))
+    shutil.copyfile(src, dest)
+    print('drop: %s landed in the glasses inbox' % fixtures[name])
+    return 0
+
+
 def cmd_pending(name, argv):
     if '--help' in argv:
         print('stevensctl %s: not implemented until %s (see references/cli-contract.md).' % (name, PENDING[name]))
@@ -574,7 +610,8 @@ def main(argv):
         print('  evidence  dir|list')
         print('  cleanup   stop this instance, keep evidence')
         print('  report    print the report shape')
-        print('  meta      fake --mode ... | calls\n')
+        print('  meta      fake --mode ... | calls')
+        print('  drop      land talk|slide in the glasses inbox\n')
         print('Examples:')
         print('  stevensctl doctor')
         print('  stevensctl stack up && stevensctl seed')
@@ -591,6 +628,8 @@ def main(argv):
         return cmd_api(argv[1:])
     if name == 'meta':
         return cmd_meta(argv[1:])
+    if name == 'drop':
+        return cmd_drop(argv[1:])
     if name == 'evidence':
         return cmd_evidence(argv[1:])
     if name == 'test':

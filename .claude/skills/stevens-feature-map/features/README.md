@@ -123,7 +123,7 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 | [server.md](server.md) | Stevens API, media route, SSE | all | api-only |
 | [chat.md](chat.md) | Follow-up chat (gated stretch) | Associate, Partner | deferred |
 | [split.md](split.md) | v3: two processes, agent API, payload-free streams | all | beta |
-| [ingestion.md](ingestion.md) | v3: personal ingestion layer into personal.db | Associate (owner) | planned |
+| [ingestion.md](ingestion.md) | v3: personal ingestion layer into personal.db | Associate (owner) | beta |
 | [connectors.md](connectors.md) | v3: firm CRM and SEC Form D connectors, ACL mirroring | all | planned |
 | [triggers.md](triggers.md) | v3: automatic briefs, decision drafts, fail-closed queue | all | planned |
 | [associate-app.md](associate-app.md) | v3: Stevens · yours (Today, Ask, Share, Captures, Receipts) | Associate (owner) | planned |
