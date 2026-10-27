@@ -68,8 +68,10 @@ function AnswerCard({ draft, escalationTo, role, data, onApprove, onRelease, app
         </div>
       )}
       {escalationTo && (
-        <div className="my-4 flex items-center gap-2" data-testid="escalation">
-          <Chip tone="warn">Escalation drafted to {escalationTo} — no content enclosed</Chip>
+        <div className="my-4 rounded-md border border-brass/40 bg-ivory p-4" data-testid="escalation">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-brass">Escalation</p>
+          <p className="mt-1 font-display text-lg">To {escalationTo} — please review before the second meeting.</p>
+          <p className="mt-1 text-sm text-smoke">Enclosed: nothing. The verdict routes this for review; the restricted record stays sealed.</p>
         </div>
       )}
       {events.some((e) => e.type === 'privy.judged' && (e as { failedClosed: boolean }).failedClosed) && (
