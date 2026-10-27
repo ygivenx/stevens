@@ -1,16 +1,16 @@
 # Connectors
 
-Last verified: 0f84ea375996 on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (source)
 
-Stevens · firm (:8787) reads the firm's systems through connectors into `firm.db` and mirrors each source system's ACL into a classification, so access levels come from the source, not a hand-typed field. Connectors: a fictional firm CRM and public SEC Form D filings. All roles. Reached through the Partner app's deal and Sources pages. Overall maturity: planned (SPEC.md v3 days 11–12).
+Stevens · firm (:8787) reads the firm's systems through connectors into `firm.db` and mirrors each source system's ACL into a classification, so access levels come from the source, not a hand-typed field. Connectors: a fictional firm CRM and public SEC Form D filings. All roles. Day 11 landed the CRM connector, ACL mirroring, firm extraction and the agent meetings/context/media API; Form D and the Partner UI arrive days 12 and 14. Overall maturity: crm beta, formd planned.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| connectors-crm | Firm CRM connector: people, deals, deal teams, meetings, documents with ACLs, portfolio | planned | infra | - | not driven | SPEC.md § Firm data layer (Connectors) |
-| connectors-acl-map | ACL principals to classification as data; legal hold wins; unknown or empty maps to wall | planned | infra | - | not driven | SPEC.md § Firm data layer (ACL mirroring) |
-| connectors-firm-extract | Firm-side vision on the deck photo and extraction on firm documents | planned | infra | - | not driven | SPEC.md § Firm data layer (Connectors) |
+| connectors-crm | Firm CRM connector: people, deals, deal teams, meetings, documents with ACLs, portfolio | beta | infra | - | not driven | `server/firm/connectors/crm.ts`, `fixtures/enterprise/crm.json` |
+| connectors-acl-map | ACL principals to classification as data; legal hold wins; unknown or empty maps to wall | beta | infra | - | not driven | `server/firm/connectors/acl-map.ts`, `server/firm/connectors/acl-map.test.ts` |
+| connectors-firm-extract | Firm-side vision on the deck photo and extraction on firm documents | beta | infra | - | not driven | `server/firm/sync.ts`, `server/firm/agent.test.ts` |
 | connectors-formd-import | One-time script downloads SEC Form D quarters and commits a filtered subset | planned | infra | - | not driven | SPEC.md § Firm data layer (Form D import) |
 | connectors-formd-comps | Code-computed market comps document and claims per quarter, visible to all staff | planned | API | - | not driven | SPEC.md § Firm data layer (Connectors) |
 

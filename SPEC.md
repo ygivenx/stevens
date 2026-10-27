@@ -181,7 +181,7 @@ Pipeline: `adapter → RawItem → dedupe → normalize → item + segments → 
 | `readwise` | Readwise API v2 export: `GET https://readwise.io/api/v2/export/?updatedAfter=<cursor>` with `Authorization: Token <READWISE_TOKEN>`, following `pageCursor` | A demo Readwise account with fictional highlights when `READWISE_TOKEN` is set; otherwise `fixtures/personal/readwise-export.json` in the same response shape | On start, then every 15 min; the cursor is kept in `adapter_state` | Without a token: `Simulated — Readwise export file` |
 | `notes` | A Markdown folder (an Obsidian vault works) | `data/personal/notes/`, seeded from `fixtures/personal/notes/` | `fs.watch` | Fictional notes |
 
-Day 11 verifies the Readwise export response shape against the live API and records it here before the adapter is written.
+Day 11 records the export shape from the public `api_deets` documentation (`results[]` of books with nested `highlights[]`, `nextPageCursor` paging): no `READWISE_TOKEN` exists in this build, so the adapter's live path is code-reviewed against the doc and the fixture mirrors it field for field. The first run with a real token must confirm the shape and update this paragraph.
 
 **Inbox file types.** Audio `.wav .m4a .mp3`; photo `.jpg .jpeg .png .heic` (HEIC → JPEG with `sips`; on other OSes it is rejected with a reason); video `.mp4 .mov`. Anything else becomes `item.rejected` with a reason and shows in Captures as "Skipped: unsupported file type". Audio or video longer than 30 minutes is rejected.
 

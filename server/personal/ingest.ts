@@ -7,6 +7,7 @@ import { scanInbox, scanUnsupported } from './adapters/inbox.js';
 import { normalizeAudio, type AudioDeps } from './normalize/audio.js';
 import { normalizePhoto, type PhotoDeps } from './normalize/photo.js';
 import { normalizeVideo, type VideoDeps } from './normalize/video.js';
+import { highlightPieces, splitNote } from './normalize/text.js';
 import { extractItem, type ExtractDeps } from './extract.js';
 import { hasContentHash, writeIngested } from './store.js';
 
@@ -41,24 +42,30 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
   const itemId = itemIdFor(raw);
   if (ingestedItemIds().has(itemId) || hasContentHash(raw.contentHash)) return { itemId, added: false };
   const at = new Date().toISOString();
-  if (!raw.mediaPath) {
-    append({ at, type: 'item.rejected', origin: raw.origin, originId: raw.originId, reason: 'Skipped: unsupported file type' });
-    return { itemId, added: false };
-  }
   let pieces: Piece[] = [];
   let api: Api | null = null;
   let stageKeyValue = 'normalize:' + raw.contentHash;
   try {
-    if (raw.kind === 'audio') ({ pieces, api } = await normalizeAudio(raw.mediaPath, raw.contentHash, deps));
-    else if (raw.kind === 'photo') ({ pieces, api } = await normalizePhoto(raw.mediaPath, raw.contentHash, deps));
-    else ({ pieces, api } = await normalizeVideo(raw.mediaPath, raw.contentHash, deps));
-    stageKeyValue = (api as Api).stageKey;
+    if (raw.mediaPath) {
+      if (raw.kind === 'audio') ({ pieces, api } = await normalizeAudio(raw.mediaPath, raw.contentHash, deps));
+      else if (raw.kind === 'photo') ({ pieces, api } = await normalizePhoto(raw.mediaPath, raw.contentHash, deps));
+      else ({ pieces, api } = await normalizeVideo(raw.mediaPath, raw.contentHash, deps));
+      stageKeyValue = (api as Api).stageKey;
+    } else if (raw.kind === 'highlight') {
+      pieces = highlightPieces(raw.segments);
+    } else if (raw.kind === 'note' && raw.text) {
+      pieces = splitNote(raw.text);
+      if (pieces.length === 0) throw new Error('empty note');
+    } else {
+      append({ at, type: 'item.rejected', origin: raw.origin, originId: raw.originId, reason: 'Skipped: unsupported file type' });
+      return { itemId, added: false };
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     append({ at, type: 'attempt.failed', stageKey: stageKeyValue, model: modelForKind(raw.kind), error: message });
     const failed: Item = {
       id: itemId, origin: raw.origin, originId: raw.originId, kind: raw.kind, title: raw.title,
-      capturedAt: raw.capturedAt, status: 'failed', error: message, hasMedia: true,
+      capturedAt: raw.capturedAt, status: 'failed', error: message, hasMedia: raw.mediaPath !== undefined,
     };
     append({ at, type: 'item.ingested', item: failed, segments: [], contentHash: raw.contentHash, mediaPath: raw.mediaPath });
     writeIngested(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
@@ -76,7 +83,7 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
   }));
   const item: Item = {
     id: itemId, origin: raw.origin, originId: raw.originId, kind: raw.kind, title: raw.title,
-    capturedAt: raw.capturedAt, status: 'ready', hasMedia: true,
+    capturedAt: raw.capturedAt, status: 'ready', hasMedia: raw.mediaPath !== undefined,
   };
   append({ at, type: 'item.ingested', item, segments, contentHash: raw.contentHash, mediaPath: raw.mediaPath, api: api as Api });
   writeIngested(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });

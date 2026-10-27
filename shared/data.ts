@@ -9,11 +9,16 @@ export type Api = { model: string; responseId: string; usage: Usage; stageKey: s
 
 export interface Source {
   id: string; vault: Vault; title: string; capturedAt: string;
-  kind: 'talk-audio' | 'slide-photo' | 'article' | 'deck-photo' | 'crm' | 'memo' | 'conflicts';
+  kind: 'talk-audio' | 'slide-photo' | 'article' | 'deck-photo' | 'crm' | 'memo' | 'conflicts' | 'crm-record' | 'market-comps' | 'released-quote';
   fixture: string;
   text?: string;
   ownerRole?: Role;
   classification?: Classification;
+}
+
+export interface SourceRef {
+  id: string; vault: Vault; kind: Source['kind']; title: string; capturedAt: string;
+  origin?: Origin; connector?: 'crm' | 'sec-form-d'; aclLabel?: string; access: Access; ruleId: string;
 }
 
 export interface AccessRule {
@@ -50,7 +55,7 @@ export type ItemKind = 'audio' | 'photo' | 'video' | 'highlight' | 'note';
 
 export interface RawItem {
   origin: Origin; originId: string; kind: ItemKind; title: string; capturedAt: string;
-  mediaPath?: string; text?: string; locator?: string; contentHash: string;
+  mediaPath?: string; text?: string; locator?: string; segments?: { text: string; locator?: string }[]; contentHash: string;
 }
 
 export interface Item {
@@ -74,6 +79,7 @@ export type LedgerEvent = { at: string } & (
   | { type: 'item.ingested'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; api?: Api }
   | { type: 'item.rejected'; origin: Origin; originId: string; reason: string }
   | { type: 'sync.completed'; adapter: Origin; added: number; cursor?: string }
+  | { type: 'context.served'; personId: string; dealId: string; purpose: Purpose; sourceIds: string[] }
   | { type: 'attempt.failed'; stageKey: string; model: string; error: string; usage?: Usage }
   | { type: 'role.switched'; role: Role }
   | { type: 'draft.approved' | 'draft.rejected'; draftId: string; by: Role });

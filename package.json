@@ -8,8 +8,8 @@
   ],
   "scripts": {
     "dev": "concurrently -n firm-server,personal-server,personal-web,firm-web \"npm run dev:server:firm\" \"npm run dev:server:personal\" \"npm run dev:web:personal\" \"npm run dev:web:firm\"",
-    "dev:server:firm": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/firm/index.ts",
-    "dev:server:personal": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/personal/index.ts",
+    "dev:server:firm": "STEVENS_DEV=1 NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/firm/index.ts",
+    "dev:server:personal": "STEVENS_DEV=1 NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/personal/index.ts",
     "dev:web:personal": "npm run dev:personal --workspace web",
     "dev:web:firm": "npm run dev:firm --workspace web",
     "build": "npm run build --workspace web && tsc -p tsconfig.server.json",

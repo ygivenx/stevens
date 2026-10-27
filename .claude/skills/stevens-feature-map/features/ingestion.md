@@ -2,15 +2,15 @@
 
 Last verified: uncommitted on 2026-10-27 (source)
 
-Stevens · yours (:8788) takes every personal source through one pipeline (adapter → normalize → extract → index) into `personal.db`, the owner's personal database, which the firm process never reads. Adapters: the glasses inbox, Readwise and a notes folder. Owner only (the Associate in the demo). Day 10 landed the inbox adapter, the three media normalizers, dedupe, anchored extraction, FTS and rebuild; the Captures UI arrives day 13 and Readwise/notes land day 11. Overall maturity: media ingestion beta, readwise and notes planned.
+Stevens · yours (:8788) takes every personal source through one pipeline (adapter → normalize → extract → index) into `personal.db`, the owner's personal database, which the firm process never reads. Adapters: the glasses inbox, Readwise and a notes folder. Owner only (the Associate in the demo). Day 10 landed the inbox adapter, the three media normalizers, dedupe, anchored extraction, FTS and rebuild; the Captures UI arrives day 13 and Readwise and notes landed day 11; the Captures UI arrives day 13. Overall maturity: media ingestion beta, readwise and notes planned.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
 | ingestion-inbox | Watched glasses inbox folder; a stable new file becomes a RawItem | beta | infra | - | not driven | `server/personal/adapters/inbox.ts`, `server/personal/ingest.test.ts` |
-| ingestion-readwise | Readwise API v2 export with a cursor, or the labeled export file without a token | planned | infra | - | not driven | SPEC.md § Personal ingestion layer (Adapters) |
-| ingestion-notes | Watched Markdown notes folder | planned | infra | - | not driven | SPEC.md § Personal ingestion layer (Adapters) |
+| ingestion-readwise | Readwise API v2 export with a cursor, or the labeled export file without a token | beta | infra | - | not driven | `server/personal/adapters/readwise.ts`, `server/personal/adapters.test.ts` |
+| ingestion-notes | Watched Markdown notes folder | beta | infra | - | not driven | `server/personal/adapters/notes.ts`, `server/personal/adapters.test.ts` |
 | ingestion-audio | Audio to diarized, time-anchored segments via Voice, chunked at 9 minutes | beta | infra | - | 2026-10-27 | `server/personal/normalize/audio.ts`, live `voyager/transcribe/F394A6866C8C4A239374C` |
 | ingestion-photo | Photo (HEIC converted) to verbatim text via Spark vision | beta | infra | - | 2026-10-27 | `server/personal/normalize/photo.ts`, live `resp_6ae0437657ece316c039451e` |
 | ingestion-video | Video to audio turns plus up to 4 keyframe text segments | beta | infra | - | not driven | `server/personal/normalize/video.ts`, no live video fixture yet |

@@ -5,7 +5,9 @@ import { createApp } from '../common/app.js';
 import { openProcessDb } from '../common/db.js';
 import { readAll } from '../common/ledger/store.js';
 import { InboxAdapter } from './adapters/inbox.js';
-import { ingestRaws, runInboxPoll } from './ingest.js';
+import { NotesAdapter, seedNotes } from './adapters/notes.js';
+import { ReadwiseAdapter } from './adapters/readwise.js';
+import { ingestRaws, runInboxPoll, type IngestDeps } from './ingest.js';
 import { ensureDb, getItemBundle, mediaPathForItem } from './store.js';
 
 if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'personal');
@@ -47,13 +49,47 @@ export const app = createApp({
 });
 
 const inbox = new InboxAdapter();
+const notes = new NotesAdapter();
+const readwise = new ReadwiseAdapter();
+
+export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: number; readwise: number; notes: number }> {
+  const counts = { inbox: 0, readwise: 0, notes: 0 };
+  try {
+    counts.inbox = (await runInboxPoll(deps)).added;
+  } catch {
+    void 0;
+  }
+  try {
+    counts.readwise = (await ingestRaws(await readwise.poll(), deps)).added;
+  } catch {
+    void 0;
+  }
+  try {
+    counts.notes = (await ingestRaws(await notes.poll(), deps)).added;
+  } catch {
+    void 0;
+  }
+  return counts;
+}
 
 export function bootPersonal(): () => void {
+  seedNotes();
   ensureDb(readAll());
-  void runInboxPoll().catch(() => {});
-  return inbox.watch((raws) => {
+  void pollSources().catch(() => {});
+  const stopInbox = inbox.watch((raws) => {
     void ingestRaws(raws).catch(() => {});
   });
+  const stopNotes = notes.watch((raws) => {
+    void ingestRaws(raws).catch(() => {});
+  });
+  const interval = setInterval(() => {
+    void readwise.poll().then((raws) => ingestRaws(raws)).catch(() => {});
+  }, 15 * 60 * 1000);
+  return () => {
+    stopInbox();
+    stopNotes();
+    clearInterval(interval);
+  };
 }
 
 if (!process.env.VITEST) {
