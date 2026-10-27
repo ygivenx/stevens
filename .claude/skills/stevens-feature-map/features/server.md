@@ -1,17 +1,17 @@
 # Server
 
-Last verified: uncommitted on 2026-10-27 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
-The server owns the boundary: a Hono app on :8787 holds the vaults, policy, assembler, pipeline, ledger, and every Meta call, and the browser receives only viewer-filtered JSON. `MODEL_API_KEY` exists only in `.env.local` and the server process. The Vite UI on :5173 proxies `/api` to the server and adds no key; `npm start` serves the built UI from the server. Day 1 scaffolded it (Hono answers `/api/health` and a placeholder `/api/state`, Vite proxies `/api`, `npm start` serves the built UI); day 2 wires real state and events. Overall maturity: one stub, the rest planned.
+The server owns the boundary: a Hono app on :8787 holds the vaults, policy, assembler, pipeline, ledger, and every Meta call, and the browser receives only viewer-filtered JSON. `MODEL_API_KEY` exists only in `.env.local` and the server process. The Vite UI on :5173 proxies `/api` to the server and adds no key; `npm start` serves the built UI from the server. Day 2 wired real state and events and drove them live: `/api/state` projects the ledger, `/api/events` replays it and follows appends, `POST /api/ingest` runs the pipeline. Overall maturity: state and events api-only, actions stub, media planned.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| server-state | GET /api/state returns the viewer-filtered ledger projection for the X-Viewer-Role caller | stub | API | - | not driven | `server/index.ts`, SPEC.md § Stevens API |
-| server-actions | POST ingest, ask, release, approve, and reject run the pipeline and gates for the calling viewer | planned | API | - | not driven | SPEC.md § Stevens API |
+| server-state | GET /api/state returns the viewer-filtered ledger projection for the X-Viewer-Role caller | api-only | API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day2/evidence/state1.json` |
+| server-actions | POST ingest, ask, release, approve, and reject run the pipeline and gates for the calling viewer | stub | API | - | not driven | `server/index.ts` |
 | server-media | GET /api/media/:sourceId serves fixture media only after a policy check; fixtures are never served statically | planned | API | - | not driven | SPEC.md § Stevens API, SPEC.md § Contracts |
-| server-events | GET /api/events streams pipeline progress over server-sent events | planned | API | - | not driven | SPEC.md § Architecture |
+| server-events | GET /api/events streams pipeline progress over server-sent events | api-only | API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day2/evidence/sse-clean.out` |
 
 ## How to get to it (user POV)
 
@@ -21,10 +21,10 @@ No user path: the server is infrastructure. Its visible surface is every screen,
 
 Preconditions: baseline.
 
-- **server-state**: read state as each role → `stevensctl api --as Associate state --expect 200 --field '.drafts'` then `--as Partner` → each sees only its own projection with no leaked text or media.
-- **server-actions**: ask then approve → `stevensctl api --as Associate ask --expect 200` then `stevensctl api --as Partner approve <draftId> --expect 200` → answer drafts, then the decision logs.
+- **server-state**: read state as each role → `stevensctl api --as Associate state --expect 200 --field '.events'` then `--as Partner` → both read the ledger projection (per-role filtering lands with the day-4 policy).
+- **server-actions**: ingest → `stevensctl api --as Associate ingest --expect 200 --field '.ingested'` → 10 sources ingested (ask, release, approve, and reject land days 4–5).
 - **server-media**: fetch media as each role → `stevensctl api --as Associate media <sourceId> --expect 200` → bytes for allowed sources, rejection for withheld ones; no fixture URL works outside this route.
-- **server-events**: watch a run → `stevensctl api --as Associate events --until '.stage == drafted'` → transcribing through drafting stages arrive in order.
+- **server-events**: watch a run → `curl -s http://localhost:8787/api/events` during `api ingest` → ledger replay plus live appends and heartbeats (the api driver has no events surface yet).
 
 ## Gotchas
 
@@ -32,4 +32,5 @@ Preconditions: baseline.
 - Contracts live in `shared/data.ts`, imported by server and UI (SPEC.md § Architecture).
 - Model IDs are checked against `GET /v1/models` at startup (SPEC.md § Meta API wiring).
 - Voice is not on the Responses API: `fetch` plus `FormData` to `POST /v1/asr/transcribe` with DIARIZATION mode (SPEC.md § Meta API wiring).
-- `server-state` is a stub: it parses `X-Viewer-Role` and answers 200, but `events` and `drafts` are always empty until the day-2 ledger lands (`server/index.ts`).
+- `server-state` is unfiltered until the day-4 policy lands: both roles read the full ledger projection today (`server/index.ts`).
+- `seed` truncates the ledger, so an SSE stream open across a reseed sees inconsistent offsets; reseed with no watchers.
