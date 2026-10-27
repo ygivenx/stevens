@@ -33,7 +33,7 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-- `spec-v3` (local, docs only, 2026-10-26): SPEC.md v3, AGENTS.md, the CLI contract and the six v3 areas above. No code.
+None. SPEC v3 (docs only) merged to `main` on 2026-10-26.
 
 ## Test evidence
 
