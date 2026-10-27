@@ -34,3 +34,4 @@ Preconditions: baseline.
 - Voice is not on the Responses API: `fetch` plus `FormData` to `POST /v1/asr/transcribe` with DIARIZATION mode (SPEC.md § Meta API wiring).
 - `server-state` drops non-visible sources entirely: text, title, and id never reach that viewer (SPEC.md § Contracts).
 - `seed` truncates the ledger, so an SSE stream open across a reseed sees inconsistent offsets; reseed with no watchers.
+- **Known defect (found 2026-10-27, open):** `GET /api/events` ignores `X-Viewer-Role` and streams raw ledger events, so an Associate's stream carries the full text of the partner-only conflicts memo and the wall note (`server/index.ts:36`). The client only uses the stream as a ping (`web/src/api.ts:55`). Fix in SPEC.md v3 day 9a: send only `changed` with `data: {}`.

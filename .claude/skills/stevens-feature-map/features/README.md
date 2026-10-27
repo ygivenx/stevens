@@ -2,7 +2,7 @@
 
 One file per product area. Each file says what exists, how mature it is, how a user reaches it, and how to drive it through `stevensctl` (the verify-stevens skill, at `.claude/skills/verify-stevens/stevensctl`). Use the map to answer questions without re-reading the whole codebase. Use the source to settle anything the map does not cover or that may have changed.
 
-Scope: the Stevens demo app as defined in SPEC.md v2.1: `shared/` (contracts), `server/` (Hono on :8787: vaults, boundary, pipeline, ledger, resolver, Meta client), `web/` (Vite on :5173), server-only `fixtures/`, `data/ledger.jsonl`, and `docs/`. It deliberately leaves out the hackathon submission mechanics, the video edit, and the scope-guard exclusions in AGENTS.md (SAM unless the day-1 condition triggers, learning ranker, Modal, live glasses streaming, auth/SSO, Muse Image, pi-durable except the stretch chat, agent and memory frameworks, vector stores, databases).
+Scope: the Stevens demo app. The v2.1 areas grade the code on `main`; the v3 areas (ingestion, connectors, split, triggers, associate-app, partner-app) are `planned` against SPEC.md v3 until their days land. v3 supersedes capture → ingestion, inspector → associate-receipts, and approval's role switch → partner-signin; the v2.1 files keep grading the v2.1 code until it is replaced. v2.1 scope, as defined in SPEC.md v2.1: `shared/` (contracts), `server/` (Hono on :8787: vaults, boundary, pipeline, ledger, resolver, Meta client), `web/` (Vite on :5173), server-only `fixtures/`, `data/ledger.jsonl`, and `docs/`. It deliberately leaves out the hackathon submission mechanics, the video edit, and the scope-guard exclusions in AGENTS.md (SAM unless the day-1 condition triggers, learning ranker, Modal, live glasses streaming, auth/SSO, Muse Image, pi-durable except the stretch chat, agent and memory frameworks, vector stores, databases).
 
 ## Maturity rubric
 
@@ -33,7 +33,7 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-None. No branches besides `main`, no PRs.
+None. SPEC v3 (docs only) merged to `main` on 2026-10-26.
 
 ## Test evidence
 
@@ -122,6 +122,12 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 | [ledger.md](ledger.md) | Durable pipeline ledger + replay | all | beta |
 | [server.md](server.md) | Stevens API, media route, SSE | all | api-only |
 | [chat.md](chat.md) | Follow-up chat (gated stretch) | Associate, Partner | deferred |
+| [split.md](split.md) | v3: two processes, agent API, payload-free streams | all | planned |
+| [ingestion.md](ingestion.md) | v3: personal ingestion layer into personal.db | Associate (owner) | planned |
+| [connectors.md](connectors.md) | v3: firm CRM and SEC Form D connectors, ACL mirroring | all | planned |
+| [triggers.md](triggers.md) | v3: automatic briefs, decision drafts, fail-closed queue | all | planned |
+| [associate-app.md](associate-app.md) | v3: Stevens · yours (Today, Ask, Share, Captures, Receipts) | Associate (owner) | planned |
+| [partner-app.md](partner-app.md) | v3: Stevens · firm (Inbox, deal page, Sources, demo harness) | Partner | planned |
 
 ## Sweep order
 
@@ -140,5 +146,11 @@ Areas build on each other's data. Sweep in this order so each one starts with wh
 11. inspector
 12. approval
 13. chat
+14. split
+15. ingestion
+16. connectors
+17. triggers
+18. associate-app
+19. partner-app
 
 Run this after a feature change, or when a freshness check finds drift.

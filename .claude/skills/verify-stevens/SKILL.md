@@ -18,6 +18,8 @@ The CLI contract every project's CLI follows is in the project-verify-kit skill 
 
 ## What it mirrors
 
+**v3 (planned, SPEC.md v3):** the stack becomes four pieces: Stevens · firm on :8787 (`firm.db`, connectors, policy, privy, releases), Stevens · yours on :8788 (`personal.db`, adapters, ingestion, bridge, brief, answer), the Associate app on :5173 and the Partner app on :5174, each with its own ledger under `data/firm/` or `data/personal/`. New commands (`drop`, `sync`, `demo`, `leak scan`, `db query`, `firm down|up`) and the `api --via yours|firm|agent --as <personId>` form are specified in `references/cli-contract.md`, each tagged with the SPEC day that implements it. Until day 9b lands, the v2.1 description below is what runs.
+
 The demo runs under `npm run dev` only; there is no deployed app, no database, and no IaC, so there is no drift to diff. The table below is the whole stack:
 
 | Deployed resource | Local stand-in |
@@ -54,7 +56,7 @@ Name your instance before anything that mutates: `export STEVENS_VERIFY_INSTANCE
 
 `api --as` sends the role as `X-Viewer-Role`; the server enforces it.
 
-There is no `db query`: the ledger is the server's `data/ledger.jsonl`, read via `GET /api/state`. No SQL exists anywhere.
+There is no `db query` in v2.1: the ledger is the server's `data/ledger.jsonl`, read via `GET /api/state`. v3 adds two SQLite files and a read-only `db query personal|firm` (day 9b).
 
 ## CI parity
 

@@ -31,3 +31,4 @@ Preconditions: baseline.
 - Wonder won the day-1 A/B and judges; the fallback stays Spark 1.3 `high` (SPEC.md § Models).
 - Wonder gets text only: image and audio input is reported inconsistently (SPEC.md § Models).
 - Code prefilters candidates so the judge makes few calls; prompt iteration happens on Spark (SPEC.md § Models).
+- **Known defect (found 2026-10-27, open):** `filterState` passes `bridge.judged` through with only the manifest redacted (`server/boundary/filter.ts:51`), so `bridge.reason`, model text derived from the Associate's unreleased personal claim, reaches the Partner; PR #8's Judged-bridges card renders it (`web/src/brief.tsx`). Fix in SPEC.md v3 day 9a; in v3 bridges never leave Stevens · yours.
