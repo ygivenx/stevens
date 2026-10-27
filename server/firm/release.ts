@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { append } from '../common/ledger/store.js';
-import { getFirmDb, upsertDocument } from './store.js';
+import { getFirmDb, saveReleaseProvenance, upsertDocument } from './store.js';
 import type { AgentPerson } from './agent-auth.js';
 
 const Provenance = z.strictObject({
@@ -42,6 +42,13 @@ export function inboundRelease(agent: AgentPerson, payload: unknown): { document
     body: parsed.quote,
   }, ['deal-team:' + parsed.dealId]);
   db.prepare(`update documents set shared_by = ? where id = ?`).run(agent.id, documentId);
+  saveReleaseProvenance(documentId, {
+    title: parsed.provenance.title,
+    origin: parsed.provenance.origin,
+    capturedAt: parsed.provenance.capturedAt,
+    speaker: parsed.provenance.speaker,
+    at: parsed.provenance.at,
+  });
   append({ at: new Date().toISOString(), type: 'personal.released', documentId, dealId: parsed.dealId, claimId: parsed.claimId, by: agent.role });
   return { documentId };
 }

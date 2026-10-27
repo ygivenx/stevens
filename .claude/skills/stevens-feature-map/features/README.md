@@ -127,7 +127,7 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 | [connectors.md](connectors.md) | v3: firm CRM and SEC Form D connectors, ACL mirroring | all | beta |
 | [triggers.md](triggers.md) | v3: automatic briefs, decision drafts, fail-closed queue | all | beta |
 | [associate-app.md](associate-app.md) | v3: Stevens · yours (Today, Ask, Share, Captures, Receipts) | Associate (owner) | beta |
-| [partner-app.md](partner-app.md) | v3: Stevens · firm (Inbox, deal page, Sources, demo harness) | Partner | planned |
+| [partner-app.md](partner-app.md) | v3: Stevens · firm (Inbox, deal page, Sources, demo harness) | Partner | beta |
 
 ## Sweep order
 

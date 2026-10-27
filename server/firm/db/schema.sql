@@ -45,12 +45,21 @@ create table portfolio (
 create table filings (
   accession text primary key,
   issuer text not null,
+  cik text,
   state text,
   industry_group text not null,
   filed_at text not null,
   first_sale_date text,
   total_offering_usd integer,
   total_sold_usd integer
+);
+create table release_provenance (
+  document_id text primary key references documents(id),
+  title text not null,
+  origin text not null,
+  captured_at text not null,
+  speaker text,
+  at text
 );
 create table connector_state (
   connector text primary key,

@@ -137,9 +137,9 @@ describe('escalation and decision', () => {
     const drafts = readAll().filter((e) => e.type === 'draft.created' && e.draft.kind === 'decision');
     expect(drafts.length).toBeGreaterThan(0);
     const draftId = drafts[0].type === 'draft.created' ? drafts[0].draft.id : '';
-    const denied = await app.request('/api/approve/' + draftId, { method: 'POST', headers: { 'X-Viewer-Role': 'Associate' } });
+    const denied = await app.request('/api/approve/' + draftId, { method: 'POST', headers: { 'X-Viewer-Id': 'p-alex' } });
     expect(denied.status).toBe(403);
-    const approved = await app.request('/api/approve/' + draftId, { method: 'POST', headers: { 'X-Viewer-Role': 'Partner' } });
+    const approved = await app.request('/api/approve/' + draftId, { method: 'POST', headers: { 'X-Viewer-Id': 'p-morgan' } });
     expect(approved.status).toBe(200);
   });
 

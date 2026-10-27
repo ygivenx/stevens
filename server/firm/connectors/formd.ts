@@ -5,6 +5,7 @@ import type { Connector, ConnectorDocument } from './connector.js';
 export interface FormDFiling {
   accession: string;
   issuer: string;
+  cik?: string;
   state: string;
   industryGroup: string;
   filedAt: string;
@@ -53,6 +54,32 @@ export function quarterEnd(quarter: string): string {
 
 export function compsSentence(quarter: string, issuers: number, med: number): string {
   return 'SEC Form D, ' + quarterLabel(quarter) + ': ' + issuers + ' technology issuers reported equity offerings between $2M and $50M; the median total offering was ' + millions(med) + '.';
+}
+
+export interface MarketSample {
+  issuer: string;
+  filedAt: string;
+  totalOfferingUsd: number;
+  accession: string;
+  secUrl: string;
+}
+
+export function secFilingUrl(accession: string): string {
+  return 'https://www.sec.gov/edgar/search/#/q=%2522' + encodeURIComponent(accession) + '%2522';
+}
+
+export function marketSample(filings: FormDFiling[], quarter: string, limit: number = 5): MarketSample[] {
+  return filings
+    .filter((filing) => filing.quarter === quarter && filing.issuer.length > 0)
+    .sort((a, b) => b.totalOfferingUsd - a.totalOfferingUsd)
+    .slice(0, limit)
+    .map((filing) => ({
+      issuer: filing.issuer,
+      filedAt: filing.filedAt,
+      totalOfferingUsd: filing.totalOfferingUsd,
+      accession: filing.accession,
+      secUrl: secFilingUrl(filing.accession),
+    }));
 }
 
 export function buildComps(filings: FormDFiling[]): { quarter: string; sentence: string; issuers: number; medianUsd: number }[] {

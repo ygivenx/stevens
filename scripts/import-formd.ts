@@ -12,6 +12,7 @@ const MAX_ROWS = 2000;
 interface Filing {
   accession: string;
   issuer: string;
+  cik: string;
   state: string;
   industryGroup: string;
   filedAt: string;
@@ -51,6 +52,21 @@ function amount(value: string): number {
   return Number.isFinite(parsed) ? Math.round(parsed) : 0;
 }
 
+const FILING_MONTHS: Record<string, string> = {
+  JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+  JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
+};
+
+function isoDate(value: string): string {
+  const trimmed = (value || '').trim();
+  const dmy = trimmed.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})/);
+  if (dmy) {
+    const month = FILING_MONTHS[dmy[2].toUpperCase()];
+    if (month) return dmy[3] + '-' + month + '-' + dmy[1].padStart(2, '0');
+  }
+  return trimmed.slice(0, 10);
+}
+
 async function quarterRows(quarter: string, work: string): Promise<Filing[]> {
   const zipName = quarter.toLowerCase() + '_d.zip';
   const url = 'https://www.sec.gov/files/structureddata/data/form-d-data-sets/' + zipName;
@@ -64,7 +80,8 @@ async function quarterRows(quarter: string, work: string): Promise<Filing[]> {
   for (const row of parseTsv(join(inner, 'FORMDSUBMISSION.tsv'))) subs.set(row['ACCESSIONNUMBER'], row);
   const issuers = new Map<string, Record<string, string>>();
   for (const row of parseTsv(join(inner, 'ISSUERS.tsv'))) {
-    if (row['IS_PRIMARYISSUER_FLAG'] === 'true' && !issuers.has(row['ACCESSIONNUMBER'])) issuers.set(row['ACCESSIONNUMBER'], row);
+    const primary = (row['IS_PRIMARYISSUER_FLAG'] || '').toUpperCase();
+    if ((primary === 'YES' || primary === 'TRUE') && !issuers.has(row['ACCESSIONNUMBER'])) issuers.set(row['ACCESSIONNUMBER'], row);
   }
   const rows: Filing[] = [];
   for (const offering of parseTsv(join(inner, 'OFFERING.tsv'))) {
@@ -78,9 +95,10 @@ async function quarterRows(quarter: string, work: string): Promise<Filing[]> {
     rows.push({
       accession,
       issuer: (issuer['ENTITYNAME'] || '').trim(),
+      cik: (issuer['CIK'] || '').replace(/^0+/, ''),
       state: ((issuer['STATEORCOUNTRYDESCRIPTION'] || issuer['STATEORCOUNTRY'] || '') as string).trim(),
       industryGroup: (offering['INDUSTRYGROUPTYPE'] || '').trim(),
-      filedAt: (sub['FILING_DATE'] || '').slice(0, 10),
+      filedAt: isoDate(sub['FILING_DATE'] || ''),
       firstSaleDate: (offering['SALE_DATE'] || '').slice(0, 10) || null,
       totalOfferingUsd: total,
       totalSoldUsd: amount(offering['TOTALAMOUNTSOLD']),
