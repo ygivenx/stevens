@@ -22,17 +22,20 @@ The demo runs under `npm run dev` only; there is no deployed app, no database, a
 
 | Deployed resource | Local stand-in |
 |---|---|
-| Vite dev server + `/api/meta/*` proxy (holds `MODEL_API_KEY`) | `stevensctl stack up` on :5173 |
+| Hono server on :8787 (holds `MODEL_API_KEY`, owns vaults, policy, assembler, pipeline, ledger) | `stevensctl stack up` serves it locally |
+| Vite dev server on :5173 (proxies `/api` to the Hono server, adds no key) | same `stack up` |
 | Meta Model API (`api.meta.ai`) | live API, or the `meta fake` failure injector |
-| Browser `localStorage` event ledger | same, in the driven browser profile |
+| Server JSONL event ledger at `data/ledger.jsonl` | same, seeded fresh by `seed` |
 | GitHub Pages static site (`docs/`) | `docs/index.html` opened locally |
+
+The browser calls only Stevens' own `/api/*`, never Meta. There is no `/api/meta/*` proxy.
 
 ## Launch
 
 ```bash
-$CC doctor          # node, uv, ffmpeg, MODEL_API_KEY, GET /v1/models, port 5173
-$CC stack up        # npm run dev on :5173, waits for health
-$CC seed            # SPEC fixtures into public/fixtures/; synthetic data only
+$CC doctor          # node, uv, ffmpeg, MODEL_API_KEY, GET /v1/models, ports 5173+8787
+$CC stack up        # npm run dev (UI :5173 + server :8787), waits for health
+$CC seed            # SPEC fixtures into server-only fixtures/ plus a fresh data/ledger.jsonl; synthetic data only
 ```
 
 Name your instance before anything that mutates: `export STEVENS_VERIFY_INSTANCE=<task>`. If `doctor` shows your instance UP and you did not start it, another session did: pick another name. Never `stack down` a stack you did not start.
@@ -43,13 +46,15 @@ Name your instance before anything that mutates: `export STEVENS_VERIFY_INSTANCE
 |---|---|
 | Call the app as a role | `$CC api --as Associate\|Partner <surface> --expect 200` |
 | Assert a JSON field or wait for async work | `--field '<json path>'`, `--until '<condition>'`, `--save <file>` |
-| Drive a UI flow | `$CC browser run <capture\|brief\|answer\|inspector\|role-switch\|approve>` |
+| Drive a UI flow | `$CC browser run <capture\|brief\|answer\|inspector\|role-switch\|release\|approve>` |
 | Capture DOM + screenshot | `$CC browser snapshot` |
 | Read dev server logs | `$CC stack logs` |
 | Inject Meta API failures | `$CC meta fake --mode normal\|empty\|fail\|garbage\|slow`, `$CC meta calls` |
 | Run typecheck + tests + build | `$CC test` |
 
-There is no `db query`: the ledger is `localStorage`, and the browser driver reads it. No SQL exists anywhere.
+`api --as` sends the role as `X-Viewer-Role`; the server enforces it.
+
+There is no `db query`: the ledger is the server's `data/ledger.jsonl`, read via `GET /api/state`. No SQL exists anywhere.
 
 ## CI parity
 
