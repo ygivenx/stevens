@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5173",
-    "build": "tsc --noEmit -p tsconfig.json && vite build --outDir ../dist-web",
+    "dev:personal": "vite --config vite.personal.config.ts",
+    "dev:firm": "vite --config vite.firm.config.ts",
+    "build": "tsc --noEmit -p tsconfig.json && vite build --config vite.personal.config.ts --outDir ../dist-web-personal && vite build --config vite.firm.config.ts --outDir ../dist-web-firm",
     "preview": "vite preview"
   },
   "dependencies": {
