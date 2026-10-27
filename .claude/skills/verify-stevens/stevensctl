@@ -14,7 +14,7 @@ EXPECTED_MODELS = ['muse-voice-transcribe-1.0', 'muse-spark-1.3', 'muse-wonder-1
 ROOT = os.path.dirname(os.path.abspath(__file__ + '/../../..'))
 FAKE_MODES = ['live', 'normal', 'empty', 'fail', 'garbage', 'slow']
 PENDING = {
-    'browser': 'day 6', 'cleanup': 'day 7', 'report': 'day 7',
+    'cleanup': 'day 7', 'report': 'day 7',
 }
 
 
@@ -296,7 +296,7 @@ def cmd_api(argv):
     if '--help' in argv or '--as' not in argv:
         print('stevensctl api: drive the app HTTP surface as a role.\n')
         print('Usage: stevensctl api --as Associate|Partner SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
-        print('Surfaces: health, state, ingest, extract, bridge, brief, ask, switch, release/<id>, approve/<id>, reject/<id>, media/<id>.')
+        print('Surfaces: health, state, ingest, extract, bridge, brief, ask, switch, transcript/<id>, release/<id>, approve/<id>, reject/<id>, media/<id>.')
         print('--field prints one JSON path; --until polls until it is truthy (30s); --data sends a JSON body; --save stores it.')
         print('until that path is truthy (30s); --save stores the body under evidence.\n')
         print('Examples:')
@@ -326,11 +326,13 @@ def cmd_api(argv):
         method, path = 'POST', '/api/' + surface
     elif surface and (surface.startswith('approve/') or surface.startswith('reject/')):
         method, path = 'POST', '/api/' + surface
+    elif surface and surface.startswith('transcript/'):
+        method, path = 'GET', '/api/' + surface
     elif surface and surface.startswith('media/'):
         method, path = 'GET', '/api/' + surface
         raw = True
     else:
-        print('unknown surface: %s (health, state, ingest, extract, bridge, brief, ask, switch, release/<id>, approve/<id>, reject/<id>, media/<id>).' % surface, file=sys.stderr)
+        print('unknown surface: %s (health, state, ingest, extract, bridge, brief, ask, switch, release/<id>, approve/<id>, reject/<id>, transcript/<id>, media/<id>).' % surface, file=sys.stderr)
         return 2
     expect = int(argv[argv.index('--expect') + 1]) if '--expect' in argv else None
     field = argv[argv.index('--field') + 1] if '--field' in argv else None
@@ -465,6 +467,33 @@ def cmd_test(argv):
     return 0
 
 
+def cmd_browser(argv):
+    name = instance_name(argv) or 'default'
+    if '--help' in argv or not argv:
+        print('stevensctl browser: drive UI flows with headless Chromium.\n')
+        print('Usage: stevensctl browser run <flow> [--instance NAME]')
+        print('       stevensctl browser snapshot [--tab TAB] [--instance NAME]\n')
+        print('Flows: capture, brief, answer, inspector, role-switch, release, approve.')
+        print('Precondition: seeded stack with the pipeline run (ingest through ask).\n')
+        print('Examples:')
+        print('  stevensctl browser run brief')
+        print('  stevensctl browser snapshot --tab Inspector')
+        return 0
+    if not stack_healthy():
+        print('browser refuses: the local stack is not up.', file=sys.stderr)
+        return 2
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'browser.mjs')
+    cmd = ['node', script] + [a for a in argv if not a.startswith('--instance')] + ['--evidence', evidence_dir(name)]
+    if '--instance' in argv:
+        drop = argv.index('--instance')
+        cmd = ['node', script] + [a for i, a in enumerate(argv) if i not in (drop, drop + 1)] + ['--evidence', evidence_dir(name)]
+    plus(' '.join(cmd))
+    proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    print(proc.stdout, end='')
+    print(proc.stderr, end='', file=sys.stderr)
+    return proc.returncode
+
+
 def cmd_pending(name, argv):
     if '--help' in argv:
         print('stevensctl %s: not implemented until %s (see references/cli-contract.md).' % (name, PENDING[name]))
@@ -482,7 +511,7 @@ def main(argv):
         print('  stack     up|down|logs|restart|status')
         print('  seed      stage fixtures + fresh ledger')
         print('  api       drive HTTP as a role (all surfaces; ask needs --data)')
-        print('  browser   run|snapshot UI flows (day 6)')
+        print('  browser   run <flow> | snapshot [--tab TAB]')
         print('  test      typecheck + vitest + build')
         print('  evidence  dir|list')
         print('  cleanup   stop this instance (day 7)')
@@ -508,6 +537,8 @@ def main(argv):
         return cmd_evidence(argv[1:])
     if name == 'test':
         return cmd_test(argv[1:])
+    if name == 'browser':
+        return cmd_browser(argv[1:])
     if name in PENDING:
         return cmd_pending(name, argv[1:])
     print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)

@@ -2,18 +2,17 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-Approval closes the demo loop: switching to Partner reveals the conflicts memo (Helios competes with portfolio company Lumen) plus the released churn quote while every other personal source stays owner-only, the Partner approves "take the meeting after conflict review", and the decision is logged. The role switcher sends `X-Viewer-Role` and the server enforces it; the switcher is labeled "simulated sign-in". Routes live day 5; role-switch UI day 6. Overall maturity: everything api-only.
+Approval closes the demo loop: switching to Partner reveals the conflicts memo (Helios competes with portfolio company Lumen) plus the released churn quote while every other personal source stays owner-only, the Partner approves "take the meeting after conflict review", and the decision is logged. The role switcher sends `X-Viewer-Role` and the server enforces it; the switcher is labeled "simulated sign-in". Routes live day 5; role-switch UI day 6. Overall maturity: everything beta (happy path works in Chromium).
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| approval-role-switch | Associate/Partner switch changes what is visible: the Partner sees the conflicts memo and released quote the Associate's firm view never shows | api-only | UI+API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day4/evidence/assoc2.json` |
-| approval-decision | The Partner approves or rejects a draft and the decision is logged with the draft id and role | api-only | UI+API | - | 2026-10-27 | `server/index.ts` |
+| approval-role-switch | Associate/Partner switch changes what is visible: the Partner sees the conflicts memo and released quote the Associate's firm view never shows | beta | UI+API | - | 2026-10-27 | `web/src/App.tsx`, `/tmp/stevens-verify/day6/evidence/run-role-switch.png` |
+| approval-decision | The Partner approves or rejects a draft and the decision is logged with the draft id and role | beta | UI+API | - | 2026-10-27 | `web/src/answer.tsx`, `/tmp/stevens-verify/day6/evidence/run-approve.png` |
 
 ## How to get to it (user POV)
 
-Planned UI; no build exists yet. Intended path:
 
 1. Open the app at `http://localhost:5173`.
 2. Switch role to Partner and read the conflicts memo and the released quote.

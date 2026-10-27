@@ -2,19 +2,18 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-The release gate in `server/boundary/release.ts` is the personal→firm boundary: escalations, approved decisions, and every response to a non-owner pass through it. Personal citations render as "Personal source (owner only)" unless a `personal.released` event exists for that claim. Only the owner can release a quote, one quote per release, and each release is logged. Day 4 built it and drove it live: owner release, 403 for non-owners, released quote visible to the Partner. Overall maturity: everything api-only.
+The release gate in `server/boundary/release.ts` is the personal→firm boundary: escalations, approved decisions, and every response to a non-owner pass through it. Personal citations render as "Personal source (owner only)" unless a `personal.released` event exists for that claim. Only the owner can release a quote, one quote per release, and each release is logged. Day 4 built it and drove it live: owner release, 403 for non-owners, released quote visible to the Partner. Overall maturity: share beta, gate and owner-only api-only.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| release-share | The owner clicks Share with the firm on one quote, which logs a personal.released event for that claim | api-only | UI+API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day4/evidence/partner.json` |
+| release-share | The owner clicks Share with the firm on one quote, which logs a personal.released event for that claim | beta | UI+API | - | 2026-10-27 | `web/src/sentences.tsx`, `/tmp/stevens-verify/day6/evidence/run-release.png` |
 | release-gate | Escalations, approved decisions, and non-owner responses pass the gate; unreleased personal text renders owner-only or the response is withheld | api-only | API | - | 2026-10-27 | `server/boundary/release.ts`, `server/boundary/filter.ts` |
 | release-owner-only | A release attempt by anyone but the claim's owner is rejected | api-only | API | - | 2026-10-27 | `server/boundary/release.test.ts` |
 
 ## How to get to it (user POV)
 
-Planned UI; no build exists yet. Intended path:
 
 1. Open the app at `http://localhost:5173` as Associate.
 2. In the brief, click "Share with the firm" on the churn quote.

@@ -1,19 +1,17 @@
 # Inspector
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
-The boundary inspector makes the enforced boundary inspectable: for each model call it shows what went in, what was withheld and which policy rule applied, and raw vs assembled token counts. The answer call contains no partner memo; an Associate sees "1 privy check ran — contents hidden"; web search was off for every enterprise call. Day 6 UI. Overall maturity: everything planned.
+The boundary inspector makes the enforced boundary inspectable: for each model call it shows what went in, what was withheld and which policy rule applied, and raw vs assembled token counts. The answer call contains no partner memo; an Associate sees "1 privy check ran — contents hidden"; web search was off for every enterprise call. Day 6 UI drove it live via headless Chromium. Overall maturity: everything beta (happy path works; no interaction coverage beyond the flows).
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| inspector-manifests | Each model call shows included sources, withheld sources with rule IDs, the web-search flag, raw vs assembled tokens, and dropped-sentence counts | planned | UI | - | not driven | SPEC.md § Demo, SPEC.md § Contracts |
-| inspector-hidden | Privy manifest contents stay hidden from a viewer who may not see them ("1 privy check ran — contents hidden"); the partner memo is absent from the answer call | planned | UI | - | not driven | SPEC.md § Demo, SPEC.md § Contracts |
+| inspector-manifests | Each model call shows included sources, withheld sources with rule IDs, the web-search flag, raw vs assembled tokens, and dropped-sentence counts | beta | UI | - | 2026-10-27 | `web/src/inspector.tsx`, `/tmp/stevens-verify/day6/evidence/run-inspector.png` |
+| inspector-hidden | Privy manifest contents stay hidden from a viewer who may not see them ("1 privy check ran — contents hidden"); the partner memo is absent from the answer call | beta | UI | - | 2026-10-27 | `web/src/inspector.tsx`, `/tmp/stevens-verify/day6/evidence/run-inspector.png` |
 
 ## How to get to it (user POV)
-
-Planned UI; no build exists yet. Intended path:
 
 1. Open the app at `http://localhost:5173`.
 2. Choose "Inspector".

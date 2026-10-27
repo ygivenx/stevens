@@ -90,7 +90,7 @@ No rule requires using every Meta model; Stage One is pass/fail on *reasonable* 
 | --- | --- | --- |
 | Language | TypeScript throughout; shared types in `shared/` | One set of contracts for server and UI |
 | Server | Hono on Node (:8787) | Owns the vaults, policy, assembler, pipeline, ledger and every Meta call. The browser receives only viewer-filtered JSON. |
-| UI | Vite + React + Tailwind + shadcn/ui (:5173) | Demo polish is 25% of the score |
+| UI | Vite + React + Tailwind + shadcn-style components (:5173) | Demo polish is 25% of the score. Day 6 hand-rolled Button/Card/Chip/Tab in shadcn spirit instead of the registry CLI; same look, no new dep |
 | Meta calls | OpenAI JS SDK at `https://api.meta.ai/v1` (server only); `fetch` + `FormData` for Voice | Voice is not on the Responses API |
 | Structured output | zod schema per call; validate, retry once, then fail closed | A weak model's shape can't be trusted |
 | Ledger | Append-only JSONL at `data/ledger.jsonl` (gitignored) | Event sourcing in its simplest form; inspectable and replayable |
@@ -132,7 +132,7 @@ Pipeline: `ingest → extract → bridge → brief → privy → answer → rele
 
 - `GET /api/state`: viewer-filtered projection of the ledger.
 - `GET /api/events`: SSE.
-- `POST /api/ingest`, `POST /api/extract`, `POST /api/bridge`, `POST /api/brief`, `POST /api/ask`, `POST /api/release/:claimId`, `POST /api/approve/:draftId`, `POST /api/reject/:draftId`, `POST /api/switch` (logs `role.switched` for the simulated sign-in).
+- `POST /api/ingest`, `POST /api/extract`, `POST /api/bridge`, `POST /api/brief`, `POST /api/ask`, `POST /api/release/:claimId`, `POST /api/approve/:draftId`, `POST /api/reject/:draftId`, `POST /api/switch` (logs `role.switched` for the simulated sign-in). `GET /api/transcript/:sourceId` returns diarization turns, policy-checked like media.
 - `GET /api/media/:sourceId`: policy-checked; fixtures are never served statically.
 
 Every request carries `X-Viewer-Role`. The browser never calls Meta.

@@ -152,6 +152,17 @@ app.post('/api/release/:claimId', (c) => {
   }
 });
 
+app.get('/api/transcript/:sourceId', (c) => {
+  const viewer = viewerRole(c.req.header('X-Viewer-Role'));
+  const { sources } = indexEvents(readAll());
+  const source = sources.get(c.req.param('sourceId'));
+  if (!source) return c.json({ error: 'unknown source' }, 404);
+  if (policy(source, viewer, 'brief').access !== 'visible') return c.json({ error: 'unknown source' }, 404);
+  const path = join(process.cwd(), 'data', 'derived', source.id + '.json');
+  if (!existsSync(path)) return c.json({ error: 'unknown source' }, 404);
+  return c.json(JSON.parse(readFileSync(path, 'utf8')));
+});
+
 const MEDIA_TYPES: Record<string, string> = { '.wav': 'audio/wav', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.txt': 'text/plain' };
 
 app.get('/api/media/:sourceId', (c) => {

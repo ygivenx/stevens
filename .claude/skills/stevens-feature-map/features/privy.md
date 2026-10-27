@@ -2,19 +2,18 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-The privy step is the agent↔viewer boundary at answer time: Wonder reasons over the privy sources that code matched by entity and returns only a `Verdict` with no string fields. An Associate's answer recommends "hold until Partner review" without ever learning why, and an escalation is drafted to a Partner. Failures fail closed. Day 5 built and drove it live. Overall maturity: everything api-only.
+The privy step is the agent↔viewer boundary at answer time: Wonder reasons over the privy sources that code matched by entity and returns only a `Verdict` with no string fields. An Associate's answer recommends "hold until Partner review" without ever learning why, and an escalation is drafted to a Partner. Failures fail closed. Day 5 built and drove it live. Overall maturity: escalation beta, verdict and fail-closed api-only.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
 | privy-verdict | The privy step sees code-matched privy sources and returns exactly a verdict (proceed, hold, or decline plus routing); one call per question | api-only | API | - | 2026-10-27 | `server/pipeline/ask.ts`, `/tmp/stevens-verify/day5/evidence/answer2.json` |
-| privy-escalation | A hold verdict produces an escalation draft to a Partner carrying no content; with the conflicts memo removed there is no escalation | api-only | UI+API | - | 2026-10-27 | `server/pipeline/ask.ts`, `server/pipeline/pipeline.test.ts` |
+| privy-escalation | A hold verdict produces an escalation draft to a Partner carrying no content; with the conflicts memo removed there is no escalation | beta | UI+API | - | 2026-10-27 | `web/src/answer.tsx`, `/tmp/stevens-verify/day6/evidence/run-answer.png` |
 | privy-fail-closed | A privy step that fails validation twice yields hold routed to a Partner, flagged as failed closed | api-only | API | - | 2026-10-27 | `server/pipeline/ask.ts` |
 
 ## How to get to it (user POV)
 
-Planned UI; no build exists yet. Intended path:
 
 1. Open the app at `http://localhost:5173`.
 2. As Associate, choose "Ask" and type "Should we take the second meeting?".
