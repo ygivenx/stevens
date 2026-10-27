@@ -1,20 +1,20 @@
 # Associate app
 
-Last verified: 0f84ea375996 on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-28 (live)
 
-Stevens · yours (:5173 → :8788) is the Associate's product: Today with a self-written meeting card, the bridge as a two-column contrast with replay, Ask and the answer, the Share sheet, Captures, Shared, and the Receipts drawer. No ids, no pipeline vocabulary and no Run control outside Receipts. Owner only. Overall maturity: planned (SPEC.md v3 day 13).
+Stevens · yours (:5173 → :8788) is the Associate's product: Today with a self-written meeting card, the bridge as a two-column contrast with replay, Ask and the answer, the Share sheet, Captures, Shared, and the Receipts drawer. No ids, no pipeline vocabulary and no Run control outside Receipts. Owner only. Day 13 landed Today, bridge block with replay, Ask/Answer, Share sheet, Captures, Shared and Receipts; v2.1 tabs removed. Overall maturity: beta.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| associate-today | Today: date, meetings within 24h, empty state | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
-| associate-bridge-block | Deck-says versus you-heard columns, relation, reason, replay of the moment | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
-| associate-ask-answer | Ask box with the privy disclosure; verdict pill, answer, escalation row | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
-| associate-share-sheet | Confirm exactly what crosses, then share one quote | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
-| associate-captures | Feed of captures by day with transcripts, photos, highlights, notes and status | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
-| associate-shared | Every quote shared with the firm | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
-| associate-receipts | Per-draft drawer: calls, what went in, what was held back, rule ids, tokens | planned | UI | - | not driven | SPEC.md § UI (Stevens · yours) |
+| associate-today | Today: date, meetings within 24h, empty state | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, browser `associate-today` PASS |
+| associate-bridge-block | Deck-says versus you-heard columns, relation, reason, replay of the moment | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, browser `associate-today` PASS |
+| associate-ask-answer | Ask box with the privy disclosure; verdict pill, answer, escalation row | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, browser `associate-ask` PASS |
+| associate-share-sheet | Confirm exactly what crosses, then share one quote | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, browser `associate-share` PASS |
+| associate-captures | Feed of captures by day with transcripts, photos, highlights, notes and status | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, browser `associate-captures` PASS |
+| associate-shared | Every quote shared with the firm | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, `associate-share` lists under Shared |
+| associate-receipts | Per-draft drawer: calls, what went in, what was held back, rule ids, tokens | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, `server/personal/receipts.ts`, browser `associate-receipts` PASS |
 
 ## How to get to it (user POV)
 

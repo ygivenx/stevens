@@ -8,6 +8,7 @@ import { InboxAdapter } from './adapters/inbox.js';
 import { NotesAdapter, seedNotes } from './adapters/notes.js';
 import { ReadwiseAdapter } from './adapters/readwise.js';
 import { askQuestion } from './answer.js';
+import { buildPersonalState } from './state.js';
 import { ingestRaws, runInboxPoll, type IngestDeps } from './ingest.js';
 import { startEscalationRetry, startTriggerLoop, runMeetingTrigger } from './triggers.js';
 import { receiptsFor } from './receipts.js';
@@ -29,6 +30,7 @@ function devEnabled(): boolean {
 export const app = createApp({
   webRoot: './dist-web-personal',
   mountExtra: (extra) => {
+    extra.get('/api/state', async (c) => c.json(await buildPersonalState()));
     extra.get('/api/owner', (c) => c.json({ owner: process.env.STEVENS_OWNER ?? 'p-alex' }));
 
     extra.get('/api/items/:itemId', (c) => {
@@ -43,6 +45,19 @@ export const app = createApp({
       const body = readFileSync(path);
       c.header('Content-Type', MEDIA_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream');
       return c.body(body);
+    });
+
+    extra.get('/api/firm-media/:sourceId', async (c) => {
+      const sourceId = c.req.param('sourceId');
+      const token = process.env.STEVENS_AGENT_TOKEN ?? '';
+      const url = (process.env.STEVENS_FIRM_URL ?? 'http://localhost:8787') + '/agent/media/' + encodeURIComponent(sourceId);
+      const res = await fetch(url, { headers: { 'X-Stevens-Agent': token } });
+      if (!res.ok) return c.json({ error: 'unknown source' }, 404);
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const contentType = res.headers.get('content-type') ?? 'application/octet-stream';
+      return new Response(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer, {
+        headers: { 'Content-Type': contentType },
+      });
     });
 
     extra.post('/api/dev/sync', async (c) => {
