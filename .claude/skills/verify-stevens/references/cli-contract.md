@@ -2,7 +2,18 @@
 
 `stevensctl` is the single verification CLI for Stevens. It lives in `.claude/skills/verify-stevens/stevensctl`, runs from the repo root with `uv run` (no install step), and mirrors the verify-CLI contract shared across projects: `--help` with examples on every command, `+` echo lines for every command it runs, exit 0 pass / 1 check failed / 2 usage or precondition error whose message says how to fix it.
 
-Day 4 status: `doctor`, `stack`, `seed`, `meta`, `api` (all surfaces), `evidence`, and `test` are implemented. Day 7 status: all commands implemented, including `cleanup` and `report`.
+Status: every v2.1 command is implemented (day 7). The v3 changes below are **planned**; implement each on the SPEC.md v3 day that first needs it (noted per command). Until then the v2.1 behavior stays.
+
+## v3 stack in one table
+
+| Piece | Port | Health check |
+| --- | --- | --- |
+| Stevens · firm (Hono, `server/firm/index.ts`) | 8787 | `GET /api/people` → 200 |
+| Stevens · yours (Hono, `server/personal/index.ts`) | 8788 | `GET /api/state` → 200 |
+| Associate app (Vite, `web/personal/`) | 5173 | `GET /` → 200 |
+| Partner app (Vite, `web/firm/`) | 5174 | `GET /` → 200 |
+
+State: `data/firm/{firm.db,ledger.jsonl}` and `data/personal/{personal.db,ledger.jsonl,inbox/,notes/}`.
 
 ## Instances and evidence
 
@@ -14,40 +25,67 @@ Day 4 status: `doctor`, `stack`, `seed`, `meta`, `api` (all surfaces), `evidence
 
 Checks the tools and credentials the demo needs:
 
-- `node` 20+, `uv`, and `ffmpeg` are present.
-- `MODEL_API_KEY` is set in `.env.local` (never printed).
-- `GET /v1/models` succeeds and lists the SPEC models (`muse-voice-transcribe-1.0`, `muse-spark-1.3`, `muse-wonder-1.0` if the day-1 A/B keeps it).
-- Ports 5173 and 8787 are free or held by this instance.
+- `node` 24+ (for `node:sqlite`), `uv`, and `ffmpeg` are present; `sips` on macOS.
+- `MODEL_API_KEY` and `STEVENS_AGENT_TOKEN` are set in `.env.local` (never printed). `READWISE_TOKEN` is optional; without it, doctor notes "Readwise: export file (simulated)".
+- `GET /v1/models` succeeds and lists the SPEC models (`muse-voice-transcribe-1.0`, `muse-spark-1.3`, `muse-spark-1.3-contributor`, `muse-wonder-1.0`).
+- Ports 8787, 8788, 5173 and 5174 are free or held by this instance. (v3: day 9b.)
 
 Exit 1 names the missing piece and the fix.
 
 ### stack up|down|logs|restart|status
 
-Local copy of the deployment: `npm run dev` (Vite UI on :5173 plus the Hono server on :8787, which holds the key). `up` starts both and waits for health (HTTP 200 on `/` plus `GET /api/state` answering with an `X-Viewer-Role` caller). `status` prints the instance, pids, ports, and health. `logs` tails the dev server log. `down` stops only this instance's servers.
+Local copy of the deployment: `npm run dev`. `up` starts all four pieces and waits for each health check in the table above. `status` prints the instance, pids, ports and health per piece. `logs [firm|yours|web]` tails one piece or all. `down` stops only this instance's processes. `--now <iso>` sets `STEVENS_NOW` for the instance (the demo uses `2026-10-28T14:00:00-04:00`). (v3: day 9b.)
 
 ### seed
 
-Stages the SPEC fixtures into the server-only `fixtures/` directory (talk audio + slide photo + article highlights into the personal vault, Helios deal + CRM + deck photo + team memo + partner-only conflicts memo + one `wall` item into the enterprise vault) plus a fresh `data/ledger.jsonl`. Nothing lands in `public/`; fixtures are never served statically. Synthetic and fictional only; refuses to run against anything but the local stack.
+Rebuilds this instance's state from fixtures, with fresh ledgers:
+- **firm:** `firm.db` from `fixtures/enterprise/crm.json` and `fixtures/enterprise/formd/*.json`, then a connector sync;
+- **yours:** `data/personal/notes/` from `fixtures/personal/notes/`; Readwise from the live account if `READWISE_TOKEN` is set, else `fixtures/personal/readwise-export.json`; an **empty** inbox.
+
+`--with-captures` also drops the talk and the slide, and waits until both items are `ready`. Synthetic and fictional only (plus public Form D rows); refuses to run against anything but the local stack. (v3: day 9b for the databases, day 10–11 for the adapters.)
+
+### drop <talk|slide|path> [--wait]
+
+Copies a fixture (or any file) into `data/personal/inbox/`, which is exactly what the glasses import does. `--wait` polls the personal `/api/state` until the item is `ready`, `failed` or rejected, and prints its status, segment count and claim count. (v3: day 10.)
+
+### sync [firm|yours]
+
+Calls the dev-only sync endpoints (`STEVENS_DEV=1`): connectors on the firm, adapters on yours. (v3: day 11.)
 
 ### api
 
-Drives the app's HTTP surface as a role (sent as `X-Viewer-Role`, enforced by the server):
+Drives an HTTP surface as a person:
 
 ```bash
-stevensctl api --as Associate brief --expect 200 --field 'sentences[0].citations[0].kind' --save brief.json
-stevensctl api --as Associate answer --expect 200 --until '.escalation == true'
-stevensctl api --as Partner memo --expect 200
+stevensctl api --via yours GET /api/state --field '.meetings[0].briefId'
+stevensctl api --via yours POST /api/ask --data '{"dealId":"helios","question":"Should we take the second meeting?"}' --expect 202
+stevensctl api --via firm --as p-morgan GET /api/state --until '.inbox | length > 0'
+stevensctl api --via agent --as p-alex GET '/agent/context?dealId=helios&purpose=answer' --save context.json
 ```
 
-`--as Associate|Partner` sets the viewer role, `--expect` asserts status, `--field` asserts a JSON path, `--until` polls a condition, `--save` stores the capture under the evidence dir.
+- `--via yours|firm|agent` picks the surface: yours (:8788, as its owner), firm (:8787, `X-Viewer-Id`), or the agent API (:8787, `X-Stevens-Agent` for that person's token).
+- `--as <personId>` sets the person (firm and agent only); `--expect` asserts status; `--field` asserts a JSON path; `--until` polls a condition; `--save` stores the capture under the evidence dir.
+- Refuses with exit 2 when the stack is not up (day 8 behavior). (v3: day 9b.)
 
 ### browser run|snapshot
 
-`browser run <flow>` drives a named UI flow (capture, brief, answer, inspector, role-switch, release, approve) and asserts visible text; `browser snapshot` saves DOM + screenshot to the evidence dir. Preferred for UI surfaces; the API driver covers API-only paths.
+`browser run <flow>` drives a named UI flow and asserts visible text; `browser snapshot <app> <route>` saves DOM + screenshot to the evidence dir. v3 flows: `associate-today`, `associate-ask`, `associate-share`, `associate-receipts`, `associate-captures` (day 13), `partner-inbox`, `partner-approve`, `partner-sources`, `demo-two-screens` (day 14). Every flow also asserts the UI-vocabulary rule: no id, no pipeline vocabulary and no Run control outside the Receipts drawer.
+
+### demo run|open
+
+`demo run` executes the SPEC demo through the APIs only: seed → `drop talk` → `drop slide` → wait for the Helios brief → ask → assert `hold` and an escalation in Morgan's inbox → share the churn quote → assert it in the Helios record → approve the decision → `leak scan`. `demo open` opens `web/demo.html`. (v3: `run` day 12, `open` day 14.)
+
+### leak scan
+
+Searches `data/firm/` (ledger and `firm.db`) for the text of every personal segment and reports any hit that is not a released quote; checks that every `/api/events` message from both servers has `data: {}`. Exit 1 on any finding. (v3: day 9a for the stream check, day 12 for the full scan.)
+
+### db query <personal|firm> "<select>"
+
+Read-only SQL against one database (opened read-only; anything but a single `SELECT` exits 2). Prints rows as JSON. For checks the APIs don't expose (for example, counting `segments` per item). (v3: day 9b.)
 
 ### test
 
-Runs `npx tsc --noEmit`, the vitest suites (exhaustive policy, assembler, release gate, resolver, resume), and `npm run build`. Prints one line per suite plus the evidence path of the full log.
+Runs `npx tsc --noEmit`, the vitest suites (exhaustive policy, ACL map, assembler, release gates, resolver, resume, import boundary, ingestion, triggers, Form D comps), and `npm run build`. Prints one line per suite plus the evidence path of the full log.
 
 ### evidence dir|list
 
@@ -63,7 +101,7 @@ Prints the verify-stevens report shape (verdict, checks table, deployed-environm
 
 ### meta fake (failure injection)
 
-The Meta API fake stands in for `api.meta.ai` in tests and failure drills. Modes: `normal|empty|fail|garbage|slow`, plus a call counter the replay and resume checks read:
+The Meta API fake stands in for `api.meta.ai` in tests and failure drills, for both servers. Modes: `normal|empty|fail|garbage|slow`, plus a call counter the replay and resume checks read:
 
 ```bash
 stevensctl meta fake --mode fail     # every model call errors
@@ -72,13 +110,16 @@ stevensctl meta calls                # prints the call counter
 stevensctl meta fake --mode normal   # restore
 ```
 
-Expected app behavior per mode: `fail` and `garbage` show `Simulated — <reason>` badges and the demo continues; `empty` yields "nothing relevant" drafts; `slow` must not hang the UI; the counter must read zero new calls after a replay or a resumed restart.
+Expected app behavior per mode: `fail` and `garbage` show `Simulated — <reason>` badges and the demo continues, failing closed; `empty` yields "nothing relevant" drafts; `slow` must not hang either UI; the counter must read zero new calls after a replay, a resumed restart, a re-drop of the same file, or a `personal.db` rebuild.
+
+### firm down|up (failure injection)
+
+Stops or restarts only the firm server of this instance, to drill the fail-closed path: Alex's question yields `hold`, `escalation.queued` and its label, and the escalation is sent once the firm is back. (v3: day 15.)
 
 ## Explicit skips
 
 Not implemented until the thing they check exists:
 
-- `db query` — no database; the ledger is the server's `data/ledger.jsonl`, read via `GET /api/state`.
 - `ci status` — no CI yet.
 - `aws status` — no deployed app; the only deploy is the static GitHub Pages site in `docs/`.
 - `parity check` — same reason: nothing deployed to diff against.
