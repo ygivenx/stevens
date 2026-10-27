@@ -38,9 +38,20 @@ function VaultSection({ title, sources, role, tone }: { title: string; sources: 
 }
 
 function SourceBody({ source, role }: { source: Source; role: Role }) {
-  if (source.kind === 'talk-audio') return <Turns sourceId={source.id} role={role} />;
+  if (source.kind === 'talk-audio') return <div className="space-y-4"><AudioNote sourceId={source.id} role={role} /><Turns sourceId={source.id} role={role} /></div>;
   if (source.kind === 'slide-photo' || source.kind === 'deck-photo') return <Photo sourceId={source.id} role={role} text={source.text} />;
   return <p className="max-w-3xl text-[15px] leading-relaxed">{source.text}</p>;
+}
+
+function AudioNote({ sourceId, role }: { sourceId: string; role: Role }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    fetchMedia(role, sourceId).then((u) => { if (live) setUrl(u); }).catch(() => {});
+    return () => { live = false; };
+  }, [sourceId, role]);
+  if (!url) return null;
+  return <audio controls src={url} className="w-full max-w-md" data-testid={'audio-' + sourceId} />;
 }
 
 function Turns({ sourceId, role }: { sourceId: string; role: Role }) {

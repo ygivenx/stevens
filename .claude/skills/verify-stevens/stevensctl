@@ -339,6 +339,11 @@ def cmd_api(argv):
     data = json.loads(argv[argv.index('--data') + 1]) if '--data' in argv else None
     name = instance_name(argv) or 'default'
     plus('%s %s as %s' % (method, path, role))
+    try:
+        http_json('GET', '/api/health', timeout=5)
+    except Exception:
+        print('api refuses: the local stack is not up (run stevensctl stack up first).', file=sys.stderr)
+        return 2
     if raw:
         req = urllib.request.Request('http://localhost:8787' + path, headers={'X-Viewer-Role': role}, method=method)
         try:

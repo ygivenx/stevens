@@ -2,12 +2,31 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Claim, LedgerEvent, Role, Source } from '../../shared/data.js';
 import { getState, postAction, watchEvents } from './api.js';
 import { Button, Tab } from './ui.js';
+import { nextSteps } from './nextup.js';
 import { Capture } from './capture.js';
 import { Brief } from './brief.js';
 import { Answer } from './answer.js';
 import { Inspector } from './inspector.js';
 
 type TabName = 'Capture' | 'Brief' | 'Answer' | 'Inspector';
+
+const STAGES = ['ingesting', 'extracting', 'bridging', 'drafting'];
+
+function StageChecklist({ stage }: { stage: string }) {
+  const current = STAGES.indexOf(stage);
+  return (
+    <ol className="flex flex-wrap items-center gap-4">
+      {STAGES.map((name, i) => (
+        <li key={name} className="flex items-center gap-2 text-sm">
+          <span className={i < current ? 'text-forest' : i === current ? 'text-brass-deep' : 'text-smoke'}>
+            {i < current ? '✓' : i === current ? '▶' : '○'}
+          </span>
+          <span className={i <= current ? 'font-semibold' : 'text-smoke'}>{name}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 export default function App() {
   const [role, setRole] = useState<Role>('Associate');
@@ -100,6 +119,7 @@ export default function App() {
   }
 
   const drafts = events.filter((e) => e.type === 'draft.created').length;
+  const steps = nextSteps(events, role, derived, { runPipeline, gotoTab: setTab, switchRole, release, approve });
 
   return (
     <div className="mx-auto max-w-5xl px-5 pb-16">
@@ -137,6 +157,21 @@ export default function App() {
         </div>
         {error !== '' && <p className="mt-3 text-sm text-oxblood" data-testid="error">{error}</p>}
       </header>
+
+      {(steps.length > 0 || stage !== '') && (
+        <div className="mb-6 rounded-md border border-brass/40 bg-paper p-4" data-testid="next-rail">
+          {stage !== '' ? (
+            <StageChecklist stage={stage} />
+          ) : (
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs font-bold uppercase tracking-[0.18em] text-brass">What next</span>
+              {steps.map((s) => (
+                <Button key={s.testid} testid={s.testid} tone="brass" onClick={s.run}>{s.label}</Button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <nav className="mb-6 flex gap-6 border-b border-hairline">
         {(['Capture', 'Brief', 'Answer', 'Inspector'] as TabName[]).map((name) => (
