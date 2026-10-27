@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { readFileSync, existsSync } from 'node:fs';
+import { join, extname } from 'node:path';
 import type { Role } from '../shared/data.js';
 import { readAll } from './ledger/store.js';
 
@@ -11,6 +12,9 @@ for (const line of existsSync('.env.local') ? readFileSync('.env.local', 'utf8')
 }
 import { runIngest } from './pipeline/ingest.js';
 import { runExtract } from './pipeline/extract.js';
+import { policy } from './boundary/policy.js';
+import { filterState, indexEvents } from './boundary/filter.js';
+import { releaseClaim } from './boundary/release.js';
 
 const app = new Hono();
 
@@ -22,7 +26,7 @@ app.get('/api/health', (c) => c.json({ ok: true }));
 
 app.get('/api/state', (c) => {
   const viewer = viewerRole(c.req.header('X-Viewer-Role'));
-  return c.json({ viewer, events: readAll(), drafts: [] });
+  return c.json({ viewer, events: filterState(readAll(), viewer), drafts: [] });
 });
 
 app.get('/api/events', (c) => {
@@ -75,6 +79,35 @@ app.post('/api/extract', async (c) => {
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
+});
+
+app.post('/api/release/:claimId', (c) => {
+  const viewer = viewerRole(c.req.header('X-Viewer-Role'));
+  const events = readAll();
+  const { claims, sources } = indexEvents(events);
+  try {
+    releaseClaim(c.req.param('claimId'), viewer, claims, sources, events);
+    return c.json({ released: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'only the owner can release' ? 403 : 404;
+    return c.json({ error: message }, status);
+  }
+});
+
+const MEDIA_TYPES: Record<string, string> = { '.wav': 'audio/wav', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.txt': 'text/plain' };
+
+app.get('/api/media/:sourceId', (c) => {
+  const viewer = viewerRole(c.req.header('X-Viewer-Role'));
+  const { sources } = indexEvents(readAll());
+  const source = sources.get(c.req.param('sourceId'));
+  if (!source) return c.json({ error: 'unknown source' }, 404);
+  if (policy(source, viewer, 'brief').access !== 'visible') return c.json({ error: 'unknown source' }, 404);
+  const path = join(process.cwd(), 'fixtures', source.fixture);
+  if (!existsSync(path)) return c.json({ error: 'unknown source' }, 404);
+  const body = readFileSync(path);
+  c.header('Content-Type', MEDIA_TYPES[extname(path)] ?? 'application/octet-stream');
+  return c.body(body);
 });
 
 app.use('/*', serveStatic({ root: './dist-web' }));

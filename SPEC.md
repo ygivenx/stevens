@@ -213,6 +213,7 @@ Field rules (documentation only; code carries no comments, per AGENTS.md):
 - `Verdict` has no string fields by design; it is the only channel from privy sources to a viewer.
 - `escalation.drafted` carries no content, by design. `personal.released` is accepted only from the claim's owner.
 - A `privy` manifest's contents are shown only to a viewer for whom every included source is `visible`; others see "1 privy check ran — contents hidden."
+- Identity is content: a viewer for whom a source is not `visible` sees neither its text, title, nor id. Its ingested and emptied claim events are dropped from the projection, and its manifest entries keep only access and rule id. A released personal quote is the exception: its claim and source id cross with the quote.
 
 ## Meta API wiring
 
