@@ -1,6 +1,6 @@
 # Multi-surface journeys
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (source)
 
 A journey crosses areas, so it can fail where no single area file looks. Each one names the sub-feature IDs it touches, the invariant that must hold across areas, the last live result, and the commands to drive it. Use this file for questions like "what happens to X after Y" and for release smoke tests. Journeys run in the order below, and each assumes the state the one before it left.
 
@@ -28,7 +28,7 @@ $CC doctor && $CC stack up && $CC seed
 $CC browser run brief
 ```
 
-Result (2026-10-26): NOT DRIVEN, nothing is built yet.
+Result (2026-10-27): NOT DRIVEN, scaffold only, no pipeline yet.
 
 ## j-answer-escalation
 
@@ -48,7 +48,7 @@ $CC doctor && $CC stack up && $CC seed
 $CC api --as Associate answer --expect 200 --field '.escalation'
 ```
 
-Result (2026-10-26): NOT DRIVEN, nothing is built yet.
+Result (2026-10-27): NOT DRIVEN, scaffold only, no pipeline yet.
 
 ## j-release-approve
 
@@ -69,4 +69,4 @@ $CC browser run role-switch
 $CC api --as Partner approve answer --expect 200 --field '.status'
 ```
 
-Result (2026-10-26): NOT DRIVEN, nothing is built yet.
+Result (2026-10-27): NOT DRIVEN, scaffold only, no pipeline yet.

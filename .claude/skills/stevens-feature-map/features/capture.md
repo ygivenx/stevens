@@ -1,8 +1,8 @@
 # Capture
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (source)
 
-Capture stages what Stevens reasons over: Ray-Ban Meta glasses captures (a staged ~90s conference talk, a slide photo, article highlights) into the personal vault, and the fictional Helios deal data (deck photo, CRM record, memos) into the enterprise vault. Fixtures live in the server-only `fixtures/` directory and reach the browser only through the policy-checked media route. Day 1 proves both perception gates with live calls; day 2 commits the final fixtures. Overall maturity: everything planned.
+Capture stages what Stevens reasons over: Ray-Ban Meta glasses captures (a staged ~90s conference talk, a slide photo, article highlights) into the personal vault, and the fictional Helios deal data (deck photo, CRM record, memos) into the enterprise vault. Fixtures live in the server-only `fixtures/` directory and reach the browser only through the policy-checked media route. Day 1 proved both perception gates with live calls on placeholders (spike log: `spikes/day1/README.md`); day 2 commits the final fixtures. Overall maturity: everything planned.
 
 ## Sub-features
 

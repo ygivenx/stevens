@@ -19,7 +19,7 @@ Stevens is a chief-of-staff agent. It links what you learn off the clock (talks,
 
 Write no app code (`server/`, `web/`, `shared/`, `package.json`, Vite) in this phase.
 
-**Status (Oct 26):** steps 1–2 were done against SPEC v2. SPEC v2.1 has since changed the architecture. Before any app code, do the following, then repeat step 3:
+**Status (Oct 27):** phase 0 exit passed (map and site verified v2.1, user reviewed, `render-map` exit 0); day 1 done (spikes in `spikes/day1/`, Vite + Hono scaffold, `stevensctl doctor`). The refresh checklist below is kept as the record of what phase 0 verified:
 - update the feature-map areas to the v2.1 list below;
 - update `verify-stevens` (its `SKILL.md` and `references/cli-contract.md`), which still describe v2:
   - Hono server on :8787 holds the key (there is no `/api/meta/*` proxy);
