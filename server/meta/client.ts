@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import OpenAI from 'openai';
-import type { Usage } from '../../shared/data.js';
+import { z } from 'zod';
+import type { Citation, Claim, Source, Usage, Verdict } from '../../shared/data.js';
 
 export type FakeMode = 'live' | 'normal' | 'empty' | 'fail' | 'garbage' | 'slow';
 
@@ -181,3 +182,186 @@ export async function extractClaims(sourceId: string, text: string, turns?: Tran
 export const voiceModel = VOICE_MODEL;
 export const visionModel = VISION_MODEL;
 export const extractModel = EXTRACT_MODEL;
+
+export const WONDER_MODEL = 'muse-wonder-1.0';
+
+export const Judgement = z.strictObject({
+  relation: z.enum(['contradicts', 'supports', 'context', 'reject']),
+  reason: z.string().min(1),
+});
+export type Judgement = z.infer<typeof Judgement>;
+
+const JUDGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    relation: { type: 'string', enum: ['contradicts', 'supports', 'context', 'reject'] },
+    reason: { type: 'string' },
+  },
+  required: ['relation', 'reason'],
+  additionalProperties: false,
+} as const;
+
+export interface Judged { judgement: Judgement; responseId: string; usage: Usage }
+
+export async function judgeBridge(personal: Claim, work: Claim, prompt: string): Promise<Judged> {
+  const mode = fakeMode();
+  countCall();
+  if (mode === 'fail') throw new Error('fake judge failure');
+  if (mode === 'slow') await sleep(5000);
+  if (mode === 'empty') return { judgement: { relation: 'reject', reason: 'empty' }, responseId: 'fake_judge_empty', usage: fakeUsage() };
+  if (mode === 'garbage') return { judgement: Judgement.parse({ relation: 'maybe', reason: '' }), responseId: 'fake_judge_garbage', usage: fakeUsage() };
+  if (mode !== 'live') {
+    const both = personal.quote.toLowerCase().includes('churn') && work.quote.toLowerCase().includes('churn');
+    return {
+      judgement: both
+        ? { relation: 'contradicts', reason: 'both quote churn benchmarks with incompatible definitions' }
+        : { relation: 'reject', reason: 'unrelated claims' },
+      responseId: 'fake_judge_normal',
+      usage: fakeUsage(),
+    };
+  }
+  const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
+  const resp = await client.responses.create({
+    model: WONDER_MODEL,
+    reasoning: { effort: 'high' },
+    input: prompt,
+    text: { format: { type: 'json_schema', name: 'judgement', schema: JUDGE_SCHEMA, strict: true } },
+  });
+  const judgement = Judgement.parse(JSON.parse(resp.output_text));
+  return { judgement, responseId: resp.id, usage: wonderUsage(resp.usage?.input_tokens, resp.usage?.output_tokens) };
+}
+
+export const DraftSentence = z.strictObject({
+  text: z.string().min(1),
+  citations: z.array(z.strictObject({
+    kind: z.enum(['Fact', 'Inference']),
+    claimId: z.string().nullable().optional(),
+    vault: z.enum(['personal', 'enterprise']).nullable().optional(),
+    quote: z.string().nullable().optional(),
+    fromClaimIds: z.array(z.string()).nullable().optional(),
+  })).min(1),
+});
+const DraftBody = z.strictObject({ sentences: z.array(DraftSentence) });
+
+const DRAFT_SCHEMA = {
+  type: 'object',
+  properties: {
+    sentences: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string' },
+          citations: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                kind: { type: 'string', enum: ['Fact', 'Inference'] },
+                claimId: { type: ['string', 'null'] },
+                vault: { type: ['string', 'null'], enum: ['personal', 'enterprise', null] },
+                quote: { type: ['string', 'null'] },
+                fromClaimIds: { type: ['array', 'null'], items: { type: 'string' } },
+              },
+              required: ['kind', 'claimId', 'vault', 'quote', 'fromClaimIds'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['text', 'citations'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['sentences'],
+  additionalProperties: false,
+} as const;
+
+export interface Written { sentences: { text: string; citations: Citation[] }[]; responseId: string; usage: Usage }
+
+export async function writeDraft(prompt: string, claims: Claim[], sources: Source[]): Promise<Written> {
+  const mode = fakeMode();
+  countCall();
+  if (mode === 'fail') throw new Error('fake writer failure');
+  if (mode === 'slow') await sleep(5000);
+  if (mode === 'empty' || claims.length === 0) return { sentences: [], responseId: 'fake_write_empty', usage: fakeUsage() };
+  if (mode === 'garbage') {
+    return { sentences: [{ text: 'Invented.', citations: [{ kind: 'Fact', claimId: claims[0].id, vault: 'personal', quote: 'words from nowhere' }] }], responseId: 'fake_write_garbage', usage: fakeUsage() };
+  }
+  if (mode !== 'live') {
+    const first = claims[0];
+    const second = claims[1] ?? claims[0];
+    const vaultOf = (id: string) => sources.find((s) => s.id === id)?.vault ?? 'enterprise';
+    return {
+      sentences: [
+        { text: 'The record says: ' + first.quote, citations: [{ kind: 'Fact', claimId: first.id, vault: vaultOf(first.sourceId), quote: first.quote }] },
+        { text: 'So compare the definitions.', citations: [{ kind: 'Inference', fromClaimIds: [first.id, second.id] }] },
+      ],
+      responseId: 'fake_write_normal',
+      usage: fakeUsage(),
+    };
+  }
+  const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
+  const resp = await client.responses.create({
+    model: WONDER_MODEL,
+    reasoning: { effort: 'high' },
+    input: prompt,
+    text: { format: { type: 'json_schema', name: 'draft', schema: DRAFT_SCHEMA, strict: true } },
+  });
+  const parsed = DraftBody.parse(JSON.parse(resp.output_text));
+  const sentences = parsed.sentences.map((s) => ({
+    text: s.text,
+    citations: s.citations.map((c) => {
+      if (c.kind === 'Fact') {
+        if (!c.claimId || !c.vault || !c.quote) throw new Error('fact citation missing fields');
+        return { kind: 'Fact' as const, claimId: c.claimId, vault: c.vault, quote: c.quote };
+      }
+      if (!c.fromClaimIds || c.fromClaimIds.length === 0) throw new Error('inference citation missing claims');
+      return { kind: 'Inference' as const, fromClaimIds: c.fromClaimIds };
+    }),
+  }));
+  return { sentences, responseId: resp.id, usage: wonderUsage(resp.usage?.input_tokens, resp.usage?.output_tokens) };
+}
+
+export const VerdictShape = z.strictObject({
+  verdict: z.enum(['proceed', 'hold', 'decline']),
+  routeTo: z.enum(['Associate', 'Partner']).nullable(),
+});
+
+const VERDICT_SCHEMA = {
+  type: 'object',
+  properties: {
+    verdict: { type: 'string', enum: ['proceed', 'hold', 'decline'] },
+    routeTo: { type: ['string', 'null'], enum: ['Associate', 'Partner', null] },
+  },
+  required: ['verdict', 'routeTo'],
+  additionalProperties: false,
+} as const;
+
+export async function judgePrivy(prompt: string): Promise<{ verdict: Verdict; responseId: string; usage: Usage }> {
+  const mode = fakeMode();
+  countCall();
+  if (mode === 'fail') throw new Error('fake privy failure');
+  if (mode === 'slow') await sleep(5000);
+  if (mode === 'empty') return { verdict: { verdict: 'proceed', routeTo: null }, responseId: 'fake_privy_empty', usage: fakeUsage() };
+  if (mode === 'garbage') return { verdict: VerdictShape.parse({ verdict: 'maybe', routeTo: 'Intern' }), responseId: 'fake_privy_garbage', usage: fakeUsage() };
+  if (mode !== 'live') return { verdict: { verdict: 'hold', routeTo: 'Partner' }, responseId: 'fake_privy_normal', usage: fakeUsage() };
+  const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
+  const resp = await client.responses.create({
+    model: WONDER_MODEL,
+    reasoning: { effort: 'high' },
+    input: prompt,
+    text: { format: { type: 'json_schema', name: 'verdict', schema: VERDICT_SCHEMA, strict: true } },
+  });
+  const verdict = VerdictShape.parse(JSON.parse(resp.output_text));
+  return { verdict, responseId: resp.id, usage: wonderUsage(resp.usage?.input_tokens, resp.usage?.output_tokens) };
+}
+
+function wonderUsage(inputTokens?: number, outputTokens?: number): Usage {
+  return {
+    inputTokens,
+    outputTokens,
+    costUsd: ((inputTokens ?? 0) * 4 + (outputTokens ?? 0) * 20) / 1_000_000,
+  };
+}
+

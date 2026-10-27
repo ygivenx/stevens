@@ -4,7 +4,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import type { Role } from '../shared/data.js';
-import { readAll } from './ledger/store.js';
+import { append, readAll } from './ledger/store.js';
 
 for (const line of existsSync('.env.local') ? readFileSync('.env.local', 'utf8').split('\n') : []) {
   const cut = line.indexOf('=');
@@ -12,6 +12,9 @@ for (const line of existsSync('.env.local') ? readFileSync('.env.local', 'utf8')
 }
 import { runIngest } from './pipeline/ingest.js';
 import { runExtract } from './pipeline/extract.js';
+import { runBridge } from './pipeline/bridge.js';
+import { runBrief } from './pipeline/draft.js';
+import { runAsk } from './pipeline/ask.js';
 import { policy } from './boundary/policy.js';
 import { filterState, indexEvents } from './boundary/filter.js';
 import { releaseClaim } from './boundary/release.js';
@@ -79,6 +82,60 @@ app.post('/api/extract', async (c) => {
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
   }
+});
+
+app.post('/api/bridge', async (c) => {
+  const viewer = viewerRole(c.req.header('X-Viewer-Role'));
+  try {
+    return c.json(await runBridge(viewer));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+app.post('/api/brief', async (c) => {
+  const viewer = viewerRole(c.req.header('X-Viewer-Role'));
+  try {
+    return c.json(await runBrief(viewer));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+app.post('/api/ask', async (c) => {
+  const viewer = viewerRole(c.req.header('X-Viewer-Role'));
+  const body = (await c.req.json().catch(() => ({}))) as { question?: string };
+  if (!body.question) return c.json({ error: 'question is required' }, 400);
+  try {
+    return c.json(await runAsk(viewer, body.question));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+app.post('/api/approve/:draftId', (c) => {
+  const by = viewerRole(c.req.header('X-Viewer-Role'));
+  const draftId = c.req.param('draftId');
+  const exists = readAll().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
+  if (!exists) return c.json({ error: 'unknown draft' }, 404);
+  append({ at: new Date().toISOString(), type: 'draft.approved', draftId, by });
+  return c.json({ approved: true });
+});
+
+app.post('/api/reject/:draftId', (c) => {
+  const by = viewerRole(c.req.header('X-Viewer-Role'));
+  const draftId = c.req.param('draftId');
+  const exists = readAll().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
+  if (!exists) return c.json({ error: 'unknown draft' }, 404);
+  append({ at: new Date().toISOString(), type: 'draft.rejected', draftId, by });
+  return c.json({ rejected: true });
+});
+
+app.post('/api/switch', async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { role?: string };
+  if (body.role !== 'Associate' && body.role !== 'Partner') return c.json({ error: 'role must be Associate or Partner' }, 400);
+  append({ at: new Date().toISOString(), type: 'role.switched', role: body.role });
+  return c.json({ role: body.role });
 });
 
 app.post('/api/release/:claimId', (c) => {

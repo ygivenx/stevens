@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { LedgerEvent } from '../../shared/data.js';
 
-export const PROMPT_VERSION = 'v1';
+export const PROMPT_VERSION = 'v2';
 
 export function dataDir(): string {
   const dir = process.env.STEVENS_DATA_DIR ?? join(process.cwd(), 'data');

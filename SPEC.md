@@ -132,7 +132,7 @@ Pipeline: `ingest → extract → bridge → brief → privy → answer → rele
 
 - `GET /api/state`: viewer-filtered projection of the ledger.
 - `GET /api/events`: SSE.
-- `POST /api/ingest`, `POST /api/ask`, `POST /api/release/:claimId`, `POST /api/approve/:draftId`, `POST /api/reject/:draftId`.
+- `POST /api/ingest`, `POST /api/extract`, `POST /api/bridge`, `POST /api/brief`, `POST /api/ask`, `POST /api/release/:claimId`, `POST /api/approve/:draftId`, `POST /api/reject/:draftId`, `POST /api/switch` (logs `role.switched` for the simulated sign-in).
 - `GET /api/media/:sourceId`: policy-checked; fixtures are never served statically.
 
 Every request carries `X-Viewer-Role`. The browser never calls Meta.
@@ -269,7 +269,7 @@ Cut if behind, in this order: the stretch, SAM, Wonder (use Spark), article high
   - **One conversation per (viewer, draft),** never forked across roles.
   - **Tools:** `search_claims(query)` and `get_quote(claimId)` resolve through the same policy, so even the agent's own tool calls return only what the viewer may see. Privy content is never a tool result.
   - **The first answer stays on the fixed pipeline,** and the citation resolver applies to every chat sentence.
-  - **Go only if** the day-1 tool-calling check passed (it did on Oct 27: a `get_quote` call round-tripped through pi-ai's Meta provider to Spark 1.3) **and** day 5's exit check passed by the end of Sat Oct 31.
+  - **Go only if** the day-1 tool-calling check passed (it did on Oct 27: a `get_quote` call round-tripped through pi-ai's Meta provider to Spark 1.3) **and** day 5's exit check passed by the end of Sat Oct 31. It passed Oct 27 (brief with cross-vault bridges, live hold + escalation), so the stretch is READY pending the user's confirmation; chat stays `deferred` until then.
 - **Preference learning (design only).** A future `preference.learned` event would store a Partner's edit as a versioned note that later drafts cite. Not built in this hackathon.
 
 ## Validation
