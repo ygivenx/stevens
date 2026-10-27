@@ -49,13 +49,17 @@ def evidence_dir(name):
 
 
 def port_free(port):
-    s = socket.socket()
-    try:
-        s.bind(('127.0.0.1', port))
-        s.close()
-        return True
-    except OSError:
-        return False
+    for host in ('127.0.0.1', '::1'):
+        family = socket.AF_INET6 if ':' in host else socket.AF_INET
+        s = socket.socket(family)
+        s.settimeout(2)
+        try:
+            s.connect((host, port))
+            s.close()
+            return False
+        except OSError:
+            pass
+    return True
 
 
 def http_json(method, path, role=None, timeout=30):
