@@ -1,19 +1,19 @@
 # Partner app
 
-Last verified: 0f84ea375996 on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-28 (live)
 
-Stevens · firm (:5174 → :8787) is the Partner's product: a simulated sign-in, a live Inbox of escalations, shared quotes and decision drafts with Approve, a deal page with ACL chips and market comps, and the Sources page showing connectors and the ACL mapping. Partner (and the Associate's firm view). Overall maturity: planned (SPEC.md v3 day 14).
+Stevens · firm (:5174 → :8787) is the Partner's product: a simulated sign-in, a live Inbox of escalations, shared quotes and decision drafts with Approve, a deal page with ACL chips and market comps, and the Sources page showing connectors and the ACL mapping. Partner (and the Associate's firm view). Day 14 landed sign-in, Inbox, deal pages, Sources and the demo harness with live updates. Overall maturity: beta.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| partner-signin | Person picker labeled simulated sign-in, or ?as= for the demo harness | planned | UI | - | not driven | SPEC.md § UI (Stevens · firm) |
-| partner-inbox | Live escalations and shared quotes | planned | UI | - | not driven | SPEC.md § UI (Stevens · firm) |
-| partner-decision | Decision draft with citations; Approve and Reject, logged | planned | UI | - | not driven | SPEC.md § UI (Stevens · firm) |
-| partner-deal-page | Deal record, documents with ACL chips, market comps, shared quotes | planned | UI | - | not driven | SPEC.md § UI (Stevens · firm) |
-| partner-sources | Connectors, last sync, ACL mapping and rules table | planned | UI | - | not driven | SPEC.md § UI (Stevens · firm) |
-| partner-demo-harness | web/demo.html shows both apps side by side | planned | UI | - | not driven | SPEC.md § UI (Demo harness) |
+| partner-signin | Person picker labeled simulated sign-in, or ?as= for the demo harness | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, `GET /api/people` |
+| partner-inbox | Live escalations and shared quotes, newest first, no refresh | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, browser `partner-inbox` PASS |
+| partner-decision | Decision draft with citations; Partner-only Approve and Reject, logged | beta | UI+API | - | 2026-10-28 | `server/firm/index.ts`, browser `partner-approve` PASS |
+| partner-deal-page | Deal record, documents with ACL chips, market comps with SEC links, shared quotes | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, live Helios page |
+| partner-sources | Connectors, last sync, ACL mapping and rules table | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, browser `partner-sources` PASS |
+| partner-demo-harness | web/demo.html shows both apps side by side | beta | UI | - | 2026-10-28 | `web/demo.html`, browser `demo-two-screens` PASS |
 
 ## How to get to it (user POV)
 

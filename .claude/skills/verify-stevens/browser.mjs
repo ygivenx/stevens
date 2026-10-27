@@ -2,6 +2,9 @@ import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const PERSONAL = 'http://localhost:5173';
+const FIRM = 'http://localhost:5174/?as=p-morgan';
+
 const FLOWS = {
   'associate-today': [
     { expectTestId: 'meeting-card' },
@@ -18,6 +21,28 @@ const FLOWS = {
     { expect: 'Hold' },
     { expect: 'nothing enclosed' },
     { expectTestId: 'answer' },
+  ],
+  'partner-inbox': [
+    { expectTestId: 'inbox' },
+    { expect: 'asked about Helios' },
+    { expect: "Enclosed from" },
+  ],
+  'partner-approve': [
+    { expectTestId: 'decision' },
+    { click: 'approve' },
+    { expect: 'Approved by Morgan Hale' },
+  ],
+  'partner-sources': [
+    { click: 'nav-sources' },
+    { expectTestId: 'sources' },
+    { expect: 'Where the firm reads from' },
+    { expect: 'SEC Form D' },
+  ],
+  'demo-two-screens': [
+    { url: PERSONAL + '/#/today' },
+    { expect: 'The deck says' },
+    { url: FIRM + '#/inbox' },
+    { expect: 'asked about Helios' },
   ],
   'associate-share': [
     { expectTestId: 'meeting-card' },
@@ -116,6 +141,10 @@ async function run() {
       }
       for (const step of steps) {
         try {
+          if (step.url) {
+            await page.goto(step.url, { waitUntil: 'domcontentloaded' });
+            await page.waitForTimeout(5000);
+          }
           if (step.click) await page.getByTestId(step.click).first().click();
           if (step.clickPrefix) await page.locator(`[data-testid^="${step.clickPrefix}"]`).first().click();
           if (step.fill) await page.getByTestId(step.fill).first().fill(step.with);

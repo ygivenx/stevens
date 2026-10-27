@@ -2,12 +2,20 @@ import { serve } from '@hono/node-server';
 import { join } from 'node:path';
 import { createApp } from '../common/app.js';
 import { personForToken, seedPeople } from './agent-auth.js';
-import { getFirmDb } from './store.js';
 import { agentContext, agentFromHeader, agentMedia, agentMeetings, isAgentPurpose } from './agent.js';
 import { draftEscalation } from './decision.js';
 import { inboundRelease } from './release.js';
 import { runPrivy } from './privy.js';
 import { runConnectorSync } from './sync.js';
+import { buildFirmState, viewerFromHeader } from './state.js';
+import { append as appendFirmEvent, readAll as readFirmLedger } from '../common/ledger/store.js';
+import { receiptsForDraft } from './receipts.js';
+import { classifyAcl } from './connectors/acl-map.js';
+import { documentAcl, firmDocuments, getFirmDb } from './store.js';
+import { firmSourceFor } from './sync.js';
+import { policy } from '../common/boundary/policy.js';
+import { join as joinPath, extname as extName } from 'node:path';
+import { existsSync as existsSyncFs, readFileSync as readFileSyncFs } from 'node:fs';
 
 if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'firm');
 
@@ -22,9 +30,69 @@ export const app = createApp({
   webRoot: './dist-web-firm',
   mountExtra: (agent) => {
     agent.get('/agent/me', (c) => {
-      const person = personForToken(db, c.req.header('X-Stevens-Agent'));
+      const person = personForToken(getFirmDb(), c.req.header('X-Stevens-Agent'));
       if (!person) return c.json({ error: 'unknown agent' }, 401);
       return c.json(person);
+    });
+
+    agent.get('/api/people', (c) => {
+      const rows = getFirmDb().prepare(`select id, name, role from people order by name`).all();
+      return c.json(rows);
+    });
+
+    agent.get('/api/state', (c) => {
+      const viewer = viewerFromHeader(c.req.header('X-Viewer-Id'));
+      if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
+      return c.json(buildFirmState(viewer));
+    });
+
+    agent.get('/api/media/:sourceId', (c) => {
+      const viewer = viewerFromHeader(c.req.header('X-Viewer-Id'));
+      if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
+      const docs = firmDocuments().filter((doc) => doc.id === c.req.param('sourceId'));
+      if (docs.length === 0) return c.json({ error: 'unknown source' }, 404);
+      const doc = docs[0];
+      const source = firmSourceFor(
+        { id: doc.id, kind: doc.kind as Parameters<typeof firmSourceFor>[0]['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
+        classifyAcl(documentAcl(doc.id)).classification,
+      );
+      if (policy(source, viewer.role, 'brief').access !== 'visible') return c.json({ error: 'unknown source' }, 404);
+      if (!doc.mediaPath) return c.json({ error: 'unknown source' }, 404);
+      const path = joinPath(process.env.STEVENS_FIXTURES_DIR ?? joinPath(process.cwd(), 'fixtures'), doc.mediaPath);
+      if (!existsSyncFs(path)) return c.json({ error: 'unknown source' }, 404);
+      const body = readFileSyncFs(path);
+      const mediaTypes: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.txt': 'text/plain' };
+      const found = new Uint8Array(body);
+      const copy = found.buffer.slice(found.byteOffset, found.byteOffset + found.byteLength) as ArrayBuffer;
+      return new Response(copy, { headers: { 'Content-Type': mediaTypes[extName(path).toLowerCase()] ?? 'application/octet-stream' } });
+    });
+
+    agent.get('/api/receipts/:draftId', (c) => {
+      const viewer = viewerFromHeader(c.req.header('X-Viewer-Id'));
+      if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
+      return c.json(receiptsForDraft(viewer.role, c.req.param('draftId')));
+    });
+
+    agent.post('/api/approve/:draftId', (c) => {
+      const viewer = viewerFromHeader(c.req.header('X-Viewer-Id'));
+      if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
+      if (viewer.role !== 'Partner') return c.json({ error: 'Partner only' }, 403);
+      const draftId = c.req.param('draftId');
+      const exists = readFirmLedger().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
+      if (!exists) return c.json({ error: 'unknown draft' }, 404);
+      appendFirmEvent({ at: new Date().toISOString(), type: 'draft.approved', draftId, by: viewer.role });
+      return c.json({ approved: true });
+    });
+
+    agent.post('/api/reject/:draftId', (c) => {
+      const viewer = viewerFromHeader(c.req.header('X-Viewer-Id'));
+      if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
+      if (viewer.role !== 'Partner') return c.json({ error: 'Partner only' }, 403);
+      const draftId = c.req.param('draftId');
+      const exists = readFirmLedger().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
+      if (!exists) return c.json({ error: 'unknown draft' }, 404);
+      appendFirmEvent({ at: new Date().toISOString(), type: 'draft.rejected', draftId, by: viewer.role });
+      return c.json({ rejected: true });
     });
 
     agent.get('/agent/meetings', (c) => {

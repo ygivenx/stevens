@@ -1,61 +1,40 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { LedgerEvent, Source } from '../../shared/data.js';
-
-function source(id: string, vault: Source['vault'], text: string, extra: Partial<Source> = {}): Source {
-  return { id, vault, title: id, capturedAt: '2026-10-20T00:00:00Z', kind: 'memo', fixture: 'x', text, ...extra };
-}
-
-const TEAM = source('team1', 'enterprise', 'TEAM-ALPHA-BRAVO', { classification: 'team' });
-const MEMO = source('memo1', 'enterprise', 'MEMO-CHARLIE-LUMEN', { classification: 'partner-only', title: 'Conflicts memo: LUMEN' });
-const WALL = source('wall1', 'enterprise', 'WALL-ECHO-FOXTROT', { classification: 'wall', title: 'Restricted: FOXTROT' });
-const MINE = source('mine1', 'personal', 'MINE-GOLF-HOTEL', { ownerRole: 'Associate' });
-
-function seed(): LedgerEvent[] {
-  return [
-    { at: '2026-10-27T00:00:00Z', type: 'source.ingested', source: TEAM },
-    { at: '2026-10-27T00:00:00Z', type: 'source.ingested', source: MEMO },
-    { at: '2026-10-27T00:00:00Z', type: 'source.ingested', source: WALL },
-    { at: '2026-10-27T00:00:00Z', type: 'source.ingested', source: MINE },
-    {
-      at: '2026-10-27T00:00:00Z', type: 'claims.extracted', sourceId: 'mine1',
-      claims: [{ id: 'c-mine', sourceId: 'mine1', entity: 'e', quote: 'MINE-GOLF-HOTEL' }],
-      api: { model: 'm', responseId: 'r', usage: { costUsd: 0 }, stageKey: 'k' },
-    },
-    {
-      at: '2026-10-27T00:00:00Z', type: 'claims.extracted', sourceId: 'team1',
-      claims: [{ id: 'c-team', sourceId: 'team1', entity: 'e', quote: 'TEAM-ALPHA-BRAVO' }],
-      api: { model: 'm', responseId: 'r', usage: { costUsd: 0 }, stageKey: 'k2' },
-    },
-    {
-      at: '2026-10-27T00:00:01Z', type: 'bridge.judged',
-      bridge: { id: 'b-1', personalClaimId: 'c-mine', workClaimId: 'c-team', relation: 'context', reason: 'MINE-GOLF-HOTEL shows the gap' },
-      candidate: ['c-mine', 'c-team'],
-      manifest: {
-        callId: 'c', purpose: 'bridge', viewerRole: 'Associate', model: 'm', stageKey: 'k3',
-        included: [
-          { sourceId: 'mine1', access: 'visible', ruleId: 'r-personal-owner' },
-          { sourceId: 'team1', access: 'visible', ruleId: 'r-team-associate' },
-        ],
-        withheld: [], webSearch: false, tokens: { raw: 1, assembled: 2 },
-      },
-      api: { model: 'm', responseId: 'r', usage: { costUsd: 0 }, stageKey: 'k3' },
-    },
-  ];
-}
+import { closeFirmDb, getFirmDb } from './store.js';
+import { seedPeople } from './agent-auth.js';
+import { runConnectorSync } from './sync.js';
+import type { FirmState } from './state.js';
 
 let app: typeof import('./index.js')['app'];
 
 beforeEach(async () => {
-  process.env.STEVENS_DATA_DIR = mkdtempSync(join(tmpdir(), 'stevens-routes-'));
+  closeFirmDb();
+  const dir = mkdtempSync(join(tmpdir(), 'stevens-routes-'));
+  process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = 'test-agent-token-9b';
+  writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
+  writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
+  seedPeople(getFirmDb(), 'test-agent-token-9b');
+  await runConnectorSync();
   const mod = await import('./index.js');
   app = mod.app;
-  const { append } = await import('../common/ledger/store.js');
-  for (const event of seed()) append(event);
 });
+
+async function stateAs(viewerId: string | undefined): Promise<{ status: number; body: string; json: FirmState | null }> {
+  const headers: Record<string, string> = {};
+  if (viewerId) headers['X-Viewer-Id'] = viewerId;
+  const res = await app.request('/api/state', { headers });
+  const body = await res.text();
+  let json: FirmState | null = null;
+  try {
+    json = JSON.parse(body) as FirmState;
+  } catch {
+    json = null;
+  }
+  return { status: res.status, body, json };
+}
 
 async function readFirstChunk(res: Response): Promise<string> {
   const reader = res.body?.getReader();
@@ -66,36 +45,65 @@ async function readFirstChunk(res: Response): Promise<string> {
 }
 
 describe('route boundary', () => {
-  it('serves associate state without privy, wall, or bridge reason text', async () => {
-    const res = await app.request('/api/state', { headers: { 'X-Viewer-Role': 'Associate' } });
+  it('lists people for the simulated sign-in picker', async () => {
+    const res = await app.request('/api/people');
     expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain('TEAM-ALPHA-BRAVO');
-    for (const leaked of ['MEMO-CHARLIE-LUMEN', 'WALL-ECHO-FOXTROT', 'LUMEN', 'FOXTROT', 'memo1', 'wall1']) {
-      expect(body).not.toContain(leaked);
-    }
-    expect(body).toContain('shows the gap');
+    const people = (await res.json()) as { id: string; role: string }[];
+    expect(people.map((person) => person.id)).toContain('p-alex');
+    expect(people.map((person) => person.id)).toContain('p-morgan');
   });
 
-  it('serves partner state without personal text or bridge reason', async () => {
-    const res = await app.request('/api/state', { headers: { 'X-Viewer-Role': 'Partner' } });
-    expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain('MEMO-CHARLIE-LUMEN');
-    for (const leaked of ['MINE-GOLF-HOTEL', 'shows the gap', 'mine1']) {
+  it('requires a known viewer for state', async () => {
+    expect((await app.request('/api/state')).status).toBe(401);
+    expect((await app.request('/api/state', { headers: { 'X-Viewer-Id': 'nobody' } })).status).toBe(401);
+  });
+
+  it('serves associate state without privy, wall, or personal text', async () => {
+    const { status, body, json } = await stateAs('p-alex');
+    expect(status).toBe(200);
+    expect(json?.viewer.id).toBe('p-alex');
+    expect(body).toContain('Helios');
+    for (const leaked of ['Lumen', 'Granite', 'legal hold', 'd-conflicts-lumen', 'd-granite']) {
       expect(body).not.toContain(leaked);
     }
+    const ids = (json?.deals ?? []).flatMap((deal) => deal.documents.map((doc) => doc.id));
+    expect(ids).not.toContain('d-conflicts-lumen');
+    expect(ids).not.toContain('d-granite');
+  });
+
+  it('serves partner state with the conflicts memo but no wall or personal text', async () => {
+    const { status, body, json } = await stateAs('p-morgan');
+    expect(status).toBe(200);
+    expect(body).toContain('Lumen');
+    const ids = (json?.deals ?? []).flatMap((deal) => deal.documents.map((doc) => doc.id));
+    expect(ids).toContain('d-conflicts-lumen');
+    expect(ids).not.toContain('d-granite');
+    for (const leaked of ['Granite', 'legal hold']) {
+      expect(body).not.toContain(leaked);
+    }
+  });
+
+  it('serves deck media to the deal team and refuses anything else', async () => {
+    const deck = await app.request('/api/media/d-helios-deck', { headers: { 'X-Viewer-Id': 'p-alex' } });
+    expect(deck.status).toBe(200);
+    expect(deck.headers.get('content-type')).toContain('image');
+    const conflicts = await app.request('/api/media/d-conflicts-lumen', { headers: { 'X-Viewer-Id': 'p-alex' } });
+    expect(conflicts.status).toBe(404);
+    const missing = await app.request('/api/media/no-such-doc', { headers: { 'X-Viewer-Id': 'p-morgan' } });
+    expect(missing.status).toBe(404);
+    const anonymous = await app.request('/api/media/d-helios-deck');
+    expect(anonymous.status).toBe(401);
   });
 
   it('streams only empty changed signals with no ledger text', async () => {
-    for (const role of ['Associate', 'Partner']) {
-      const res = await app.request('/api/events', { headers: { 'X-Viewer-Role': role } });
+    for (const viewerId of ['p-alex', 'p-morgan']) {
+      const res = await app.request('/api/events', { headers: { 'X-Viewer-Id': viewerId } });
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/event-stream');
       const chunk = await readFirstChunk(res);
       expect(chunk).toContain('event: changed');
       expect(chunk).toContain('data: {}');
-      for (const leaked of ['MEMO-CHARLIE-LUMEN', 'WALL-ECHO-FOXTROT', 'MINE-GOLF-HOTEL', 'shows the gap', 'bridge.judged', 'privy']) {
+      for (const leaked of ['Lumen', 'Granite', 'conflicts', 'privy']) {
         expect(chunk).not.toContain(leaked);
       }
     }

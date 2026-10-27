@@ -65,6 +65,7 @@ export interface FirmDocument {
   body: string | null;
   mediaPath: string | null;
   createdAt: string;
+  sharedBy?: string | null;
 }
 
 export function upsertDocument(connector: string, doc: { id: string; dealId?: string; kind: string; title: string; createdAt: string; body?: string; mediaPath?: string }, acl: string[]): void {
@@ -83,8 +84,8 @@ export function upsertDocument(connector: string, doc: { id: string; dealId?: st
 export function firmDocuments(dealId?: string): FirmDocument[] {
   const db = getFirmDb();
   const rows = (dealId
-    ? db.prepare(`select id, connector, deal_id as dealId, kind, title, body, media_path as mediaPath, created_at as createdAt from documents where deal_id = ? order by created_at`).all(dealId)
-    : db.prepare(`select id, connector, deal_id as dealId, kind, title, body, media_path as mediaPath, created_at as createdAt from documents order by created_at`).all()) as unknown as FirmDocument[];
+    ? db.prepare(`select id, connector, deal_id as dealId, kind, title, body, media_path as mediaPath, created_at as createdAt, shared_by as sharedBy from documents where deal_id = ? order by created_at`).all(dealId)
+    : db.prepare(`select id, connector, deal_id as dealId, kind, title, body, media_path as mediaPath, created_at as createdAt, shared_by as sharedBy from documents order by created_at`).all()) as unknown as FirmDocument[];
   return rows;
 }
 
@@ -99,18 +100,18 @@ export function documentBody(documentId: string, body: string): void {
   db.prepare(`update documents set body = ? where id = ?`).run(body, documentId);
 }
 
-export function syncFilings(filings: { accession: string; issuer: string; state: string; industryGroup: string; filedAt: string; firstSaleDate: string | null; totalOfferingUsd: number; totalSoldUsd: number }[]): void {
+export function syncFilings(filings: { accession: string; issuer: string; cik?: string; state: string; industryGroup: string; filedAt: string; firstSaleDate: string | null; totalOfferingUsd: number; totalSoldUsd: number }[]): void {
   const db = getFirmDb();
   const upsert = db.prepare(
-    `insert into filings (accession, issuer, state, industry_group, filed_at, first_sale_date, total_offering_usd, total_sold_usd)
-     values (?, ?, ?, ?, ?, ?, ?, ?)
-     on conflict(accession) do update set issuer = excluded.issuer, state = excluded.state, industry_group = excluded.industry_group,
+    `insert into filings (accession, issuer, cik, state, industry_group, filed_at, first_sale_date, total_offering_usd, total_sold_usd)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(accession) do update set issuer = excluded.issuer, cik = excluded.cik, state = excluded.state, industry_group = excluded.industry_group,
        filed_at = excluded.filed_at, first_sale_date = excluded.first_sale_date, total_offering_usd = excluded.total_offering_usd, total_sold_usd = excluded.total_sold_usd`,
   );
   db.exec('BEGIN');
   try {
     for (const filing of filings) {
-      upsert.run(filing.accession, filing.issuer, filing.state, filing.industryGroup, filing.filedAt, filing.firstSaleDate, filing.totalOfferingUsd, filing.totalSoldUsd);
+      upsert.run(filing.accession, filing.issuer, filing.cik ?? null, filing.state, filing.industryGroup, filing.filedAt, filing.firstSaleDate, filing.totalOfferingUsd, filing.totalSoldUsd);
     }
     db.exec('COMMIT');
   } catch (err) {
@@ -121,6 +122,32 @@ export function syncFilings(filings: { accession: string; issuer: string; state:
     }
     throw err;
   }
+}
+
+export interface ReleaseProvenance {
+  title: string;
+  origin: string;
+  capturedAt: string;
+  speaker?: string;
+  at?: string;
+}
+
+export function saveReleaseProvenance(documentId: string, provenance: ReleaseProvenance): void {
+  const db = getFirmDb();
+  db.prepare(
+    `insert into release_provenance (document_id, title, origin, captured_at, speaker, at)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict(document_id) do update set title = excluded.title, origin = excluded.origin,
+       captured_at = excluded.captured_at, speaker = excluded.speaker, at = excluded.at`,
+  ).run(documentId, provenance.title, provenance.origin, provenance.capturedAt, provenance.speaker ?? null, provenance.at ?? null);
+}
+
+export function getReleaseProvenance(documentId: string): ReleaseProvenance | null {
+  const db = getFirmDb();
+  const row = db.prepare(
+    `select title, origin, captured_at as capturedAt, speaker, at from release_provenance where document_id = ?`,
+  ).get(documentId) as unknown as ReleaseProvenance | undefined;
+  return row ?? null;
 }
 
 export function setConnectorState(connector: string, documents: number, lastSyncAt: string): void {

@@ -71,13 +71,24 @@ def read_agent_token():
     return None
 
 
-def http_json(method, path, role=None, timeout=30, data=None, base='http://localhost:8787', agent=False):
+def viewer_id(role):
+    if role == 'Associate':
+        return 'p-alex'
+    if role == 'Partner':
+        return 'p-morgan'
+    return role
+
+
+def http_json(method, path, role=None, timeout=30, data=None, base='http://localhost:8787', agent=False, viewer=False):
     headers = {}
     if agent:
         if role != 'nobody':
             token = read_agent_token()
             if token:
                 headers['X-Stevens-Agent'] = token
+    elif viewer:
+        if role and role != 'nobody':
+            headers['X-Viewer-Id'] = viewer_id(role)
     elif role:
         headers['X-Viewer-Role'] = role
     body = None
@@ -195,7 +206,7 @@ def cmd_stack(argv):
     name = instance_name(argv)
     if name is None or '--help' in argv or not argv or argv[0].startswith('--'):
         print('stevensctl stack: run the local stack for one instance.\n')
-        print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME]\n')
+        print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME] [--now ISO]\n')
         print('up starts npm run dev (yours :5173+:8788, firm :5174+:8787) and waits for health;')
         print('down stops only this instance; logs tails its log; status prints health.\n')
         print('Examples:')
@@ -210,10 +221,20 @@ def cmd_stack(argv):
             return 0
         if not all(port_free(port) for port in (5173, 5174, 8787, 8788)):
             return fail('ports 5173/5174/8787/8788 are held by another stack; stop it or pick another machine (fixed ports, one stack at a time)')
+        now = None
+        if '--now' in argv:
+            i = argv.index('--now')
+            if i + 1 >= len(argv):
+                return fail('stack up --now needs an ISO timestamp')
+            now = argv[i + 1]
         logpath = stack_logfile(name)
         plus('npm run dev > %s' % logpath)
         log = open(logpath, 'a')
-        proc = subprocess.Popen(['npm', 'run', 'dev'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        env = dict(os.environ)
+        if now:
+            env['STEVENS_NOW'] = now
+            plus('STEVENS_NOW=%s' % now)
+        proc = subprocess.Popen(['npm', 'run', 'dev'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env)
         with open(stack_pidfile(name), 'w') as f:
             f.write(str(proc.pid))
         for _ in range(60):
@@ -246,6 +267,9 @@ def cmd_stack(argv):
         print(out.stdout, end='')
         return 0
     if verb == 'restart':
+        now_args = []
+        if '--now' in argv:
+            now_args = ['--now', argv[argv.index('--now') + 1]]
         rc = cmd_stack(['down', '--instance', name])
         if rc != 0:
             return rc
@@ -253,7 +277,7 @@ def cmd_stack(argv):
             if all(port_free(port) for port in (5173, 5174, 8787, 8788)):
                 break
             time.sleep(1)
-        return cmd_stack(['up', '--instance', name])
+        return cmd_stack(['up', '--instance', name] + now_args)
     if verb == 'status':
         print('instance: %s' % name)
         print('stack process: %s' % ('up' if stack_running(name) else 'down'))
@@ -304,10 +328,11 @@ def cmd_seed(argv):
                 os.remove(stale_path)
     inbox = os.path.join(datadir, 'personal', 'inbox')
     os.makedirs(inbox, exist_ok=True)
-    for name in os.listdir(inbox):
-        name_path = os.path.join(inbox, name)
-        if os.path.isfile(name_path):
-            os.remove(name_path)
+    for inbox_name in os.listdir(inbox):
+        inbox_path = os.path.join(inbox, inbox_name)
+        if os.path.isfile(inbox_path):
+            os.remove(inbox_path)
+    for processdir in ('firm', 'personal'):
         with open(os.path.join(datadir, processdir, 'meta-calls.json'), 'w') as f:
             json.dump({'count': 0}, f)
         with open(os.path.join(datadir, processdir, 'meta-fake.json'), 'w') as f:
@@ -321,7 +346,10 @@ def cmd_seed(argv):
         shutil.rmtree(derived)
     print('seed: %d fixtures verified, state fresh, fake normal, counter 0' % len(entries))
     print('seed: restarting the stack so both processes rebuild from fixtures')
-    return cmd_stack(['restart', '--instance', name])
+    restart_argv = ['restart', '--instance', name]
+    if '--now' in argv:
+        restart_argv += ['--now', argv[argv.index('--now') + 1]]
+    return cmd_stack(restart_argv)
 
 
 def json_path(doc, path):
@@ -343,7 +371,7 @@ def cmd_api(argv):
         print('stevensctl api: drive the app HTTP surface as a role.\n')
         print('Usage: stevensctl api --as Associate|Partner [--via yours|firm|agent] SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
         print('Surfaces (yours :8788): health, state, items/<id>, ask, share/<claimId>, receipts/<id>.')
-        print('Surfaces (firm :8787): health, state, approve/<id>, reject/<id>, media/<id>.')
+        print('Surfaces (firm :8787): health, people, state, approve/<id>, reject/<id>, media/<id>, receipts/<id>.')
         print('Surfaces (agent :8787): me, meetings, context, privy.')
         print('Legacy v2.1 surfaces (firm :8787): ingest, extract, bridge, brief, ask, switch, transcript/<id>, release/<id>.')
         print('--field prints one JSON path; --until polls until it is truthy (30s); --data sends a JSON body; --save stores it.')
@@ -373,6 +401,7 @@ def cmd_api(argv):
         i += 1
     base = 'http://localhost:8788' if via == 'yours' else 'http://localhost:8787'
     agent = via == 'agent'
+    firm_viewer = via == 'firm' and not agent
     methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest'), 'extract': ('POST', '/api/extract'), 'bridge': ('POST', '/api/bridge'), 'brief': ('POST', '/api/brief'), 'ask': ('POST', '/api/ask'), 'switch': ('POST', '/api/switch')}
     raw = False
     if agent and surface == 'me':
@@ -390,6 +419,10 @@ def cmd_api(argv):
     elif not agent and via == 'yours' and surface and surface.startswith('items/'):
         method, path = 'GET', '/api/' + surface
     elif not agent and via == 'yours' and surface and surface.startswith('receipts/'):
+        method, path = 'GET', '/api/' + surface
+    elif not agent and via == 'firm' and surface == 'people':
+        method, path = 'GET', '/api/people'
+    elif not agent and via == 'firm' and surface and surface.startswith('receipts/'):
         method, path = 'GET', '/api/' + surface
     elif surface in methods:
         method, path = methods[surface]
@@ -423,6 +456,9 @@ def cmd_api(argv):
             token = read_agent_token()
             if token and role != 'nobody':
                 raw_headers['X-Stevens-Agent'] = token
+        elif firm_viewer:
+            if role != 'nobody':
+                raw_headers['X-Viewer-Id'] = viewer_id(role)
         else:
             raw_headers['X-Viewer-Role'] = role
         req = urllib.request.Request(base + path, headers=raw_headers, method=method)
@@ -439,7 +475,7 @@ def cmd_api(argv):
     deadline = time.time() + 30
     while True:
         try:
-            status, body = http_json(method, path, role, timeout=300, data=data, base=base, agent=agent)
+            status, body = http_json(method, path, role, timeout=300, data=data, base=base, agent=agent, viewer=firm_viewer)
         except urllib.error.HTTPError as e:
             try:
                 body = json.load(e)
