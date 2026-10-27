@@ -93,6 +93,21 @@ export function hasContentHash(contentHash: string): boolean {
   return row !== undefined;
 }
 
+export function getAdapterState(adapter: string): { cursor: string | null; lastSyncAt: string | null; lastError: string | null } | null {
+  const db = getDb();
+  const row = db.prepare(`select cursor, last_sync_at as lastSyncAt, last_error as lastError from adapter_state where adapter = ?`).get(adapter) as unknown as { cursor: string | null; lastSyncAt: string | null; lastError: string | null } | undefined;
+  return row ?? null;
+}
+
+export function setAdapterState(adapter: string, state: { cursor?: string | null; lastSyncAt?: string | null; lastError?: string | null }): void {
+  const db = getDb();
+  const current = getAdapterState(adapter);
+  db.prepare(
+    `insert into adapter_state (adapter, cursor, last_sync_at, last_error) values (?, ?, ?, ?)
+     on conflict(adapter) do update set cursor = excluded.cursor, last_sync_at = excluded.last_sync_at, last_error = excluded.last_error`,
+  ).run(adapter, state.cursor ?? current?.cursor ?? null, state.lastSyncAt ?? current?.lastSyncAt ?? null, state.lastError ?? current?.lastError ?? null);
+}
+
 export function searchSegments(query: string, limit: number = 10): Segment[] {
   const db = getDb();
   const hits = db.prepare(`select segment_id as id from segments_fts where segments_fts match ? limit ?`).all(query, limit) as { id: string }[];

@@ -1,15 +1,19 @@
 import { serve } from '@hono/node-server';
 import { join } from 'node:path';
 import { createApp } from '../common/app.js';
-import { openProcessDb } from '../common/db.js';
 import { personForToken, seedPeople } from './agent-auth.js';
+import { getFirmDb } from './store.js';
+import { agentContext, agentFromHeader, agentMedia, agentMeetings, isAgentPurpose } from './agent.js';
+import { runConnectorSync } from './sync.js';
 
 if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'firm');
 
-const schemaFile = join(process.cwd(), 'server', 'firm', 'db', 'schema.sql');
-
-export const db = openProcessDb('firm.db', schemaFile);
+export const db = getFirmDb();
 seedPeople(db, process.env.STEVENS_AGENT_TOKEN);
+
+function devEnabled(): boolean {
+  return process.env.STEVENS_DEV === '1';
+}
 
 export const app = createApp({
   webRoot: './dist-web-firm',
@@ -19,10 +23,48 @@ export const app = createApp({
       if (!person) return c.json({ error: 'unknown agent' }, 401);
       return c.json(person);
     });
+
+    agent.get('/agent/meetings', (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      const withinHours = Number(c.req.query('withinHours') ?? 24);
+      if (!Number.isFinite(withinHours) || withinHours <= 0) return c.json({ error: 'withinHours must be positive' }, 400);
+      return c.json(agentMeetings(person, withinHours));
+    });
+
+    agent.get('/agent/context', (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      const dealId = c.req.query('dealId') ?? '';
+      const purpose = c.req.query('purpose') ?? '';
+      if (!dealId) return c.json({ error: 'dealId is required' }, 400);
+      if (!isAgentPurpose(purpose)) return c.json({ error: 'purpose must be bridge, brief, or answer' }, 400);
+      return c.json(agentContext(person, dealId, purpose));
+    });
+
+    agent.get('/agent/media/:sourceId', (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      const found = agentMedia(person, c.req.param('sourceId'));
+      if (!found) return c.json({ error: 'unknown source' }, 404);
+      const view = found.bytes;
+      const copy = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+      return new Response(copy, { headers: { 'Content-Type': found.contentType } });
+    });
+
+    agent.post('/api/dev/sync', async (c) => {
+      if (!devEnabled()) return c.json({ error: 'not found' }, 404);
+      return c.json(await runConnectorSync());
+    });
   },
 });
 
+export function bootFirm(): void {
+  void runConnectorSync().catch(() => {});
+}
+
 if (!process.env.VITEST) {
+  bootFirm();
   const port = Number(process.env.FIRM_PORT ?? 8787);
   serve({ fetch: app.fetch, port });
   console.log('stevens firm on :' + port);

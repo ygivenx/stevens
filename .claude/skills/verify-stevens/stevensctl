@@ -233,6 +233,10 @@ def cmd_stack(argv):
         rc = cmd_stack(['down', '--instance', name])
         if rc != 0:
             return rc
+        for _ in range(30):
+            if all(port_free(port) for port in (5173, 5174, 8787, 8788)):
+                break
+            time.sleep(1)
         return cmd_stack(['up', '--instance', name])
     if verb == 'status':
         print('instance: %s' % name)
@@ -271,10 +275,23 @@ def cmd_seed(argv):
             return fail('fixture blob %s is missing; cannot seed' % entry['file'])
     datadir = os.path.join(ROOT, 'data')
     os.makedirs(datadir, exist_ok=True)
-    plus('truncate both ledgers, reset meta-calls.json, fake mode normal')
+    plus('truncate both ledgers, clear databases and caches, fake mode normal')
     for processdir in ('firm', 'personal'):
-        os.makedirs(os.path.join(datadir, processdir), exist_ok=True)
-        open(os.path.join(datadir, processdir, 'ledger.jsonl'), 'w').close()
+        processdir_path = os.path.join(datadir, processdir)
+        os.makedirs(processdir_path, exist_ok=True)
+        open(os.path.join(processdir_path, 'ledger.jsonl'), 'w').close()
+        for stale in ('firm.db', 'personal.db', 'stage-cache', 'work'):
+            stale_path = os.path.join(processdir_path, stale)
+            if os.path.isdir(stale_path):
+                shutil.rmtree(stale_path)
+            elif os.path.exists(stale_path):
+                os.remove(stale_path)
+    inbox = os.path.join(datadir, 'personal', 'inbox')
+    os.makedirs(inbox, exist_ok=True)
+    for name in os.listdir(inbox):
+        name_path = os.path.join(inbox, name)
+        if os.path.isfile(name_path):
+            os.remove(name_path)
         with open(os.path.join(datadir, processdir, 'meta-calls.json'), 'w') as f:
             json.dump({'count': 0}, f)
         with open(os.path.join(datadir, processdir, 'meta-fake.json'), 'w') as f:
@@ -286,8 +303,9 @@ def cmd_seed(argv):
     derived = os.path.join(datadir, 'derived')
     if os.path.exists(derived):
         shutil.rmtree(derived)
-    print('seed: %d fixtures verified, ledger fresh, fake normal, counter 0' % len(entries))
-    return 0
+    print('seed: %d fixtures verified, state fresh, fake normal, counter 0' % len(entries))
+    print('seed: restarting the stack so both processes rebuild from fixtures')
+    return cmd_stack(['restart', '--instance', name])
 
 
 def json_path(doc, path):
