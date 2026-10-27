@@ -47,7 +47,7 @@ echo "MODEL_API_KEY=..." > .env.local
 npm run dev
 ```
 
-Open http://localhost:5173. The Stevens server (:8787) holds the key and is the only thing that talks to Meta; the key never reaches the browser. `npm start` serves the built app from the same server.
+Open http://localhost:5173. Switch roles with the simulated sign-in; run the pipeline, ask, share quotes, and approve from the tabs. The Stevens server (:8787) holds the key and is the only thing that talks to Meta; the key never reaches the browser. `npm start` serves the built app from the same server. A `Simulated — Meta fake` banner shows whenever the Meta fake stands in for the API.
 
 ## Repo map
 
@@ -57,7 +57,7 @@ Open http://localhost:5173. The Stevens server (:8787) holds the key and is the 
 - `docs/`: project site and feature map (GitHub Pages)
 - `server/`, `web/`, `shared/`: Hono API, Vite UI, shared contracts
 - `spikes/day1/`: day-1 spike log with rerun commands
-- `.claude/skills/verify-stevens/stevensctl`: verification CLI (`doctor` works, the rest lands with its day)
+- `.claude/skills/verify-stevens/stevensctl`: verification CLI (all commands work: doctor, stack, seed, api, browser, meta, test, evidence, cleanup, report)
 
 ## Not in scope
 

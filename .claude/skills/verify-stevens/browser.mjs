@@ -64,6 +64,9 @@ async function run() {
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const failures = [];
+  const consoleErrors = [];
+  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text().slice(0, 200)); });
+  page.on('pageerror', (err) => consoleErrors.push(String(err).slice(0, 200)));
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('run-pipeline').waitFor({ timeout: 15000 });
@@ -73,6 +76,8 @@ async function run() {
       await page.screenshot({ path: join(evidence, 'snapshot.png'), fullPage: true });
       writeFileSync(join(evidence, 'snapshot.html'), await page.content());
       console.log('snapshot: ' + (await page.getByTestId('error').count() === 0 ? 'no page errors' : 'PAGE SHOWS AN ERROR'));
+      console.log('console errors: ' + consoleErrors.length);
+      for (const err of consoleErrors.slice(0, 5)) console.log('  ' + err);
     } else if (action === 'run') {
       const steps = FLOWS[flowName];
       if (!steps) {

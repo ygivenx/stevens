@@ -4,6 +4,7 @@ export interface State {
   viewer: Role;
   events: LedgerEvent[];
   drafts: unknown[];
+  meta: { fakeMode: string };
 }
 
 export interface Turn {

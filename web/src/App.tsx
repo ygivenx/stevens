@@ -12,6 +12,7 @@ type TabName = 'Capture' | 'Brief' | 'Answer' | 'Inspector';
 export default function App() {
   const [role, setRole] = useState<Role>('Associate');
   const [events, setEvents] = useState<LedgerEvent[]>([]);
+  const [fakeMode, setFakeMode] = useState('live');
   const [tab, setTab] = useState<TabName>('Capture');
   const [question, setQuestion] = useState('Should we take the second Helios meeting?');
   const [stage, setStage] = useState('');
@@ -22,6 +23,7 @@ export default function App() {
     try {
       const state = await getState(role);
       setEvents(state.events);
+      setFakeMode(state.meta.fakeMode);
     } catch (e) {
       setError(String(e));
     }
@@ -124,6 +126,11 @@ export default function App() {
             <span className="text-xs text-smoke">simulated sign-in</span>
           </div>
           <div className="flex-1" />
+          {fakeMode !== 'live' && (
+            <span data-testid="simulated-banner" className="rounded-md border border-brass/50 px-2 py-1 text-xs font-semibold text-brass-deep">
+              Simulated — Meta fake: {fakeMode}
+            </span>
+          )}
           <Button tone="brass" testid="run-pipeline" onClick={runPipeline} disabled={stage !== ''}>
             {stage === '' ? 'Run pipeline' : stage + '…'}
           </Button>

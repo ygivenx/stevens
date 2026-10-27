@@ -17,6 +17,7 @@ import { runBrief } from './pipeline/draft.js';
 import { runAsk } from './pipeline/ask.js';
 import { policy } from './boundary/policy.js';
 import { filterState, indexEvents } from './boundary/filter.js';
+import { fakeMode } from './meta/client.js';
 import { releaseClaim } from './boundary/release.js';
 
 const app = new Hono();
@@ -29,7 +30,7 @@ app.get('/api/health', (c) => c.json({ ok: true }));
 
 app.get('/api/state', (c) => {
   const viewer = viewerRole(c.req.header('X-Viewer-Role'));
-  return c.json({ viewer, events: filterState(readAll(), viewer), drafts: [] });
+  return c.json({ viewer, events: filterState(readAll(), viewer), drafts: [], meta: { fakeMode: fakeMode() } });
 });
 
 app.get('/api/events', (c) => {

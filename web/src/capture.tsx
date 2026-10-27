@@ -10,6 +10,7 @@ export function Capture({ events, role }: { events: LedgerEvent[]; role: Role })
   if (sources.length === 0) return <Card><p className="text-smoke">No sources yet. Run the pipeline to ingest the fixtures.</p></Card>;
   return (
     <div className="space-y-8">
+      <p className="text-xs text-smoke">Talk audio and slide photos are staged placeholders until the Ray-Ban Meta shoot; enterprise records are fictional.</p>
       <VaultSection title="Personal vault" sources={personal} role={role} tone="personal" />
       <VaultSection title="Enterprise vault" sources={enterprise} role={role} tone="enterprise" />
     </div>

@@ -41,7 +41,7 @@ export function Answer({ events, role, data, question, setQuestion, onAsk, askin
   );
 }
 
-function AnswerCard({ draft, escalationTo, role, data, onApprove, onRelease, approved }: {
+function AnswerCard({ draft, escalationTo, role, data, onApprove, onRelease, approved, events }: {
   draft: Draft;
   escalationTo: Role | undefined;
   events: LedgerEvent[];
@@ -70,6 +70,11 @@ function AnswerCard({ draft, escalationTo, role, data, onApprove, onRelease, app
       {escalationTo && (
         <div className="my-4 flex items-center gap-2" data-testid="escalation">
           <Chip tone="warn">Escalation drafted to {escalationTo} — no content enclosed</Chip>
+        </div>
+      )}
+      {events.some((e) => e.type === 'privy.judged' && (e as { failedClosed: boolean }).failedClosed) && (
+        <div className="my-4" data-testid="failed-closed">
+          <Chip tone="warn">Simulated — privy check failed, held for Partner review</Chip>
         </div>
       )}
       <SentenceList sentences={draft.sentences} claims={data.claims} sources={data.sources} role={role} released={data.released} onRelease={onRelease} />
