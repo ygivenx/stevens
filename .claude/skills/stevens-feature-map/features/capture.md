@@ -2,24 +2,23 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-Capture stages what Stevens reasons over: Ray-Ban Meta glasses captures (a staged ~90s conference talk, a slide photo, article highlights) into the personal vault, and the fictional Helios deal data (deck photo, CRM record, memos) into the enterprise vault. Fixtures live in the server-only `fixtures/` directory and reach the browser only through the policy-checked media route. Day 1 proved both perception gates with live calls on placeholders (spike log: `spikes/day1/README.md`). Day 2 committed placeholder fixtures plus text sources to `fixtures/` and drove ingest live: all 10 sources land in the ledger through `POST /api/ingest`. The real glasses shoot stays pending. Overall maturity: everything api-only.
+Capture stages what Stevens reasons over: Ray-Ban Meta glasses captures (a staged ~90s conference talk, a slide photo, article highlights) into the personal vault, and the fictional Helios deal data (deck photo, CRM record, memos) into the enterprise vault. Fixtures live in the server-only `fixtures/` directory and reach the browser only through the policy-checked media route. Day 1 proved both perception gates with live calls on placeholders (spike log: `spikes/day1/README.md`). Day 2 committed placeholder fixtures plus text sources to `fixtures/` and drove ingest live: all 10 sources land in the ledger through `POST /api/ingest`. The real glasses shoot stays pending. Overall maturity: everything beta (happy path works in Chromium; real glasses files still pending).
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| capture-talk-audio | Staged ~90s two-voice talk transcribes via Voice batch with speaker labels and timestamps into the personal vault | api-only | UI+API | - | 2026-10-27 | `server/pipeline/ingest.ts`, `/tmp/stevens-verify/day2/evidence/ingest1.json` |
-| capture-slide-photo | Glasses slide photo reads to verbatim text via Spark vision at low effort, stored for Fact checks | api-only | UI+API | - | 2026-10-27 | `server/pipeline/ingest.ts`, `/tmp/stevens-verify/day2/evidence/ingest1.json` |
-| capture-articles | 3 article highlights land in the personal vault as text claims | api-only | UI+API | - | 2026-10-27 | `server/pipeline/ingest.ts`, `/tmp/stevens-verify/day2/evidence/ingest1.json` |
-| capture-enterprise | Helios deal + CRM record, deck photo, team memo, partner-only conflicts memo, and one wall item seed the enterprise vault | api-only | API | - | 2026-10-27 | `server/pipeline/ingest.ts`, `/tmp/stevens-verify/day2/evidence/ingest1.json` |
+| capture-talk-audio | Staged ~90s two-voice talk transcribes via Voice batch with speaker labels and timestamps into the personal vault | beta | UI+API | - | 2026-10-27 | `web/src/capture.tsx`, `/tmp/stevens-verify/day6/evidence/run-capture.png` |
+| capture-slide-photo | Glasses slide photo reads to verbatim text via Spark vision at low effort, stored for Fact checks | beta | UI+API | - | 2026-10-27 | `web/src/capture.tsx`, `/tmp/stevens-verify/day6/evidence/run-capture.png` |
+| capture-articles | 3 article highlights land in the personal vault as text claims | beta | UI+API | - | 2026-10-27 | `web/src/capture.tsx`, `/tmp/stevens-verify/day6/evidence/run-capture.png` |
+| capture-enterprise | Helios deal + CRM record, deck photo, team memo, partner-only conflicts memo, and one wall item seed the enterprise vault | beta | UI+API | - | 2026-10-27 | `web/src/capture.tsx`, `/tmp/stevens-verify/day6/evidence/run-capture.png` |
 
 ## How to get to it (user POV)
 
-Planned UI; no build exists yet. Intended path:
 
 1. Open the app at `http://localhost:5173`.
 2. Choose "Capture".
-3. See the talk transcript appear with speaker labels and timestamps, the slide text, and the vault lists.
+3. See the talk transcript with speaker labels and timestamps, the slide photo with read text, and both vault lists.
 
 ## Driving it
 

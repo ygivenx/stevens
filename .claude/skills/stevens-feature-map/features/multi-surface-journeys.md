@@ -1,14 +1,14 @@
 # Multi-surface journeys
 
-Last verified: uncommitted on 2026-10-27 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
 A journey crosses areas, so it can fail where no single area file looks. Each one names the sub-feature IDs it touches, the invariant that must hold across areas, the last live result, and the commands to drive it. Use this file for questions like "what happens to X after Y" and for release smoke tests. Journeys run in the order below, and each assumes the state the one before it left.
 
 | ID | Journey | Areas | Last live | Result |
 |---|---|---|---|---|
-| j-brief-path | Capture to unprompted brief with the churn bridge | capture, extraction, server, policy, assembler, bridge, drafts, ledger | not driven | not driven |
-| j-answer-escalation | Asked answer yields hold plus a content-free escalation via the privy verdict | drafts, policy, assembler, privy, release, ledger | not driven | not driven |
-| j-release-approve | Owner releases one quote, Partner sees memo plus released quote, approves | release, approval, inspector, ledger | not driven | not driven |
+| j-brief-path | Capture to unprompted brief with the churn bridge | capture, extraction, server, policy, assembler, bridge, drafts, ledger | 2026-10-27 | PASS |
+| j-answer-escalation | Asked answer yields hold plus a content-free escalation via the privy verdict | drafts, policy, assembler, privy, release, ledger | 2026-10-27 | PASS |
+| j-release-approve | Owner releases one quote, Partner sees memo plus released quote, approves | release, approval, inspector, ledger | 2026-10-27 | PASS |
 
 ## j-brief-path
 
@@ -28,7 +28,7 @@ $CC doctor && $CC stack up && $CC seed
 $CC browser run brief
 ```
 
-Result (2026-10-27): NOT DRIVEN, scaffold only, no pipeline yet.
+Result (2026-10-27): PASS via `browser run capture` + `browser run brief` (`/tmp/stevens-verify/day6/evidence/`).
 
 ## j-answer-escalation
 
@@ -48,7 +48,7 @@ $CC doctor && $CC stack up && $CC seed
 $CC api --as Associate answer --expect 200 --field '.escalation'
 ```
 
-Result (2026-10-27): NOT DRIVEN, scaffold only, no pipeline yet.
+Result (2026-10-27): PASS via `browser run answer` (hold banner + escalation visible).
 
 ## j-release-approve
 
@@ -66,7 +66,8 @@ export STEVENS_VERIFY_INSTANCE=journey
 CC=.claude/skills/verify-stevens/stevensctl
 $CC doctor && $CC stack up && $CC seed
 $CC browser run role-switch
-$CC api --as Partner approve answer --expect 200 --field '.status'
+$CC browser run release
+$CC browser run approve
 ```
 
-Result (2026-10-27): NOT DRIVEN, scaffold only, no pipeline yet.
+Result (2026-10-27): PASS via `browser run role-switch` + `release` + `approve`.
