@@ -2,16 +2,19 @@
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
+import time
 import urllib.request
+import urllib.error
 
 EXPECTED_MODELS = ['muse-voice-transcribe-1.0', 'muse-spark-1.3', 'muse-wonder-1.0']
 ROOT = os.path.dirname(os.path.abspath(__file__ + '/../../..'))
+FAKE_MODES = ['live', 'normal', 'empty', 'fail', 'garbage', 'slow']
 PENDING = {
-    'stack': 'day 2', 'seed': 'day 2', 'api': 'days 2-6', 'browser': 'days 2-6',
-    'test': 'day 3', 'evidence': 'day 7', 'cleanup': 'day 7', 'report': 'day 7', 'meta': 'day 1',
+    'browser': 'day 6', 'test': 'day 3', 'cleanup': 'day 7', 'report': 'day 7',
 }
 
 
@@ -22,6 +25,54 @@ def plus(line):
 def fail(message):
     print('FAIL: ' + message)
     return 1
+
+
+def instance_name(argv):
+    if '--instance' in argv:
+        i = argv.index('--instance')
+        if i + 1 >= len(argv):
+            return None
+        return argv[i + 1]
+    return os.environ.get('STEVENS_VERIFY_INSTANCE', 'default')
+
+
+def instance_dir(name):
+    path = os.path.join('/tmp/stevens-verify', name)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def evidence_dir(name):
+    path = os.path.join(instance_dir(name), 'evidence')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def port_free(port):
+    s = socket.socket()
+    try:
+        s.bind(('127.0.0.1', port))
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
+def http_json(method, path, role=None, timeout=30):
+    headers = {}
+    if role:
+        headers['X-Viewer-Role'] = role
+    req = urllib.request.Request('http://localhost:8787' + path, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.status, json.load(resp)
+
+
+def stack_healthy():
+    try:
+        status, _ = http_json('GET', '/api/health', timeout=5)
+        return status == 200
+    except Exception:
+        return False
 
 
 def check_tool(name, want, fix):
@@ -48,16 +99,6 @@ def read_key():
             if line.startswith('MODEL_API_KEY='):
                 return line.strip().split('=', 1)[1]
     return None
-
-
-def check_port(port):
-    s = socket.socket()
-    try:
-        s.bind(('127.0.0.1', port))
-        s.close()
-        print('ok: port %d free' % port)
-    except OSError:
-        print('ok: port %d in use (verify it is this instance before stack up)' % port)
 
 
 def cmd_doctor(argv):
@@ -92,11 +133,277 @@ def cmd_doctor(argv):
                 print('ok: GET /v1/models lists %s' % ', '.join(EXPECTED_MODELS))
         except Exception as e:
             rc |= fail('GET /v1/models failed (%s); check network and key' % e)
-    check_port(5173)
-    check_port(8787)
+    for port in (5173, 8787):
+        if port_free(port):
+            print('ok: port %d free' % port)
+        else:
+            print('ok: port %d in use (verify it is this instance before stack up)' % port)
     if rc == 0:
         print('doctor: PASS')
     return rc
+
+
+def stack_pidfile(name):
+    return os.path.join(instance_dir(name), 'stack.pid')
+
+
+def stack_logfile(name):
+    return os.path.join(instance_dir(name), 'stack.log')
+
+
+def stack_running(name):
+    pidfile = stack_pidfile(name)
+    if not os.path.exists(pidfile):
+        return False
+    try:
+        with open(pidfile) as f:
+            pgid = int(f.read().strip())
+        os.killpg(pgid, 0)
+        return True
+    except Exception:
+        return False
+
+
+def cmd_stack(argv):
+    name = instance_name(argv)
+    if name is None or '--help' in argv or not argv or argv[0].startswith('--'):
+        print('stevensctl stack: run the local stack for one instance.\n')
+        print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME]\n')
+        print('up starts npm run dev (web :5173 + server :8787) and waits for health;')
+        print('down stops only this instance; logs tails its log; status prints health.\n')
+        print('Examples:')
+        print('  export STEVENS_VERIFY_INSTANCE=day2')
+        print('  stevensctl stack up')
+        print('  stevensctl stack status')
+        return 0 if '--help' in argv else 2
+    verb = argv[0]
+    if verb == 'up':
+        if stack_running(name):
+            print('stack already up for instance %s' % name)
+            return 0
+        if not port_free(8787) or not port_free(5173):
+            return fail('ports 5173/8787 are held by another stack; stop it or pick another machine (fixed ports, one stack at a time)')
+        logpath = stack_logfile(name)
+        plus('npm run dev > %s' % logpath)
+        log = open(logpath, 'a')
+        proc = subprocess.Popen(['npm', 'run', 'dev'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        with open(stack_pidfile(name), 'w') as f:
+            f.write(str(proc.pid))
+        for _ in range(60):
+            if stack_healthy():
+                print('stack up: instance %s healthy (pgid %d)' % (name, proc.pid))
+                return 0
+            time.sleep(2)
+        return fail('stack did not turn healthy in 120s; see stevensctl stack logs')
+    if verb == 'down':
+        pidfile = stack_pidfile(name)
+        if not os.path.exists(pidfile):
+            print('stack down: instance %s was not up' % name)
+            return 0
+        with open(pidfile) as f:
+            pgid = int(f.read().strip())
+        plus('kill pgid %d' % pgid)
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        os.remove(pidfile)
+        print('stack down: instance %s stopped' % name)
+        return 0
+    if verb == 'logs':
+        logpath = stack_logfile(name)
+        if not os.path.exists(logpath):
+            return fail('no log for instance %s; run stack up first' % name)
+        plus('tail -n 50 %s' % logpath)
+        out = subprocess.run(['tail', '-n', '50', logpath], capture_output=True, text=True)
+        print(out.stdout, end='')
+        return 0
+    if verb == 'restart':
+        rc = cmd_stack(['down', '--instance', name])
+        if rc != 0:
+            return rc
+        return cmd_stack(['up', '--instance', name])
+    if verb == 'status':
+        print('instance: %s' % name)
+        print('stack process: %s' % ('up' if stack_running(name) else 'down'))
+        print('port 5173: %s' % ('free' if port_free(5173) else 'in use'))
+        print('port 8787: %s' % ('free' if port_free(8787) else 'in use'))
+        print('health: %s' % ('ok' if stack_healthy() else 'down'))
+        return 0
+    print('unknown stack verb: %s (see stevensctl stack --help)' % verb, file=sys.stderr)
+    return 2
+
+
+def cmd_seed(argv):
+    name = instance_name(argv)
+    if name is None or '--help' in argv:
+        print('stevensctl seed: stage fixtures + fresh ledger for the local stack.\n')
+        print('Verifies fixtures/manifest.json, truncates data/ledger.jsonl, resets the')
+        print('Meta call counter, sets the fake to normal, clears derived caches.\n')
+        print('Examples:')
+        print('  stevensctl stack up && stevensctl seed')
+        return 0
+    if not stack_healthy():
+        print('seed refuses: the local stack is not up (run stevensctl stack up first).', file=sys.stderr)
+        return 2
+    manifest = os.path.join(ROOT, 'fixtures', 'manifest.json')
+    if not os.path.exists(manifest):
+        return fail('fixtures/manifest.json is missing; cannot seed')
+    with open(manifest) as f:
+        entries = json.load(f)
+    for entry in entries:
+        blob = os.path.join(ROOT, 'fixtures', entry['file'])
+        if not os.path.exists(blob):
+            return fail('fixture blob %s is missing; cannot seed' % entry['file'])
+    datadir = os.path.join(ROOT, 'data')
+    os.makedirs(datadir, exist_ok=True)
+    plus('truncate data/ledger.jsonl, reset meta-calls.json, fake mode normal')
+    open(os.path.join(datadir, 'ledger.jsonl'), 'w').close()
+    with open(os.path.join(datadir, 'meta-calls.json'), 'w') as f:
+        json.dump({'count': 0}, f)
+    with open(os.path.join(datadir, 'meta-fake.json'), 'w') as f:
+        json.dump({'mode': 'normal'}, f)
+    derived = os.path.join(datadir, 'derived')
+    if os.path.exists(derived):
+        shutil.rmtree(derived)
+    print('seed: %d fixtures verified, ledger fresh, fake normal, counter 0' % len(entries))
+    return 0
+
+
+def json_path(doc, path):
+    node = doc
+    for part in path.split('.'):
+        if '[' in part:
+            key, rest = part.split('[', 1)
+            idx = int(rest.rstrip(']'))
+            node = node[key][idx]
+        else:
+            node = node[part] if isinstance(node, dict) and part in node else None
+        if node is None:
+            return None
+    return node
+
+
+def cmd_api(argv):
+    if '--help' in argv or '--as' not in argv:
+        print('stevensctl api: drive the app HTTP surface as a role.\n')
+        print('Usage: stevensctl api --as Associate|Partner SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
+        print('Surfaces: health, state, ingest. --field prints one JSON path; --until polls')
+        print('until that path is truthy (30s); --save stores the body under evidence.\n')
+        print('Examples:')
+        print('  stevensctl api --as Associate state --expect 200 --field events --save state.json')
+        print('  stevensctl api --as Associate ingest --expect 200')
+        return 0 if '--help' in argv else 2
+    role = argv[argv.index('--as') + 1]
+    if role not in ('Associate', 'Partner'):
+        print('--as must be Associate or Partner.', file=sys.stderr)
+        return 2
+    skip = {'--as', '--expect', '--field', '--save', '--until', '--instance'}
+    surface = None
+    i = 0
+    while i < len(argv):
+        if argv[i] in skip:
+            i += 2
+            continue
+        if not argv[i].startswith('--'):
+            surface = argv[i]
+            break
+        i += 1
+    methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest')}
+    if surface not in methods:
+        print('unknown surface: %s (health, state, ingest).' % surface, file=sys.stderr)
+        return 2
+    method, path = methods[surface]
+    expect = int(argv[argv.index('--expect') + 1]) if '--expect' in argv else None
+    field = argv[argv.index('--field') + 1] if '--field' in argv else None
+    save = argv[argv.index('--save') + 1] if '--save' in argv else None
+    until = argv[argv.index('--until') + 1] if '--until' in argv else None
+    name = instance_name(argv) or 'default'
+    plus('%s %s as %s' % (method, path, role))
+    deadline = time.time() + 30
+    while True:
+        try:
+            status, body = http_json(method, path, role, timeout=120)
+        except urllib.error.HTTPError as e:
+            try:
+                body = json.load(e)
+            except Exception:
+                body = {'error': 'http %d' % e.code}
+            status = e.code
+        if until and not json_path(body, until) and time.time() < deadline:
+            time.sleep(2)
+            continue
+        break
+    if until and not json_path(body, until):
+        return fail('--until %s never turned truthy in 30s' % until)
+    if expect is not None and status != expect:
+        return fail('expected status %d, got %d (%s)' % (expect, status, json.dumps(body)[:300]))
+    if save:
+        dest = os.path.join(evidence_dir(name), save)
+        with open(dest, 'w') as f:
+            json.dump(body, f, indent=2)
+        print('saved %s' % dest)
+    if field:
+        value = json_path(body, field)
+        print('%s = %s' % (field, json.dumps(value)[:500]))
+        if value is None:
+            return fail('field %s missing' % field)
+    else:
+        print(json.dumps(body)[:1000])
+    return 0
+
+
+def cmd_meta(argv):
+    if '--help' in argv or not argv:
+        print('stevensctl meta: control the Meta API fake.\n')
+        print('Usage: stevensctl meta fake --mode live|normal|empty|fail|garbage|slow')
+        print('       stevensctl meta calls\n')
+        print('The fake stands in for api.meta.ai; calls prints the call counter the')
+        print('replay and resume checks read.\n')
+        print('Examples:')
+        print('  stevensctl meta fake --mode slow')
+        print('  stevensctl meta calls')
+        print('  stevensctl meta fake --mode normal')
+        return 0
+    if argv[0] == 'calls':
+        path = os.path.join(ROOT, 'data', 'meta-calls.json')
+        count = 0
+        if os.path.exists(path):
+            with open(path) as f:
+                count = json.load(f).get('count', 0)
+        print('meta calls: %d' % count)
+        return 0
+    if argv[0] == 'fake' and '--mode' in argv:
+        mode = argv[argv.index('--mode') + 1]
+        if mode not in FAKE_MODES:
+            print('unknown mode: %s (%s).' % (mode, '|'.join(FAKE_MODES)), file=sys.stderr)
+            return 2
+        datadir = os.path.join(ROOT, 'data')
+        os.makedirs(datadir, exist_ok=True)
+        with open(os.path.join(datadir, 'meta-fake.json'), 'w') as f:
+            json.dump({'mode': mode}, f)
+        print('meta fake: %s' % mode)
+        return 0
+    print('unknown meta command (see stevensctl meta --help).', file=sys.stderr)
+    return 2
+
+
+def cmd_evidence(argv):
+    name = instance_name(argv) or 'default'
+    if '--help' in argv or not argv or argv[0] not in ('dir', 'list'):
+        print('stevensctl evidence: inspect this instance evidence.\n')
+        print('Usage: stevensctl evidence dir|list [--instance NAME]\n')
+        print('Examples:')
+        print('  stevensctl evidence dir')
+        return 0 if '--help' in argv or not argv else 2
+    path = evidence_dir(name)
+    if argv[0] == 'dir':
+        print(path)
+        return 0
+    for entry in sorted(os.listdir(path)):
+        full = os.path.join(path, entry)
+        print('%s %d' % (entry, os.path.getsize(full)))
+    return 0
 
 
 def cmd_pending(name, argv):
@@ -113,22 +420,33 @@ def main(argv):
         print('Usage: stevensctl <command> [options]\n')
         print('Commands:')
         print('  doctor    check tools, key, models, ports')
-        print('  stack     up|down|logs|restart|status (day 2)')
-        print('  seed      stage fixtures + fresh ledger (day 2)')
-        print('  api       drive HTTP as a role (days 2-6)')
-        print('  browser   run|snapshot UI flows (days 2-6)')
+        print('  stack     up|down|logs|restart|status')
+        print('  seed      stage fixtures + fresh ledger')
+        print('  api       drive HTTP as a role (health, state, ingest)')
+        print('  browser   run|snapshot UI flows (day 6)')
         print('  test      typecheck + vitest + build (day 3)')
-        print('  evidence  dir|list (day 7)')
+        print('  evidence  dir|list')
         print('  cleanup   stop this instance (day 7)')
         print('  report    print the report shape (day 7)')
-        print('  meta      fake|fail injection (day 1)\n')
+        print('  meta      fake --mode ... | calls\n')
         print('Examples:')
         print('  stevensctl doctor')
-        print('  stevensctl doctor --help')
+        print('  stevensctl stack up && stevensctl seed')
+        print('  stevensctl api --as Associate ingest --expect 200')
         return 0
     name = argv[0]
     if name == 'doctor':
         return cmd_doctor(argv[1:])
+    if name == 'stack':
+        return cmd_stack(argv[1:])
+    if name == 'seed':
+        return cmd_seed(argv[1:])
+    if name == 'api':
+        return cmd_api(argv[1:])
+    if name == 'meta':
+        return cmd_meta(argv[1:])
+    if name == 'evidence':
+        return cmd_evidence(argv[1:])
     if name in PENDING:
         return cmd_pending(name, argv[1:])
     print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)
