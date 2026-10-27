@@ -1,9 +1,16 @@
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
+import { readFileSync, existsSync } from 'node:fs';
 import type { Role } from '../shared/data.js';
 import { readAll } from './ledger/store.js';
+
+for (const line of existsSync('.env.local') ? readFileSync('.env.local', 'utf8').split('\n') : []) {
+  const cut = line.indexOf('=');
+  if (cut > 0 && !process.env[line.slice(0, cut)]) process.env[line.slice(0, cut)] = line.slice(cut + 1).trim();
+}
 import { runIngest } from './pipeline/ingest.js';
+import { runExtract } from './pipeline/extract.js';
 
 const app = new Hono();
 
@@ -55,6 +62,15 @@ app.get('/api/events', (c) => {
 app.post('/api/ingest', async (c) => {
   try {
     const result = await runIngest();
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+  }
+});
+
+app.post('/api/extract', async (c) => {
+  try {
+    const result = await runExtract();
     return c.json(result);
   } catch (err) {
     return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
