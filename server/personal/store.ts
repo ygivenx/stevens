@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Claim, Item, LedgerEvent, Segment } from '../../shared/data.js';
+import type { Claim, Item, LedgerEvent, Segment, Source } from '../../shared/data.js';
 import { dataDir } from '../common/ledger/store.js';
 import { openProcessDb } from '../common/db.js';
 import { atLabel } from './normalize/audio.js';
@@ -108,6 +108,39 @@ export function setAdapterState(adapter: string, state: { cursor?: string | null
   ).run(adapter, state.cursor ?? current?.cursor ?? null, state.lastSyncAt ?? current?.lastSyncAt ?? null, state.lastError ?? current?.lastError ?? null);
 }
 
+export function allPersonalClaims(): Claim[] {
+  const db = getDb();
+  const rows = db.prepare(
+    `select c.id, c.item_id as sourceId, c.segment_id as segmentId, c.entity, c.metric, c.value, c.quote,
+            s.speaker as speaker, s.start_ms as startMs, s.end_ms as endMs
+     from claims c left join segments s on s.id = c.segment_id order by c.id`,
+  ).all() as unknown as (Claim & { startMs: number | null; endMs: number | null })[];
+  for (const claim of rows) {
+    if (claim.startMs != null) claim.at = atLabel(claim.startMs);
+    else claim.at = undefined;
+  }
+  return rows;
+}
+
+export function personalSources(ownerRole: 'Associate' | 'Partner'): Source[] {
+  const db = getDb();
+  const items = db.prepare(
+    `select i.id as id, i.origin as origin, i.kind as kind, i.title as title, i.captured_at as capturedAt,
+            group_concat(s.text, char(10)) as text
+     from items i left join segments s on s.item_id = i.id group by i.id order by i.id`,
+  ).all() as unknown as { id: string; origin: string; kind: string; title: string; capturedAt: string; text: string | null }[];
+  return items.map((item) => ({
+    id: item.id,
+    vault: 'personal' as const,
+    title: item.title,
+    capturedAt: item.capturedAt,
+    kind: item.kind === 'audio' ? 'talk-audio' as const : item.kind === 'photo' || item.kind === 'video' ? 'slide-photo' as const : 'article' as const,
+    fixture: '',
+    text: item.text ?? undefined,
+    ownerRole,
+  }));
+}
+
 export function searchSegments(query: string, limit: number = 10): Segment[] {
   const db = getDb();
   const hits = db.prepare(`select segment_id as id from segments_fts where segments_fts match ? limit ?`).all(query, limit) as { id: string }[];
@@ -167,7 +200,11 @@ export function rebuildFromLedger(events: LedgerEvent[]): { items: number; claim
 }
 
 export function ensureDb(events: LedgerEvent[]): { rebuilt: boolean; items: number; claims: number } {
-  if (existsSync(dbPath())) return { rebuilt: false, items: 0, claims: 0 };
+  if (existsSync(dbPath())) {
+    const db = getDb();
+    const count = (db.prepare(`select count(*) as n from items`).get() as unknown as { n: number }).n;
+    if (count > 0) return { rebuilt: false, items: 0, claims: 0 };
+  }
   const counts = rebuildFromLedger(events);
   return { rebuilt: true, ...counts };
 }

@@ -33,6 +33,8 @@ const MEDIA_TYPES: Record<string, string> = { '.wav': 'audio/wav', '.jpg': 'imag
 export function createApp(options: AppOptions): Hono {
   const app = new Hono();
 
+  if (options.mountExtra) options.mountExtra(app);
+
   app.get('/api/health', (c) => c.json({ ok: true }));
 
   app.get('/api/state', (c) => {
@@ -121,6 +123,7 @@ export function createApp(options: AppOptions): Hono {
 
   app.post('/api/approve/:draftId', (c) => {
     const by = viewerRole(c.req.header('X-Viewer-Role'));
+    if (by !== 'Partner') return c.json({ error: 'Partner only' }, 403);
     const draftId = c.req.param('draftId');
     const exists = readAll().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
     if (!exists) return c.json({ error: 'unknown draft' }, 404);
@@ -130,6 +133,7 @@ export function createApp(options: AppOptions): Hono {
 
   app.post('/api/reject/:draftId', (c) => {
     const by = viewerRole(c.req.header('X-Viewer-Role'));
+    if (by !== 'Partner') return c.json({ error: 'Partner only' }, 403);
     const draftId = c.req.param('draftId');
     const exists = readAll().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
     if (!exists) return c.json({ error: 'unknown draft' }, 404);
@@ -181,8 +185,6 @@ export function createApp(options: AppOptions): Hono {
     c.header('Content-Type', MEDIA_TYPES[extname(path)] ?? 'application/octet-stream');
     return c.body(body);
   });
-
-  if (options.mountExtra) options.mountExtra(app);
 
   app.use('/*', serveStatic({ root: options.webRoot }));
   app.get('*', serveStatic({ path: options.webRoot + '/index.html' }));

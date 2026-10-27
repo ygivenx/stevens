@@ -99,6 +99,30 @@ export function documentBody(documentId: string, body: string): void {
   db.prepare(`update documents set body = ? where id = ?`).run(body, documentId);
 }
 
+export function syncFilings(filings: { accession: string; issuer: string; state: string; industryGroup: string; filedAt: string; firstSaleDate: string | null; totalOfferingUsd: number; totalSoldUsd: number }[]): void {
+  const db = getFirmDb();
+  const upsert = db.prepare(
+    `insert into filings (accession, issuer, state, industry_group, filed_at, first_sale_date, total_offering_usd, total_sold_usd)
+     values (?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(accession) do update set issuer = excluded.issuer, state = excluded.state, industry_group = excluded.industry_group,
+       filed_at = excluded.filed_at, first_sale_date = excluded.first_sale_date, total_offering_usd = excluded.total_offering_usd, total_sold_usd = excluded.total_sold_usd`,
+  );
+  db.exec('BEGIN');
+  try {
+    for (const filing of filings) {
+      upsert.run(filing.accession, filing.issuer, filing.state, filing.industryGroup, filing.filedAt, filing.firstSaleDate, filing.totalOfferingUsd, filing.totalSoldUsd);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      void 0;
+    }
+    throw err;
+  }
+}
+
 export function setConnectorState(connector: string, documents: number, lastSyncAt: string): void {
   const db = getFirmDb();
   db.prepare(

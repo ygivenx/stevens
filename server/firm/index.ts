@@ -4,6 +4,9 @@ import { createApp } from '../common/app.js';
 import { personForToken, seedPeople } from './agent-auth.js';
 import { getFirmDb } from './store.js';
 import { agentContext, agentFromHeader, agentMedia, agentMeetings, isAgentPurpose } from './agent.js';
+import { draftEscalation } from './decision.js';
+import { inboundRelease } from './release.js';
+import { runPrivy } from './privy.js';
 import { runConnectorSync } from './sync.js';
 
 if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'firm');
@@ -55,6 +58,44 @@ export const app = createApp({
     agent.post('/api/dev/sync', async (c) => {
       if (!devEnabled()) return c.json({ error: 'not found' }, 404);
       return c.json(await runConnectorSync());
+    });
+
+    agent.post('/agent/privy', async (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      const body = (await c.req.json().catch(() => ({}))) as { dealId?: string; question?: string; questionId?: string };
+      if (!body.dealId || !body.question || !body.questionId) return c.json({ error: 'dealId, question, and questionId are required' }, 400);
+      return c.json(await runPrivy(person, body.dealId, body.question, { questionId: body.questionId }));
+    });
+
+    agent.post('/agent/escalations', async (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      const body = (await c.req.json().catch(() => ({}))) as { dealId?: string; questionId?: string };
+      if (!body.dealId || !body.questionId) return c.json({ error: 'dealId and questionId are required' }, 400);
+      try {
+        return c.json(await draftEscalation(person.id, body.dealId, body.questionId, undefined));
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+      }
+    });
+
+    agent.post('/agent/releases', async (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      let payload: unknown;
+      try {
+        payload = await c.req.json();
+      } catch {
+        return c.json({ error: 'invalid payload' }, 400);
+      }
+      try {
+        return c.json(inboundRelease(person, payload), 201);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === 'sender is not on the deal team') return c.json({ error: message }, 403);
+        return c.json({ error: 'invalid payload' }, 400);
+      }
     });
   },
 });

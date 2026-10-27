@@ -1,17 +1,17 @@
 # Triggers
 
-Last verified: 0f84ea375996 on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (source)
 
-In v3 nobody runs Stevens: an ingested capture, a Readwise or notes sync, a meeting within 24 hours, a question, a share or an escalation starts the right work. Owner and Partner. Visible as the status line and live updates in both apps. Overall maturity: planned (SPEC.md v3 day 12, failure path day 15).
+In v3 nobody runs Stevens: an ingested capture, a Readwise or notes sync, a meeting within 24 hours, a question, a share or an escalation starts the right work. Owner and Partner. Visible as the status line and live updates in both apps. Day 12 landed the meeting trigger, rebrief on new claims, escalation-driven decision drafts, and the queued-retry path. UI surfacing arrives days 13–14. Overall maturity: beta.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| triggers-meeting-brief | A meeting on the owner's deal within 24h gets a brief with no browser request | planned | infra | - | not driven | SPEC.md § Triggers and the clock |
-| triggers-rebrief | New claims for a deal with an upcoming meeting produce a new brief | planned | infra | - | not driven | SPEC.md § Triggers and the clock |
-| triggers-decision-draft | An escalation at the firm produces a decision draft for the routed role | planned | infra | - | not driven | SPEC.md § Firm data layer (Firm-side writes) |
-| triggers-firm-down | With the firm unreachable, a question yields hold and a queued escalation that is retried | planned | infra | - | not driven | SPEC.md § Boundary (Fail closed) |
+| triggers-meeting-brief | A meeting on the owner's deal within 24h gets a brief with no browser request | beta | infra | - | 2026-10-27 | `server/personal/triggers.ts`, live `br-7c1badc3f4a5` |
+| triggers-rebrief | New claims for a deal with an upcoming meeting produce a new brief | beta | infra | - | 2026-10-27 | `server/personal/triggers.ts`, live `br-fe7a9cfc1607` after the talk drop |
+| triggers-decision-draft | An escalation at the firm produces a decision draft for the routed role | beta | infra | - | 2026-10-27 | `server/firm/decision.ts`, live `dc-e4e85a7ad13c` |
+| triggers-firm-down | With the firm unreachable, a question yields hold and a queued escalation that is retried | beta | infra | - | not driven | `server/personal/answer.ts`, `server/personal/flow.test.ts` |
 
 ## How to get to it (user POV)
 

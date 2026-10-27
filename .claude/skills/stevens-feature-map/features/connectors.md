@@ -11,8 +11,8 @@ Stevens · firm (:8787) reads the firm's systems through connectors into `firm.d
 | connectors-crm | Firm CRM connector: people, deals, deal teams, meetings, documents with ACLs, portfolio | beta | infra | - | not driven | `server/firm/connectors/crm.ts`, `fixtures/enterprise/crm.json` |
 | connectors-acl-map | ACL principals to classification as data; legal hold wins; unknown or empty maps to wall | beta | infra | - | not driven | `server/firm/connectors/acl-map.ts`, `server/firm/connectors/acl-map.test.ts` |
 | connectors-firm-extract | Firm-side vision on the deck photo and extraction on firm documents | beta | infra | - | not driven | `server/firm/sync.ts`, `server/firm/agent.test.ts` |
-| connectors-formd-import | One-time script downloads SEC Form D quarters and commits a filtered subset | planned | infra | - | not driven | SPEC.md § Firm data layer (Form D import) |
-| connectors-formd-comps | Code-computed market comps document and claims per quarter, visible to all staff | planned | API | - | not driven | SPEC.md § Firm data layer (Connectors) |
+| connectors-formd-import | One-time script downloads SEC Form D quarters and commits a filtered subset | beta | infra | - | 2026-10-27 | `scripts/import-formd.ts`, `fixtures/enterprise/formd/tech-2025q4-2026q1.json` (853 rows) |
+| connectors-formd-comps | Code-computed market comps document and claims per quarter, visible to all staff | beta | API | - | 2026-10-27 | `server/firm/connectors/formd.ts`, comps `449→$7.0M` + `404→$8.0M` |
 
 ## How to get to it (user POV)
 

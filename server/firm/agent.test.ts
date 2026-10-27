@@ -46,9 +46,9 @@ describe('crm sync', () => {
   it('loads documents, acl rows, and people into firm.db', () => {
     const db = getFirmDb();
     const docs = db.prepare(`select count(*) as n from documents`).get() as unknown as { n: number };
-    expect(docs.n).toBe(5);
+    expect(docs.n).toBe(7);
     const acl = db.prepare(`select count(*) as n from document_acl`).get() as unknown as { n: number };
-    expect(acl.n).toBe(5);
+    expect(acl.n).toBe(7);
     const people = db.prepare(`select count(*) as n from people`).get() as unknown as { n: number };
     expect(people.n).toBe(3);
   });
@@ -56,10 +56,10 @@ describe('crm sync', () => {
   it('extracts verbatim claims for every document with a second sync costing nothing', async () => {
     const spent = calls(dir);
     const second = await runConnectorSync();
-    expect(second.documents).toBe(5);
+    expect(second.documents).toBe(7);
     expect(calls(dir)).toBe(spent);
     const extracted = readAll().filter((e) => e.type === 'claims.extracted');
-    expect(extracted.length).toBeGreaterThanOrEqual(5);
+    expect(extracted.length).toBeGreaterThanOrEqual(7);
   });
 });
 

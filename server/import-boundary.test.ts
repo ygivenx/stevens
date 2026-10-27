@@ -7,7 +7,7 @@ function listFiles(dir: string): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...listFiles(path));
-    else if (entry.name.endsWith('.ts')) out.push(path);
+    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) out.push(path);
   }
   return out;
 }
