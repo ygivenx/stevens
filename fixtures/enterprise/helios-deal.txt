@@ -1,0 +1,4 @@
+Account: Helios (fictional mid-market SaaS)
+Stage: First meeting held Oct 21, 2026. Second meeting proposed Oct 29.
+Owner: Associate team. Contacts: CEO Dana Reyes, CFO Priya Nair.
+Notes: Deck claims net churn 1.8%, NDR 118%. Team wants the churn definition checked before the second meeting.

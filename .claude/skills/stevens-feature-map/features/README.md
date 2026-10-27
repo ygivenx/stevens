@@ -33,11 +33,11 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-None. No branches besides `main`, no PRs.
+`day2-ledger-and-ingest`: fixtures, Meta client + fake, ledger, ingest, stevensctl day-2 commands (open PR to `main`).
 
 ## Test evidence
 
-"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 1: the scaffold exists, so `server-state` is `stub` with `server/index.ts` as evidence; every other row stays `planned` with a SPEC.md section as evidence, except the stretch chat which is `deferred` until its go/no-go. No CI exists; `stevensctl` has no `ci status` until CI does.
+"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 2: capture, ledger (except replay), and server state/events are `api-only` with live evidence; `server-actions` is `stub`; everything else stays `planned` (stretch chat `deferred`). The ledger vitest suite passes via `npm test`; `stevensctl test` itself lands day 3. No CI exists; `stevensctl` has no `ci status` until CI does.
 
 ## Baseline preconditions for driving
 
@@ -109,7 +109,7 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 
 | File | Area | Roles | Overall (2026-10-26) |
 |---|---|---|---|
-| [capture.md](capture.md) | Glasses captures and fixtures into the two vaults | all | planned |
+| [capture.md](capture.md) | Glasses captures and fixtures into the two vaults | all | api-only |
 | [extraction.md](extraction.md) | Transcript/photo text to structured claims + citation resolver | all | planned |
 | [bridge.md](bridge.md) | Personal claims bearing on work claims | all | planned |
 | [policy.md](policy.md) | Rules table + exhaustive test | all | planned |
@@ -119,8 +119,8 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 | [drafts.md](drafts.md) | Unprompted brief + Q&A answer | Associate, Partner | planned |
 | [inspector.md](inspector.md) | Boundary inspector over every model call | Associate, Partner | planned |
 | [approval.md](approval.md) | Role switch + approve/reject with logging | Associate, Partner | planned |
-| [ledger.md](ledger.md) | Durable pipeline ledger + replay | all | planned |
-| [server.md](server.md) | Stevens API, media route, SSE | all | stub |
+| [ledger.md](ledger.md) | Durable pipeline ledger + replay | all | api-only |
+| [server.md](server.md) | Stevens API, media route, SSE | all | api-only |
 | [chat.md](chat.md) | Follow-up chat (gated stretch) | Associate, Partner | deferred |
 
 ## Sweep order
