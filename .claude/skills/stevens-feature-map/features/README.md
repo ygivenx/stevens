@@ -33,7 +33,7 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-`day7-honesty`: failure states, honesty labels, final sync (open PR to `main`).
+None. No branches besides `main`, no PRs.
 
 ## Test evidence
 
