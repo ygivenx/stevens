@@ -49,7 +49,21 @@ export function filterState(events: LedgerEvent[], viewer: Role): LedgerEvent[] 
       return [{ ...event, manifest: { ...event.manifest, included: [], withheld: [] } }];
     }
     if (event.type === 'bridge.judged') {
-      return [{ ...event, manifest: redactManifest(event.manifest, sources, viewer) }];
+      const manifest = redactManifest(event.manifest, sources, viewer);
+      const personalId = event.candidate.find((id) => sources.get(claims.get(id)?.sourceId ?? '')?.vault === 'personal');
+      const candidate = event.candidate.map((id) => {
+        const claim = claims.get(id);
+        if (!claim) return 'withheld';
+        const source = sources.get(claim.sourceId);
+        if (!source) return 'withheld';
+        return claimVisible(claim, sources, viewer, events) ? id : 'withheld';
+      }) as [string, string];
+      if (!event.bridge) return [{ ...event, candidate, manifest }];
+      if (!personalId) return [{ ...event, candidate, manifest }];
+      const personalClaim = claims.get(personalId);
+      const personalSource = personalClaim ? sources.get(personalClaim.sourceId) : undefined;
+      if (personalSource?.ownerRole !== viewer) return [{ ...event, bridge: null, candidate, manifest }];
+      return [{ ...event, candidate, manifest }];
     }
     if (event.type === 'draft.created') {
       const sentences = event.draft.sentences
