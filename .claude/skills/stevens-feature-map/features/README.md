@@ -33,11 +33,11 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-`day6-ui`: business-theme UI, transcript route, browser flows (open PR to `main`).
+`day7-honesty`: failure states, honesty labels, final sync (open PR to `main`).
 
 ## Test evidence
 
-"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 6: UI surfaces reach beta via 7 headless-Chromium flows; all 3 journeys PASS. 31 vitest tests pass via `stevensctl test`. No CI exists; `stevensctl` has no `ci status` until CI does.
+"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 7: failure states and honesty labels in; `stevensctl` complete. 31 vitest tests + 7 browser flows green; all 3 journeys PASS. No CI exists; `stevensctl` has no `ci status` until CI does.
 
 ## Baseline preconditions for driving
 
