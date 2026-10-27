@@ -33,7 +33,7 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-`day1-spikes-and-scaffold`: day-1 scaffold, spikes, SPEC results, `stevensctl doctor` (open PR to `main`).
+None. No branches besides `main`, no PRs.
 
 ## Test evidence
 
