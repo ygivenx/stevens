@@ -22,9 +22,9 @@ export interface AccessRule {
 }
 
 export interface Claim {
-  id: string; sourceId: string; entity: string; metric?: string; value?: string;
+  id: string; sourceId: string; segmentId?: string; entity: string; metric?: string; value?: string;
   quote: string;
-  at?: string; speaker?: string;
+  at?: string; speaker?: string; startMs?: number; endMs?: number;
 }
 
 export type Citation =
@@ -45,14 +45,35 @@ export interface Draft { id: string; kind: 'brief' | 'answer'; question?: string
   sentences: { text: string; citations: Citation[] }[]; droppedSentences: number;
   verdict?: Verdict; status: 'draft' | 'approved' | 'rejected' }
 
+export type Origin = 'glasses' | 'readwise' | 'notes';
+export type ItemKind = 'audio' | 'photo' | 'video' | 'highlight' | 'note';
+
+export interface RawItem {
+  origin: Origin; originId: string; kind: ItemKind; title: string; capturedAt: string;
+  mediaPath?: string; text?: string; locator?: string; contentHash: string;
+}
+
+export interface Item {
+  id: string; origin: Origin; originId: string; kind: ItemKind; title: string; capturedAt: string;
+  status: 'normalizing' | 'extracting' | 'ready' | 'failed'; error?: string; hasMedia: boolean;
+}
+
+export interface Segment {
+  id: string; itemId: string; seq: number; text: string;
+  speaker?: string; startMs?: number; endMs?: number; locator?: string;
+}
+
 export type LedgerEvent = { at: string } & (
   | { type: 'source.ingested'; source: Source; api?: Api }
-  | { type: 'claims.extracted'; sourceId: string; claims: Claim[]; api: Api }
+  | { type: 'claims.extracted'; sourceId: string; itemId?: string; claims: Claim[]; api: Api }
   | { type: 'bridge.judged'; bridge: Bridge | null; candidate: [string, string]; manifest: Manifest; api: Api }
   | { type: 'draft.created'; draft: Draft; manifest: Manifest; api: Api }
   | { type: 'privy.judged'; questionId: string; verdict: Verdict; manifest: Manifest; api?: Api; failedClosed: boolean }
   | { type: 'escalation.drafted'; draftId: string; to: Role }
   | { type: 'personal.released'; claimId: string; by: Role }
+  | { type: 'item.ingested'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; api?: Api }
+  | { type: 'item.rejected'; origin: Origin; originId: string; reason: string }
+  | { type: 'sync.completed'; adapter: Origin; added: number; cursor?: string }
   | { type: 'attempt.failed'; stageKey: string; model: string; error: string; usage?: Usage }
   | { type: 'role.switched'; role: Role }
   | { type: 'draft.approved' | 'draft.rejected'; draftId: string; by: Role });

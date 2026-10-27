@@ -251,7 +251,7 @@ create table adapter_state (
 );
 ```
 
-`personal.db` is a projection: `item.ingested` events carry the item and its segments, `claims.extracted` carries claims, `share.sent` carries shares. If the file is missing at start, the process rebuilds it from `data/personal/ledger.jsonl` with zero API calls.
+`personal.db` is a projection: `item.ingested` events carry the item, its segments and the `contentHash` dedupe key (plus `mediaPath`), `claims.extracted` carries claims, `share.sent` carries shares. If the file is missing at start, the process rebuilds it from `data/personal/ledger.jsonl` with zero API calls.
 
 ### Firm data layer (Stevens · firm)
 
@@ -507,7 +507,7 @@ interface Receipt {
 }
 
 type PersonalEvent = { at: string } & (
-  | { type: 'item.ingested'; item: Item; segments: Segment[]; api?: Api }
+  | { type: 'item.ingested'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; api?: Api }
   | { type: 'item.rejected'; origin: Origin; originId: string; reason: string }
   | { type: 'claims.extracted'; itemId: string; claims: Claim[]; api: Api }
   | { type: 'sync.completed'; adapter: Origin; added: number; cursor?: string }
