@@ -7,6 +7,7 @@ export interface FirmMeeting {
   company: string;
   title: string;
   startsAt: string;
+  team?: { id: string; name: string; role: string }[];
 }
 
 import type { Claim, SourceRef, Verdict } from '../../shared/data.js';

@@ -62,6 +62,10 @@ export interface Draft {
 export type Origin = 'glasses' | 'readwise' | 'notes';
 export type ItemKind = 'audio' | 'photo' | 'video' | 'highlight' | 'note';
 
+export interface Person { id: string; name: string; role: Role }
+
+export interface Meeting { id: string; dealId: string; company: string; title: string; startsAt: string }
+
 export interface RawItem {
   origin: Origin; originId: string; kind: ItemKind; title: string; capturedAt: string;
   mediaPath?: string; text?: string; locator?: string; segments?: { text: string; locator?: string }[]; contentHash: string;

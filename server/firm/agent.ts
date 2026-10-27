@@ -23,6 +23,7 @@ export interface AgentMeeting {
   company: string;
   title: string;
   startsAt: string;
+  team: { id: string; name: string; role: string }[];
 }
 
 export function agentMeetings(person: AgentPerson, withinHours: number): AgentMeeting[] {
@@ -33,8 +34,20 @@ export function agentMeetings(person: AgentPerson, withinHours: number): AgentMe
      from meetings m join deals d on d.id = m.deal_id
      join deal_team t on t.deal_id = m.deal_id
      where t.person_id = ? order by m.starts_at`,
-  ).all(person.id) as unknown as AgentMeeting[];
-  return rows.filter((row) => Date.parse(row.startsAt) > nowMs() && Date.parse(row.startsAt) <= cutoff);
+  ).all(person.id) as unknown as Omit<AgentMeeting, 'team'>[];
+  const teamByDeal = new Map<string, { id: string; name: string; role: string }[]>();
+  const teamRows = db.prepare(
+    `select t.deal_id as dealId, p.id as id, p.name as name, p.role as role
+     from deal_team t join people p on p.id = t.person_id`,
+  ).all() as unknown as { dealId: string; id: string; name: string; role: string }[];
+  for (const row of teamRows) {
+    const list = teamByDeal.get(row.dealId) ?? [];
+    list.push({ id: row.id, name: row.name, role: row.role });
+    teamByDeal.set(row.dealId, list);
+  }
+  return rows
+    .filter((row) => Date.parse(row.startsAt) > nowMs() && Date.parse(row.startsAt) <= cutoff)
+    .map((row) => ({ ...row, team: teamByDeal.get(row.dealId) ?? [] }));
 }
 
 export interface AgentContext {

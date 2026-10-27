@@ -4,6 +4,8 @@ dist-server/
 dist-web/
 dist-web-firm/
 dist-web-personal/
+web/.vite-personal/
+web/.vite-firm/
 .env
 .env.local
 data/

@@ -6,11 +6,12 @@
   "scripts": {
     "dev:personal": "vite --config vite.personal.config.ts",
     "dev:firm": "vite --config vite.firm.config.ts",
-    "build": "tsc --noEmit -p tsconfig.json && vite build --config vite.personal.config.ts --outDir ../dist-web-personal && vite build --config vite.firm.config.ts --outDir ../dist-web-firm",
+    "build": "tsc --noEmit -p tsconfig.json && vite build --config vite.personal.config.ts --outDir ../../dist-web-personal && vite build --config vite.firm.config.ts --outDir ../../dist-web-firm",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "lucide-react": "^1.62.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^4.3.3"
