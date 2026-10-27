@@ -33,11 +33,11 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-`day2-ledger-and-ingest`: fixtures, Meta client + fake, ledger, ingest, stevensctl day-2 commands (open PR to `main`).
+`day3-extraction`: claim extraction, citation resolver (open PR to `main`).
 
 ## Test evidence
 
-"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 2: capture, ledger (except replay), and server state/events are `api-only` with live evidence; `server-actions` is `stub`; everything else stays `planned` (stretch chat `deferred`). The ledger vitest suite passes via `npm test`; `stevensctl test` itself lands day 3. No CI exists; `stevensctl` has no `ci status` until CI does.
+"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 3: extraction claims join the `api-only` set with live evidence (resolver `stub` until drafts call it). 11 vitest tests pass via `npm test`; `stevensctl test` lands day 4 with the policy suite. No CI exists; `stevensctl` has no `ci status` until CI does.
 
 ## Baseline preconditions for driving
 
@@ -110,7 +110,7 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 | File | Area | Roles | Overall (2026-10-26) |
 |---|---|---|---|
 | [capture.md](capture.md) | Glasses captures and fixtures into the two vaults | all | api-only |
-| [extraction.md](extraction.md) | Transcript/photo text to structured claims + citation resolver | all | planned |
+| [extraction.md](extraction.md) | Transcript/photo text to structured claims + citation resolver | all | api-only |
 | [bridge.md](bridge.md) | Personal claims bearing on work claims | all | planned |
 | [policy.md](policy.md) | Rules table + exhaustive test | all | planned |
 | [assembler.md](assembler.md) | Context assembler, manifests, token budget | all | planned |

@@ -2,7 +2,7 @@
 
 `stevensctl` is the single verification CLI for Stevens. It lives in `.claude/skills/verify-stevens/stevensctl`, runs from the repo root with `uv run` (no install step), and mirrors the verify-CLI contract shared across projects: `--help` with examples on every command, `+` echo lines for every command it runs, exit 0 pass / 1 check failed / 2 usage or precondition error whose message says how to fix it.
 
-Day 2 status: `doctor`, `stack`, `seed`, `meta`, `api` (health, state, ingest), and `evidence` are implemented. Remaining: `test` on day 3, `browser` on day 6 with the UI surfaces, `cleanup` / `report` on day 7.
+Day 3 status: `doctor`, `stack`, `seed`, `meta`, `api` (health, state, ingest, extract), and `evidence` are implemented. Remaining: `test` on day 4 with the policy suite, `browser` on day 6 with the UI surfaces, `cleanup` / `report` on day 7.
 
 ## Instances and evidence
 

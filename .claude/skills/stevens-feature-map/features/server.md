@@ -22,7 +22,7 @@ No user path: the server is infrastructure. Its visible surface is every screen,
 Preconditions: baseline.
 
 - **server-state**: read state as each role → `stevensctl api --as Associate state --expect 200 --field '.events'` then `--as Partner` → both read the ledger projection (per-role filtering lands with the day-4 policy).
-- **server-actions**: ingest → `stevensctl api --as Associate ingest --expect 200 --field '.ingested'` → 10 sources ingested (ask, release, approve, and reject land days 4–5).
+- **server-actions**: ingest then extract → `stevensctl api --as Associate ingest --expect 200` then `api --as Associate extract --expect 200` → 10 sources ingested, 23 claims extracted (ask, release, approve, and reject land days 4–5).
 - **server-media**: fetch media as each role → `stevensctl api --as Associate media <sourceId> --expect 200` → bytes for allowed sources, rejection for withheld ones; no fixture URL works outside this route.
 - **server-events**: watch a run → `curl -s http://localhost:8787/api/events` during `api ingest` → ledger replay plus live appends and heartbeats (the api driver has no events surface yet).
 

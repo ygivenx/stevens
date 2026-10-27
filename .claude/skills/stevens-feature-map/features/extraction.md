@@ -1,15 +1,15 @@
 # Extraction
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
-Extraction turns captured text (transcripts, photo text, documents) into structured claims via Spark at low effort with JSON output, and the runtime citation resolver guards everything Stevens displays: every sentence needs a citation, Fact quotes must be verbatim, and failing sentences are dropped and counted. Day 3 build. Overall maturity: everything planned.
+Extraction turns captured text (transcripts, photo text, documents) into structured claims via Spark at low effort with JSON output, and the runtime citation resolver guards everything Stevens displays: every sentence needs a citation, Fact quotes must be verbatim, and failing sentences are dropped and counted. Day 3 built and drove it live: 23 claims extracted, every quote resolving. Overall maturity: claims api-only, resolver stub until drafts call it.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| extraction-claims | Transcript and photo text become structured claims (entity, metric, value, verbatim quote, timestamp, speaker) | planned | API | - | not driven | SPEC.md § Models, SPEC.md § Contracts |
-| extraction-resolver | Every displayed sentence resolves ≥1 citation; Fact quotes are verbatim substrings; unsupported sentences are dropped and counted | planned | UI+API | - | not driven | SPEC.md § Server components |
+| extraction-claims | Transcript and photo text become structured claims (entity, metric, value, verbatim quote, timestamp, speaker) | api-only | API | - | 2026-10-27 | `server/pipeline/extract.ts`, `/tmp/stevens-verify/day3/evidence/extract-live.json` |
+| extraction-resolver | Every displayed sentence resolves ≥1 citation; Fact quotes are verbatim substrings; unsupported sentences are dropped and counted | stub | UI+API | - | not driven | `server/resolver/resolve.ts`, `server/resolver/resolve.test.ts` |
 
 ## How to get to it (user POV)
 
@@ -23,13 +23,15 @@ Planned UI; no build exists yet. Intended path:
 
 Preconditions: baseline.
 
-- **extraction-claims**: seed then extract → `stevensctl seed && stevensctl api --as Associate extract talk --expect 200 --field '.claims[0].quote'` → claims with verbatim quotes and speaker anchors.
-- **extraction-resolver**: inject a fake quote then render → `stevensctl api --as Associate resolver probe --expect 200 --field '.droppedSentences'` → unsupported sentence dropped and counted as 1.
+- **extraction-claims**: ingest then extract → `stevensctl api --as Associate ingest --expect 200` then `api --as Associate extract --expect 200` → 23 claims; every quote resolves against its source text.
+- **extraction-resolver**: run the unit suite → `npm test` → 7 resolver tests pass (fake quotes dropped); live sentence checks need day-5 drafts.
 
 ## Gotchas
 
 - `Claim.quote` must be a verbatim substring of its source's `text`; `at` and `speaker` come from Voice timestamps and speaker labels (SPEC.md § Contracts).
 - A Fact's quote must resolve against the claim and the claim's quote against the source text; the resolver drops failures from the draft but counts them for the inspector ("1 unsupported sentence removed") (SPEC.md § Server components).
 - Stevens says "nothing relevant" rather than inventing when no claim resolves (SPEC.md § Server components).
-- The cheaper `muse-spark-1.3-contributor` tier is tried for extraction during the day-1 A/B and kept if quality holds (SPEC.md § Models).
+- The cheaper `muse-spark-1.3-contributor` tier won the day-1 A/B and runs extraction (SPEC.md § Models).
 - Every structured response is validated against a zod schema, retried once, then fails closed (SPEC.md § Architecture).
+- Strict schemas must list every property in `required`; optional fields are nullable (the API rejects partial lists).
+- The server loads `.env.local` at boot; the key never leaves the server process.

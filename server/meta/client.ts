@@ -109,5 +109,75 @@ export function voiceCost(audioSeconds: number): number {
   return (audioSeconds / 3600) * 0.18;
 }
 
+export interface RawClaim { entity: string; metric?: string | null; value?: string | null; quote: string; at?: string | null; speaker?: string | null }
+export interface Extracted { claims: RawClaim[]; responseId: string; usage: Usage }
+
+const EXTRACT_MODEL = 'muse-spark-1.3-contributor';
+
+function firstSentence(text: string): string {
+  const match = text.replace(/\s+/g, ' ').trim().match(/^(.+?[.!?])(\s|$)/);
+  return (match ? match[1] : text).slice(0, 200);
+}
+
+function fakeClaims(text: string): RawClaim[] {
+  const quote = firstSentence(text);
+  const lowered = text.toLowerCase();
+  if (lowered.includes('churn')) return [{ entity: 'churn', metric: 'churn', value: 'see quote', quote }];
+  return [{ entity: 'general', quote }];
+}
+
+const CLAIM_SCHEMA = {
+  type: 'object',
+  properties: {
+    claims: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          entity: { type: 'string' },
+          metric: { type: ['string', 'null'] },
+          value: { type: ['string', 'null'] },
+          quote: { type: 'string' },
+          at: { type: ['string', 'null'] },
+          speaker: { type: ['string', 'null'] },
+        },
+        required: ['entity', 'metric', 'value', 'quote', 'at', 'speaker'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['claims'],
+  additionalProperties: false,
+} as const;
+
+export async function extractClaims(sourceId: string, text: string, turns?: TranscriptTurn[]): Promise<Extracted> {
+  const mode = fakeMode();
+  countCall();
+  if (mode === 'fail') throw new Error('fake extraction failure');
+  if (mode === 'slow') await sleep(5000);
+  if (mode === 'empty') return { claims: [], responseId: 'fake_extract_empty', usage: fakeUsage() };
+  if (mode === 'garbage') return { claims: [{ entity: 'general', quote: 'a sentence that appears nowhere in the source' }], responseId: 'fake_extract_garbage', usage: fakeUsage() };
+  if (mode !== 'live') return { claims: fakeClaims(text), responseId: 'fake_extract_normal', usage: fakeUsage() };
+  const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
+  const anchors = turns && turns.length > 0
+    ? '\nSpeaker turns (copy at/speaker exactly):\n' + turns.map((t) => `${t.speaker} ${(t.startMs / 1000).toFixed(0)}s: ${t.transcript}`).join('\n')
+    : '';
+  const resp = await client.responses.create({
+    model: EXTRACT_MODEL,
+    reasoning: { effort: 'low' },
+    input: `Extract factual claims from this ${sourceId} text. Every quote must be copied verbatim from the text.\n\n${text}${anchors}`,
+    text: { format: { type: 'json_schema', name: 'claims', schema: CLAIM_SCHEMA, strict: true } },
+  });
+  const parsed = JSON.parse(resp.output_text) as { claims: RawClaim[] };
+  if (!Array.isArray(parsed.claims)) throw new Error('extraction response failed validation');
+  const usage: Usage = {
+    inputTokens: resp.usage?.input_tokens,
+    outputTokens: resp.usage?.output_tokens,
+    costUsd: ((resp.usage?.input_tokens ?? 0) * 1.25 + (resp.usage?.output_tokens ?? 0) * 4.25) / 1_000_000,
+  };
+  return { claims: parsed.claims, responseId: resp.id, usage };
+}
+
 export const voiceModel = VOICE_MODEL;
 export const visionModel = VISION_MODEL;
+export const extractModel = EXTRACT_MODEL;
