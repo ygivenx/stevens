@@ -1,0 +1,12 @@
+[
+  {"id": "talk-oct20", "vault": "personal", "title": "Oct 20 talk, mid-market benchmarks", "capturedAt": "2026-10-20T14:00:00Z", "kind": "talk-audio", "file": "personal/talk.wav", "ownerRole": "Associate"},
+  {"id": "slide-oct20", "vault": "personal", "title": "Oct 20 talk slide photo", "capturedAt": "2026-10-20T14:32:00Z", "kind": "slide-photo", "file": "personal/slide.jpg", "ownerRole": "Associate"},
+  {"id": "article-churn", "vault": "personal", "title": "Highlight: churn benchmarks", "capturedAt": "2026-10-21T09:00:00Z", "kind": "article", "file": "personal/article-churn.txt", "ownerRole": "Associate"},
+  {"id": "article-ndr", "vault": "personal", "title": "Highlight: reading NDR", "capturedAt": "2026-10-22T09:00:00Z", "kind": "article", "file": "personal/article-ndr.txt", "ownerRole": "Associate"},
+  {"id": "article-meetings", "vault": "personal", "title": "Highlight: second meetings", "capturedAt": "2026-10-23T09:00:00Z", "kind": "article", "file": "personal/article-meetings.txt", "ownerRole": "Associate"},
+  {"id": "helios-deal", "vault": "enterprise", "title": "Helios CRM record", "capturedAt": "2026-10-21T16:00:00Z", "kind": "crm", "file": "enterprise/helios-deal.txt", "classification": "team"},
+  {"id": "helios-deck", "vault": "enterprise", "title": "Helios deck photo", "capturedAt": "2026-10-21T16:05:00Z", "kind": "deck-photo", "file": "enterprise/deck.jpg", "classification": "team"},
+  {"id": "team-memo", "vault": "enterprise", "title": "Helios prep memo", "capturedAt": "2026-10-22T10:00:00Z", "kind": "memo", "file": "enterprise/team-memo.txt", "classification": "team"},
+  {"id": "conflicts-lumen", "vault": "enterprise", "title": "Conflicts memo: Helios vs Lumen", "capturedAt": "2026-10-23T10:00:00Z", "kind": "conflicts", "file": "enterprise/conflicts-memo.txt", "classification": "partner-only"},
+  {"id": "wall-granite", "vault": "enterprise", "title": "Restricted: Project Granite", "capturedAt": "2026-10-24T10:00:00Z", "kind": "memo", "file": "enterprise/wall-note.txt", "classification": "wall"}
+]
