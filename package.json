@@ -7,11 +7,15 @@
     "web"
   ],
   "scripts": {
-    "dev": "concurrently -n server,web \"npm run dev:server\" \"npm run dev:web\"",
-    "dev:server": "tsx watch server/index.ts",
-    "dev:web": "npm run dev --workspace web",
+    "dev": "concurrently -n firm-server,personal-server,personal-web,firm-web \"npm run dev:server:firm\" \"npm run dev:server:personal\" \"npm run dev:web:personal\" \"npm run dev:web:firm\"",
+    "dev:server:firm": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/firm/index.ts",
+    "dev:server:personal": "NODE_OPTIONS=--disable-warning=ExperimentalWarning tsx watch server/personal/index.ts",
+    "dev:web:personal": "npm run dev:personal --workspace web",
+    "dev:web:firm": "npm run dev:firm --workspace web",
     "build": "npm run build --workspace web && tsc -p tsconfig.server.json",
-    "start": "node dist-server/server/index.js",
+    "start": "concurrently -n firm,personal \"npm run start:firm\" \"npm run start:personal\"",
+    "start:firm": "node dist-server/server/firm/index.js",
+    "start:personal": "node dist-server/server/personal/index.js",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {

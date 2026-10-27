@@ -73,12 +73,17 @@ def http_json(method, path, role=None, timeout=30, data=None):
         return resp.status, json.load(resp)
 
 
-def stack_healthy():
+def server_healthy(port):
     try:
-        status, _ = http_json('GET', '/api/health', timeout=5)
-        return status == 200
+        req = urllib.request.Request('http://localhost:%d/api/health' % port)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
     except Exception:
         return False
+
+
+def stack_healthy():
+    return server_healthy(8787) and server_healthy(8788)
 
 
 def check_tool(name, want, fix):
@@ -111,7 +116,7 @@ def cmd_doctor(argv):
     if '--help' in argv:
         print('stevensctl doctor: check tools and credentials.\n')
         print('Checks node 20+, uv, ffmpeg; MODEL_API_KEY in .env.local (never printed);')
-        print('GET /v1/models lists the SPEC models; ports 5173 and 8787 state.\n')
+        print('GET /v1/models lists the SPEC models; ports 5173, 5174, 8787 and 8788 state.\n')
         print('Examples:')
         print('  stevensctl doctor')
         return 0
@@ -139,7 +144,7 @@ def cmd_doctor(argv):
                 print('ok: GET /v1/models lists %s' % ', '.join(EXPECTED_MODELS))
         except Exception as e:
             rc |= fail('GET /v1/models failed (%s); check network and key' % e)
-    for port in (5173, 8787):
+    for port in (5173, 5174, 8787, 8788):
         if port_free(port):
             print('ok: port %d free' % port)
         else:
@@ -175,7 +180,7 @@ def cmd_stack(argv):
     if name is None or '--help' in argv or not argv or argv[0].startswith('--'):
         print('stevensctl stack: run the local stack for one instance.\n')
         print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME]\n')
-        print('up starts npm run dev (web :5173 + server :8787) and waits for health;')
+        print('up starts npm run dev (yours :5173+:8788, firm :5174+:8787) and waits for health;')
         print('down stops only this instance; logs tails its log; status prints health.\n')
         print('Examples:')
         print('  export STEVENS_VERIFY_INSTANCE=day2')
@@ -187,8 +192,8 @@ def cmd_stack(argv):
         if stack_running(name):
             print('stack already up for instance %s' % name)
             return 0
-        if not port_free(8787) or not port_free(5173):
-            return fail('ports 5173/8787 are held by another stack; stop it or pick another machine (fixed ports, one stack at a time)')
+        if not all(port_free(port) for port in (5173, 5174, 8787, 8788)):
+            return fail('ports 5173/5174/8787/8788 are held by another stack; stop it or pick another machine (fixed ports, one stack at a time)')
         logpath = stack_logfile(name)
         plus('npm run dev > %s' % logpath)
         log = open(logpath, 'a')
@@ -232,9 +237,12 @@ def cmd_stack(argv):
     if verb == 'status':
         print('instance: %s' % name)
         print('stack process: %s' % ('up' if stack_running(name) else 'down'))
-        print('port 5173: %s' % ('free' if port_free(5173) else 'in use'))
-        print('port 8787: %s' % ('free' if port_free(8787) else 'in use'))
-        print('health: %s' % ('ok' if stack_healthy() else 'down'))
+        print('port 5173 (yours web): %s' % ('free' if port_free(5173) else 'in use'))
+        print('port 5174 (firm web): %s' % ('free' if port_free(5174) else 'in use'))
+        print('port 8787 (firm): %s' % ('free' if port_free(8787) else 'in use'))
+        print('port 8788 (yours): %s' % ('free' if port_free(8788) else 'in use'))
+        print('health firm :8787: %s' % ('ok' if server_healthy(8787) else 'down'))
+        print('health yours :8788: %s' % ('ok' if server_healthy(8788) else 'down'))
         return 0
     print('unknown stack verb: %s (see stevensctl stack --help)' % verb, file=sys.stderr)
     return 2
@@ -244,7 +252,7 @@ def cmd_seed(argv):
     name = instance_name(argv)
     if name is None or '--help' in argv:
         print('stevensctl seed: stage fixtures + fresh ledger for the local stack.\n')
-        print('Verifies fixtures/manifest.json, truncates data/ledger.jsonl, resets the')
+        print('Verifies fixtures/manifest.json, truncates both process ledgers, resets the')
         print('Meta call counter, sets the fake to normal, clears derived caches.\n')
         print('Examples:')
         print('  stevensctl stack up && stevensctl seed')
@@ -263,8 +271,10 @@ def cmd_seed(argv):
             return fail('fixture blob %s is missing; cannot seed' % entry['file'])
     datadir = os.path.join(ROOT, 'data')
     os.makedirs(datadir, exist_ok=True)
-    plus('truncate data/ledger.jsonl, reset meta-calls.json, fake mode normal')
-    open(os.path.join(datadir, 'ledger.jsonl'), 'w').close()
+    plus('truncate both ledgers, reset meta-calls.json, fake mode normal')
+    for processdir in ('firm', 'personal'):
+        os.makedirs(os.path.join(datadir, processdir), exist_ok=True)
+        open(os.path.join(datadir, processdir, 'ledger.jsonl'), 'w').close()
     with open(os.path.join(datadir, 'meta-calls.json'), 'w') as f:
         json.dump({'count': 0}, f)
     with open(os.path.join(datadir, 'meta-fake.json'), 'w') as f:

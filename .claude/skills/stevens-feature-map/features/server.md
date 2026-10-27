@@ -1,8 +1,8 @@
 # Server
 
-Last verified: uncommitted on 2026-10-27 (live)
+Last verified: uncommitted on 2026-10-27 (source)
 
-The server owns the boundary: a Hono app on :8787 holds the vaults, policy, assembler, pipeline, ledger, and every Meta call, and the browser receives only viewer-filtered JSON. `MODEL_API_KEY` exists only in `.env.local` and the server process. The Vite UI on :5173 proxies `/api` to the server and adds no key; `npm start` serves the built UI from the server. Day 4 filtered state per viewer and added the release and media routes. Overall maturity: everything api-only.
+The server owns the boundary: day 9b runs two Hono processes from one shared factory (`server/common/app.ts`) — Stevens · firm on :8787 and Stevens · yours on :8788 — each with its own ledger and SQLite file. The personal web app on :5173 proxies to :8788; the firm web app on :5174 proxies to :8787. `MODEL_API_KEY` and `STEVENS_AGENT_TOKEN` exist only in `.env.local` and the server processes. `npm start` serves each built UI from its own server. Overall maturity: everything api-only.
 
 ## Sub-features
 
@@ -11,7 +11,7 @@ The server owns the boundary: a Hono app on :8787 holds the vaults, policy, asse
 | server-state | GET /api/state returns the viewer-filtered ledger projection for the X-Viewer-Role caller | api-only | API | - | 2026-10-27 | `server/boundary/filter.ts`, `/tmp/stevens-verify/day4/evidence/assoc2.json` |
 | server-actions | POST ingest, ask, release, approve, and reject run the pipeline and gates for the calling viewer | api-only | API | - | 2026-10-27 | `server/index.ts` |
 | server-media | GET /api/media/:sourceId serves fixture media only after a policy check; fixtures are never served statically | api-only | API | - | 2026-10-27 | `server/index.ts` |
-| server-events | GET /api/events sends only empty `changed` signals over server-sent events | api-only | API | - | 2026-10-27 | `server/index.ts`, `server/routes.test.ts` |
+| server-events | GET /api/events sends only empty `changed` signals over server-sent events, on both processes | api-only | API | - | 2026-10-27 | `server/common/app.ts`, `server/firm/routes.test.ts` |
 
 ## How to get to it (user POV)
 

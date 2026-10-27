@@ -1,21 +1,21 @@
 # Process split
 
-Last verified: 0f84ea375996 on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (source)
 
-v3 splits Stevens into two processes so the personal edge is physical: Stevens · yours (:8788) holds the personal database; Stevens · firm (:8787) holds the firm's. They talk only through the agent API, which carries visible firm context in, a Verdict in, a content-free escalation out, and one released quote out. All roles. No direct UI; Receipts show its effects. Overall maturity: planned (SPEC.md v3 day 9b, agent endpoints days 11–12).
+v3 splits Stevens into two processes so the personal edge is physical: Stevens · yours (:8788) holds the personal database; Stevens · firm (:8787) holds the firm's. Day 9b landed the structure: shared code under `server/common/`, two Hono entries, both SQLite schemas, agent-token auth with `/agent/me`, the pinned clock, and a four-process dev stack. The agent context/privy/escalation/release endpoints arrive days 11–12; both processes still run the v2.1 pipeline until the behavior migrates. Overall maturity: split structure beta, agent endpoints planned.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| split-import-boundary | No firm file imports personal code or reads personal data, and vice versa; common imports neither | planned | infra | - | not driven | SPEC.md § Two processes |
-| split-agent-auth | X-Stevens-Agent token resolves to a person; unknown token gets 401 | planned | API | - | not driven | SPEC.md § Two processes |
+| split-import-boundary | No firm file imports personal code or reads personal data, and vice versa; common imports neither | beta | infra | - | not driven | `server/import-boundary.test.ts` |
+| split-agent-auth | X-Stevens-Agent token resolves to a person; unknown token gets 401 | beta | API | - | not driven | `server/firm/agent-auth.ts`, `server/firm/routes.test.ts` |
 | split-agent-context | Visible-only firm context per deal and purpose, each source with its rule id | planned | API | - | not driven | SPEC.md § APIs (Agent API) |
 | split-agent-privy | Privy check at the firm returns only a Verdict | planned | API | - | not driven | SPEC.md § APIs (Agent API) |
 | split-agent-escalations | Content-free escalation to the routed role | planned | API | - | not driven | SPEC.md § APIs (Agent API) |
 | split-agent-releases | Inbound release gate: zod-validated single quote from the owner on the deal team | planned | API | - | not driven | SPEC.md § Firm data layer (Firm-side writes) |
-| split-sse-changed | Both event streams carry only a payload-free changed signal | planned | API | - | not driven | SPEC.md § Boundary |
-| split-clock | STEVENS_NOW pins the clock for triggers, the demo and tests | planned | infra | - | not driven | SPEC.md § Triggers and the clock |
+| split-sse-changed | Both event streams carry only a payload-free changed signal | beta | API | - | not driven | `server/common/app.ts`, `server/firm/routes.test.ts` |
+| split-clock | STEVENS_NOW pins the clock for triggers, the demo and tests | beta | infra | - | not driven | `server/common/clock.ts`, `server/common/clock.test.ts` |
 
 ## How to get to it (user POV)
 
@@ -36,5 +36,6 @@ Preconditions: baseline, on the v3 stack (SPEC.md v3 day 9b or later).
 
 ## Gotchas
 
-- On `main` at 0f84ea375996 the v2.1 stream sends raw ledger events to any viewer; day 9a fixes it before the split (server.md).
+- Day 9a fixed the v2.1 stream first: both entries send only `event: changed` with `data: {}` (server.md).
+- Both processes still run the v2.1 pipeline in 9b; the behavior split lands days 10–12. `server/common/pipeline/` moves then.
 - Per-person ACLs are not enforced by policy in this build; deal-team membership is checked for releases only (SPEC.md § Non-goals).
