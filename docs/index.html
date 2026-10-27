@@ -36,7 +36,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <header class="hero">
 <h1>Stevens</h1>
 <p class="tag"><strong>Stevens drafts; the human decides.</strong> A chief of staff that makes what you learn count at work, without leaking either side.</p>
-<p class="meta">Solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission Wed Nov 4, 2026, 9 PM ET. Status: <span class="pill">phase 0 — docs first, no app code</span></p>
+<p class="meta">Solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission Wed Nov 4, 2026, 9 PM ET. Status: <span class="pill">phase 0 — docs first, no app code</span> Spec v2.1</p>
 <div class="links">
 <a href="feature-map.html">Feature map</a>
 <a href="../SPEC.md">SPEC.md</a>
@@ -47,30 +47,51 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <section class="card">
 <h2>Thesis</h2>
 <p>Future knowledge workers won't mostly write; they'll read, listen and absorb. Stevens takes in what you learn off the clock — talks, readings, conference captures from Ray-Ban Meta glasses — and connects it to the work decision in front of you, with a source on every sentence.</p>
-<p>Stevens is named after the butler in <em>The Remains of the Day</em>: he knows the bigger picture, prepares you before the delegation arrives, and is discreet about everything. This is not RAG over notes. The new parts are the <strong>bridge</strong> (off-the-clock learning → work decision) and the <strong>enforced, inspectable boundary</strong>.</p>
+<p>Stevens is named after the butler in <em>The Remains of the Day</em>: he knows the bigger picture, prepares you before the delegation arrives, and is discreet about everything. This is not RAG over notes. The new parts are the <strong>bridge</strong> (off-the-clock learning → work decision) and the <strong>access rule that is enforced, provable and inspectable</strong>.</p>
 <p>The demo persona is a VC Associate at a fictional firm; the pitch generalizes to an engineer reading papers before a design review.</p>
 </section>
 
 <section class="card">
 <h2>The 3-minute demo</h2>
 <ol>
-<li><strong>Hook.</strong> One line of the thesis.</li>
-<li><strong>Capture.</strong> Last week's conference as real Ray-Ban Meta POV footage: talk audio → live Voice Transcribe with speaker labels and timestamps; glasses photo of a slide → live Spark vision. Both land in the <em>personal</em> vault.</li>
-<li><strong>Unprompted brief.</strong> For tomorrow's second Helios meeting. The bridge: "Deck: net churn 1.8% (Enterprise · Fact) — at the Oct 20 talk, Speaker 2 at 14:32: 'mid-market churn in this category runs 6–8%' (Personal · Fact) → ask how they define churn (Inference)." Chip: <em>1 quote crossed personal → work.</em></li>
-<li><strong>Associate asks</strong> "Should we take the second meeting?" The answer comes from visible data, plus: <em>Restricted information material to this decision exists; escalation drafted to a Partner.</em></li>
-<li><strong>Boundary inspector.</strong> For each model call: what went in, what was withheld and why. The partner memo is absent from the answer call, 1 of N personal items crossed, and web search was off for every enterprise call.</li>
-<li><strong>Switch to Partner.</strong> The memo shows (Helios competes with portfolio company Lumen); the Partner approves "take the meeting after conflict review"; the decision is logged.</li>
-<li><strong>Close.</strong> "Same Stevens for the engineer before a design review." Tagline.</li>
+<li><strong>Hook (0:00).</strong> One line of the thesis.</li>
+<li><strong>Capture (0:20).</strong> Last week's conference as real Ray-Ban Meta POV footage: talk audio → live Voice Transcribe with speaker labels and timestamps; glasses photo of a slide → live Spark vision. Both land in the <em>personal</em> vault.</li>
+<li><strong>Unprompted brief (0:50).</strong> For tomorrow's second Helios meeting. The bridge: the deck claims net churn of 1.8% (Enterprise · Fact); at the Oct 20 talk, Speaker 2 at 14:32: "mid-market churn in this category runs 6–8%" (Personal · Fact); so ask how they define churn (Inference). The personal quote carries a chip: <em>visible to you only</em>.</li>
+<li><strong>Associate asks (1:25)</strong> "Should we take the second meeting?" The answer comes from visible data plus the privy verdict: <em>Recommendation: hold until a Partner reviews. Stevens weighed information you are not privy to.</em> An escalation is drafted to a Partner. It has no content, and it shows personal sources as owner-only.</li>
+<li><strong>Boundary inspector (1:50).</strong> For each model call: what went in, what was withheld, and which policy rule applied; raw vs assembled token counts. The answer call contains no partner memo; the Associate sees "1 privy check ran — contents hidden"; web search was off for every enterprise call.</li>
+<li><strong>Release and approval (2:15).</strong> The Associate clicks <strong>Share with the firm</strong> on the churn quote, which logs <code>personal.released</code>. Switch to Partner. The Partner sees the conflict memo (Helios competes with portfolio company Lumen) and the released quote; every other personal source shows as owner-only. The Partner approves "take the meeting after conflict review," and the decision is logged.</li>
+<li><strong>Close (2:50).</strong> "Same Stevens for the engineer before a design review." Tagline.</li>
 </ol>
 </section>
 
 <section class="card">
-<h2>Two boundaries, one mechanism</h2>
-<h3>Personal ↔ work</h3>
-<p>You own your personal vault (talks, readings, conference captures); the firm owns the enterprise vault. Stevens reasons across both and owns neither. Only a cited quote crosses from personal to work. Nothing crosses from work to personal.</p>
-<h3>Agent ↔ viewer</h3>
-<p>Stevens may know more than you are allowed to see. Restricted data never enters the prompt that writes your answer. A separate check can only say "restricted information material to this decision exists" and draft an escalation.</p>
-<p>Both boundaries are enforced in code: one context assembler builds every model call and records what went in and what was withheld, and the boundary inspector shows it. A weak model is never asked to keep a secret.</p>
+<h2>The access rule</h2>
+<h3>Personal</h3>
+<p>Stevens is your agent, so he sees everything in your personal vault. Personal data <strong>never reaches the firm</strong> unless you release it. Reaching the firm means: stored in an enterprise record, included in an escalation or an approved decision, or shown to anyone but you. Each release covers one quote and is logged. You seeing your own quote in your own brief is not a crossing. Nothing from the firm is ever written into your personal vault.</p>
+<h3>Enterprise</h3>
+<p>For each user, every enterprise source has one access level:</p>
+<table>
+<tr><th>Level</th><th>What Stevens may do</th><th>What the user sees</th></tr>
+<tr><td><code>visible</code></td><td>Read and quote it</td><td>The content</td></tr>
+<tr><td><code>privy</code></td><td>Reason over it on the user's behalf</td><td>Only its effect: a verdict and where it routes, never content</td></tr>
+<tr><td><code>excluded</code></td><td>Nothing</td><td>Nothing (legal walls, insider information)</td></tr>
+</table>
+<p>An Associate's agent is <code>privy</code> to the Partners' memos: it knows of the Helios conflict, so it recommends "hold until Partner review," and the Associate never learns why.</p>
+<h3>One mechanism at both edges</h3>
+<p>Content crosses an edge only through a narrow, typed channel. Privy knowledge reaches the user only as a fixed <code>Verdict</code> with no string fields. Personal content reaches the firm only as a quote the owner released. A weak model is never asked to keep a secret in free text. Known, accepted leak: <code>privy</code> reveals <em>that</em> something matters and which way it pushes — fine for partner memos, which is why legal walls are <code>excluded</code>, not <code>privy</code>.</p>
+</section>
+
+<section class="card">
+<h2>Server architecture</h2>
+<p>A Hono server on :8787 owns the boundary: the vaults, policy, assembler, pipeline, ledger, and every Meta call. The browser receives only viewer-filtered JSON. The Vite UI on :5173 proxies <code>/api</code> to the server and adds no key. <code>MODEL_API_KEY</code> exists only in <code>.env.local</code> and the server process.</p>
+<ul>
+<li><strong>Policy as data:</strong> a rules table maps (vault, classification, owner, viewer role, purpose) to access; <code>policy()</code> is a lookup, and the inspector shows the rule ID behind every included or withheld source.</li>
+<li><strong>Context assembler:</strong> the only path into a model call; emits a manifest of included and withheld sources, the web-search flag, and raw vs assembled tokens.</li>
+<li><strong>Release gate:</strong> escalations, approved decisions, and non-owner responses pass through it; unreleased personal text renders "Personal source (owner only)".</li>
+<li><strong>Fail closed:</strong> a failed privy step yields hold plus escalation; a response that cannot pass the gate is withheld.</li>
+<li><strong>Durable pipeline:</strong> every stage call has a stage key and is reused if complete; events append to <code>data/ledger.jsonl</code> before the UI hears of them; a crash resumes with no repeated paid call; replay never re-calls the API.</li>
+<li><strong>Stevens API:</strong> <code>GET /api/state</code> (viewer-filtered projection), <code>GET /api/events</code> (SSE: transcribing → extracting → bridging → drafting), <code>POST</code> ingest / ask / release / approve / reject, <code>GET /api/media/:sourceId</code> (policy-checked; fixtures are never served statically). Every request carries <code>X-Viewer-Role</code>.</li>
+</ul>
 </section>
 
 <section class="card">
@@ -79,23 +100,29 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <tr><th>Job</th><th>Model</th><th>Effort</th><th>Why</th></tr>
 <tr><td>Talk audio, voice note → transcript</td><td><code>muse-voice-transcribe-1.0</code> (batch)</td><td>–</td><td>Gate 1. Speaker labels + timestamps are the citation anchors; $0.18/hr.</td></tr>
 <tr><td>Slide photo, deck photo → verbatim text</td><td><code>muse-spark-1.3</code> vision</td><td>low</td><td>Gate 2. Verbatim text is stored so Fact quotes can be checked.</td></tr>
-<tr><td>Text → structured claims</td><td><code>muse-spark-1.3</code></td><td>low</td><td>JSON schema output; cheap; most calls.</td></tr>
+<tr><td>Text → structured claims</td><td><code>muse-spark-1.3</code> (or <code>-contributor</code> if the A/B holds)</td><td>low</td><td>JSON output; cheap; most calls.</td></tr>
 <tr><td>Bridge judge: does a personal claim bear on a work claim?</td><td><code>muse-wonder-1.0</code></td><td>high</td><td>The judged reasoning; code prefilters candidates, so few calls.</td></tr>
-<tr><td>Brief + answer drafting</td><td><code>muse-wonder-1.0</code></td><td>high</td><td>Input is only what the call manifest allows.</td></tr>
-<tr><td>Restricted check</td><td>code + <code>muse-spark-1.3</code></td><td>low</td><td>Code matches entities against restricted sources; Spark answers yes/no on materiality. Output schema is <code>{ material: boolean }</code> only.</td></tr>
+<tr><td>Privy step</td><td><code>muse-wonder-1.0</code></td><td>high</td><td>Sees the privy sources that code matched by entity; returns only a <code>Verdict</code> (no strings). One call per question.</td></tr>
+<tr><td>Brief + answer writing</td><td><code>muse-wonder-1.0</code></td><td>high</td><td>Sees visible sources, the viewer's own personal claims and the <code>Verdict</code>; never privy text.</td></tr>
 </table>
 <ul>
-<li>Wonder is unverified until the day-1 A/B (same bridge prompt on Wonder and Spark <code>high</code>); the fallback is Spark 1.3 <code>high</code>. Wonder gets text only.</li>
+<li>Wonder is unverified until the day-1 A/B (same bridge and privy prompts on Wonder and Spark <code>high</code>); the fallback is Spark 1.3 <code>high</code>. Wonder gets text only.</li>
 <li>SAM 3.1 is stretch only: crop the projector screen out of a wide audience photo before Spark reads it, and only if day 1 shows Spark misreads the uncropped photo.</li>
-<li>Not used: Muse Image (nothing to generate). Glimmer is narrated only, as the production path of processing the personal vault on-device.</li>
+<li>Not used: Muse Image (nothing to generate). Glimmer is narrated only, as the production path of processing the personal vault on-device so it never touches the API.</li>
 </ul>
+</section>
+
+<section class="card">
+<h2>Stretch (gated)</h2>
+<p><strong>Follow-up chat.</strong> After the first answer, the viewer can ask follow-ups through <code>@earendil-works/pi-durable</code> pinned to exactly <code>1.4.0</code>, one conversation per viewer and draft, with tool calls resolving through the same policy. It starts only if the day-1 tool-calling check passed and day 5's exit check passed by end of Sat Oct 31 — and only with explicit confirmation. It is first to cut.</p>
+<p><strong>Preference learning</strong> is design only: a future event would store a Partner's edit as a versioned note that later drafts cite. Not built in this hackathon.</p>
 </section>
 
 <section class="card">
 <h2>What is real vs simulated</h2>
 <ul>
 <li><strong>Real:</strong> the Meta model calls through the API, and the Ray-Ban Meta captures — pre-recorded, not streamed.</li>
-<li><strong>Simulated and labeled:</strong> the VC firm and its data (fictional), the staged talk, and permission scopes modeled on Meta's Personal Agent Protocol. Every simulated surface carries a <code>Simulated — &lt;reason&gt;</code> badge; the real call is always the primary path.</li>
+<li><strong>Simulated and labeled:</strong> the VC firm and its data (fictional), the staged talk, sign-in (a role switcher labeled "simulated sign-in"), and permission scopes modeled on Meta's Personal Agent Protocol. Every simulated surface carries a <code>Simulated — &lt;reason&gt;</code> badge; the real call is always the primary path.</li>
 </ul>
 </section>
 
@@ -103,24 +130,24 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <h2>Build status by day</h2>
 <table>
 <tr><th>Day</th><th>Date</th><th>Work</th><th>Status</th></tr>
-<tr><td>0</td><td>Mon Oct 26</td><td>Docs first, no app code: verification scaffold, feature map, this site</td><td><span class="pill">planned</span></td></tr>
-<tr><td>1</td><td>Tue Oct 27</td><td>Key + model list; glasses test clip; Voice spike; Spark vision; Wonder vs Spark A/B; Vite scaffold + proxy</td><td><span class="pill">planned</span></td></tr>
-<tr><td>2</td><td>Wed Oct 28</td><td>Stage + shoot final fixtures; contracts; ledger + replay</td><td><span class="pill">planned</span></td></tr>
+<tr><td>0</td><td>Mon Oct 26</td><td>Docs first, no app code: refresh the feature map and docs for v2.1; user reviews before any code</td><td><span class="pill">planned</span></td></tr>
+<tr><td>1</td><td>Tue Oct 27</td><td>Spikes: key + model list; glasses test clip; Voice; Spark vision; JSON-schema output; Wonder vs Spark A/B; one tool-calling request via pi-ai; scaffold Vite + Hono</td><td><span class="pill">planned</span></td></tr>
+<tr><td>2</td><td>Wed Oct 28</td><td>Stage + shoot final fixtures; shared contracts; JSONL ledger with stage keys, resume, failed-attempt logging; state + SSE</td><td><span class="pill">planned</span></td></tr>
 <tr><td>3</td><td>Thu Oct 29</td><td>Extraction + runtime citation resolver</td><td><span class="pill">planned</span></td></tr>
-<tr><td>4</td><td>Fri Oct 30</td><td>Context assembler, policy, manifests, restricted check, escalation</td><td><span class="pill">planned</span></td></tr>
-<tr><td>5</td><td>Sat Oct 31</td><td>Bridge candidates + judge; brief; answer</td><td><span class="pill">planned</span></td></tr>
-<tr><td>6</td><td>Sun Nov 1</td><td>UI: capture, brief, answer, inspector, role switch, approve</td><td><span class="pill">planned</span></td></tr>
-<tr><td>7</td><td>Mon Nov 2</td><td>Failure states, honesty labels, docs sync, rough video</td><td><span class="pill">planned</span></td></tr>
+<tr><td>4</td><td>Fri Oct 30</td><td>Rules table, policy, assembler, manifests, release gate, media route</td><td><span class="pill">planned</span></td></tr>
+<tr><td>5</td><td>Sat Oct 31</td><td>Bridge candidates + judge; brief; privy step + escalation; answer; stretch go/no-go at end of day</td><td><span class="pill">planned</span></td></tr>
+<tr><td>6</td><td>Sun Nov 1</td><td>UI: capture, brief, answer, inspector, release, role switch, approve</td><td><span class="pill">planned</span></td></tr>
+<tr><td>7</td><td>Mon Nov 2</td><td>Failure states, honesty labels, docs sync, rough video; if stretch is go, chat timeboxed to 6 morning hours</td><td><span class="pill">planned</span></td></tr>
 <tr><td>8</td><td>Tue Nov 3</td><td>Final video; buffer</td><td><span class="pill">planned</span></td></tr>
 <tr><td>–</td><td>Wed Nov 4</td><td>Submit by midday; 9 PM hard deadline</td><td><span class="pill">planned</span></td></tr>
 </table>
-<p>Cut if behind, in order: SAM, Wonder (use Spark), article highlights, <code>wall</code> item. Never cut: the two gates, the assembler/inspector, the bridge.</p>
+<p>Cut if behind, in order: the stretch, SAM, Wonder (use Spark), article highlights, the <code>wall</code> item. Never cut: the two gates, the policy table + assembler + release gate + their tests, the inspector, the bridge.</p>
 </section>
 
 <section class="card">
 <h2>Links</h2>
 <ul>
-<li><a href="feature-map.html">Feature map</a> — every area graded <code>planned</code>, generated by <code>render-map</code>.</li>
+<li><a href="feature-map.html">Feature map</a> — every area graded <code>planned</code> (stretch chat <code>deferred</code>), generated by <code>render-map</code>.</li>
 <li><a href="../SPEC.md">SPEC.md</a> — source of truth for product, models, contracts, build order, and validation.</li>
 <li><a href="../AGENTS.md">AGENTS.md</a> — project rules, including the phase-0 exit check.</li>
 <li>GitHub repository — not created yet; creating the repo and enabling Pages need your explicit go-ahead.</li>
@@ -128,7 +155,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 </section>
 
 <footer>
-<p>Stevens phase-0 site, 2026-10-26. All content taken from SPEC.md; all fixtures and enterprise data are fictional.</p>
+<p>Stevens phase-0 site, 2026-10-26, refreshed for SPEC v2.1. All content taken from SPEC.md; all fixtures and enterprise data are fictional.</p>
 </footer>
 </div>
 </body>
