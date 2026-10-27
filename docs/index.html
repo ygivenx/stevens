@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stevens — a chief of staff that makes what you learn count at work</title>
+<style>
+:root{--bg:#f7f7f5;--card:#fff;--ink:#1d1d1f;--mute:#6b6b70;--line:#e3e3e0;--accent:#4a7fd4}
+@media (prefers-color-scheme:dark){:root{--bg:#151517;--card:#1f1f22;--ink:#ececee;--mute:#9a9aa2;--line:#2f2f34;--accent:#7aa2e6}}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:860px;margin:0 auto;padding:32px 20px 64px}
+header.hero{border-bottom:1px solid var(--line);padding-bottom:20px;margin-bottom:24px}
+h1{font-size:30px;line-height:1.2;margin:0 0 8px}
+.tag{font-size:19px;color:var(--mute);margin:0 0 12px}
+.tag strong{color:var(--ink)}
+.meta{font-size:13px;color:var(--mute)}
+section.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0}
+h2{font-size:20px;margin:0 0 10px}
+h3{font-size:16px;margin:16px 0 6px}
+p,li{font-size:15px}
+ul,ol{padding-left:22px;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:10px 0}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+th{background:rgba(127,127,127,.08)}
+code{font:13px ui-monospace,SFMono-Regular,Menlo,monospace;background:rgba(127,127,127,.13);padding:0 4px;border-radius:4px}
+.pill{display:inline-block;padding:1px 10px;border-radius:10px;font-size:12px;font-weight:600;background:rgba(127,127,127,.16);color:var(--ink)}
+a{color:var(--accent)}
+.links{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.links a{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 12px;text-decoration:none;font-size:14px}
+footer{margin-top:28px;font-size:13px;color:var(--mute)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="hero">
+<h1>Stevens</h1>
+<p class="tag"><strong>Stevens drafts; the human decides.</strong> A chief of staff that makes what you learn count at work, without leaking either side.</p>
+<p class="meta">Solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission Wed Nov 4, 2026, 9 PM ET. Status: <span class="pill">phase 0 — docs first, no app code</span></p>
+<div class="links">
+<a href="feature-map.html">Feature map</a>
+<a href="../SPEC.md">SPEC.md</a>
+<a href="../AGENTS.md">AGENTS.md</a>
+</div>
+</header>
+
+<section class="card">
+<h2>Thesis</h2>
+<p>Future knowledge workers won't mostly write; they'll read, listen and absorb. Stevens takes in what you learn off the clock — talks, readings, conference captures from Ray-Ban Meta glasses — and connects it to the work decision in front of you, with a source on every sentence.</p>
+<p>Stevens is named after the butler in <em>The Remains of the Day</em>: he knows the bigger picture, prepares you before the delegation arrives, and is discreet about everything. This is not RAG over notes. The new parts are the <strong>bridge</strong> (off-the-clock learning → work decision) and the <strong>enforced, inspectable boundary</strong>.</p>
+<p>The demo persona is a VC Associate at a fictional firm; the pitch generalizes to an engineer reading papers before a design review.</p>
+</section>
+
+<section class="card">
+<h2>The 3-minute demo</h2>
+<ol>
+<li><strong>Hook.</strong> One line of the thesis.</li>
+<li><strong>Capture.</strong> Last week's conference as real Ray-Ban Meta POV footage: talk audio → live Voice Transcribe with speaker labels and timestamps; glasses photo of a slide → live Spark vision. Both land in the <em>personal</em> vault.</li>
+<li><strong>Unprompted brief.</strong> For tomorrow's second Helios meeting. The bridge: "Deck: net churn 1.8% (Enterprise · Fact) — at the Oct 20 talk, Speaker 2 at 14:32: 'mid-market churn in this category runs 6–8%' (Personal · Fact) → ask how they define churn (Inference)." Chip: <em>1 quote crossed personal → work.</em></li>
+<li><strong>Associate asks</strong> "Should we take the second meeting?" The answer comes from visible data, plus: <em>Restricted information material to this decision exists; escalation drafted to a Partner.</em></li>
+<li><strong>Boundary inspector.</strong> For each model call: what went in, what was withheld and why. The partner memo is absent from the answer call, 1 of N personal items crossed, and web search was off for every enterprise call.</li>
+<li><strong>Switch to Partner.</strong> The memo shows (Helios competes with portfolio company Lumen); the Partner approves "take the meeting after conflict review"; the decision is logged.</li>
+<li><strong>Close.</strong> "Same Stevens for the engineer before a design review." Tagline.</li>
+</ol>
+</section>
+
+<section class="card">
+<h2>Two boundaries, one mechanism</h2>
+<h3>Personal ↔ work</h3>
+<p>You own your personal vault (talks, readings, conference captures); the firm owns the enterprise vault. Stevens reasons across both and owns neither. Only a cited quote crosses from personal to work. Nothing crosses from work to personal.</p>
+<h3>Agent ↔ viewer</h3>
+<p>Stevens may know more than you are allowed to see. Restricted data never enters the prompt that writes your answer. A separate check can only say "restricted information material to this decision exists" and draft an escalation.</p>
+<p>Both boundaries are enforced in code: one context assembler builds every model call and records what went in and what was withheld, and the boundary inspector shows it. A weak model is never asked to keep a secret.</p>
+</section>
+
+<section class="card">
+<h2>Models</h2>
+<table>
+<tr><th>Job</th><th>Model</th><th>Effort</th><th>Why</th></tr>
+<tr><td>Talk audio, voice note → transcript</td><td><code>muse-voice-transcribe-1.0</code> (batch)</td><td>–</td><td>Gate 1. Speaker labels + timestamps are the citation anchors; $0.18/hr.</td></tr>
+<tr><td>Slide photo, deck photo → verbatim text</td><td><code>muse-spark-1.3</code> vision</td><td>low</td><td>Gate 2. Verbatim text is stored so Fact quotes can be checked.</td></tr>
+<tr><td>Text → structured claims</td><td><code>muse-spark-1.3</code></td><td>low</td><td>JSON schema output; cheap; most calls.</td></tr>
+<tr><td>Bridge judge: does a personal claim bear on a work claim?</td><td><code>muse-wonder-1.0</code></td><td>high</td><td>The judged reasoning; code prefilters candidates, so few calls.</td></tr>
+<tr><td>Brief + answer drafting</td><td><code>muse-wonder-1.0</code></td><td>high</td><td>Input is only what the call manifest allows.</td></tr>
+<tr><td>Restricted check</td><td>code + <code>muse-spark-1.3</code></td><td>low</td><td>Code matches entities against restricted sources; Spark answers yes/no on materiality. Output schema is <code>{ material: boolean }</code> only.</td></tr>
+</table>
+<ul>
+<li>Wonder is unverified until the day-1 A/B (same bridge prompt on Wonder and Spark <code>high</code>); the fallback is Spark 1.3 <code>high</code>. Wonder gets text only.</li>
+<li>SAM 3.1 is stretch only: crop the projector screen out of a wide audience photo before Spark reads it, and only if day 1 shows Spark misreads the uncropped photo.</li>
+<li>Not used: Muse Image (nothing to generate). Glimmer is narrated only, as the production path of processing the personal vault on-device.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>What is real vs simulated</h2>
+<ul>
+<li><strong>Real:</strong> the Meta model calls through the API, and the Ray-Ban Meta captures — pre-recorded, not streamed.</li>
+<li><strong>Simulated and labeled:</strong> the VC firm and its data (fictional), the staged talk, and permission scopes modeled on Meta's Personal Agent Protocol. Every simulated surface carries a <code>Simulated — &lt;reason&gt;</code> badge; the real call is always the primary path.</li>
+</ul>
+</section>
+
+<section class="card">
+<h2>Build status by day</h2>
+<table>
+<tr><th>Day</th><th>Date</th><th>Work</th><th>Status</th></tr>
+<tr><td>0</td><td>Mon Oct 26</td><td>Docs first, no app code: verification scaffold, feature map, this site</td><td><span class="pill">planned</span></td></tr>
+<tr><td>1</td><td>Tue Oct 27</td><td>Key + model list; glasses test clip; Voice spike; Spark vision; Wonder vs Spark A/B; Vite scaffold + proxy</td><td><span class="pill">planned</span></td></tr>
+<tr><td>2</td><td>Wed Oct 28</td><td>Stage + shoot final fixtures; contracts; ledger + replay</td><td><span class="pill">planned</span></td></tr>
+<tr><td>3</td><td>Thu Oct 29</td><td>Extraction + runtime citation resolver</td><td><span class="pill">planned</span></td></tr>
+<tr><td>4</td><td>Fri Oct 30</td><td>Context assembler, policy, manifests, restricted check, escalation</td><td><span class="pill">planned</span></td></tr>
+<tr><td>5</td><td>Sat Oct 31</td><td>Bridge candidates + judge; brief; answer</td><td><span class="pill">planned</span></td></tr>
+<tr><td>6</td><td>Sun Nov 1</td><td>UI: capture, brief, answer, inspector, role switch, approve</td><td><span class="pill">planned</span></td></tr>
+<tr><td>7</td><td>Mon Nov 2</td><td>Failure states, honesty labels, docs sync, rough video</td><td><span class="pill">planned</span></td></tr>
+<tr><td>8</td><td>Tue Nov 3</td><td>Final video; buffer</td><td><span class="pill">planned</span></td></tr>
+<tr><td>–</td><td>Wed Nov 4</td><td>Submit by midday; 9 PM hard deadline</td><td><span class="pill">planned</span></td></tr>
+</table>
+<p>Cut if behind, in order: SAM, Wonder (use Spark), article highlights, <code>wall</code> item. Never cut: the two gates, the assembler/inspector, the bridge.</p>
+</section>
+
+<section class="card">
+<h2>Links</h2>
+<ul>
+<li><a href="feature-map.html">Feature map</a> — every area graded <code>planned</code>, generated by <code>render-map</code>.</li>
+<li><a href="../SPEC.md">SPEC.md</a> — source of truth for product, models, contracts, build order, and validation.</li>
+<li><a href="../AGENTS.md">AGENTS.md</a> — project rules, including the phase-0 exit check.</li>
+<li>GitHub repository — not created yet; creating the repo and enabling Pages need your explicit go-ahead.</li>
+</ul>
+</section>
+
+<footer>
+<p>Stevens phase-0 site, 2026-10-26. All content taken from SPEC.md; all fixtures and enterprise data are fictional.</p>
+</footer>
+</div>
+</body>
+</html>

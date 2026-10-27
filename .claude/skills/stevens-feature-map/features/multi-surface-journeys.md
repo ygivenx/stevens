@@ -1,0 +1,72 @@
+# Multi-surface journeys
+
+Last verified: uncommitted on 2026-10-26 (source)
+
+A journey crosses areas, so it can fail where no single area file looks. Each one names the sub-feature IDs it touches, the invariant that must hold across areas, the last live result, and the commands to drive it. Use this file for questions like "what happens to X after Y" and for release smoke tests. Journeys run in the order below, and each assumes the state the one before it left.
+
+| ID | Journey | Areas | Last live | Result |
+|---|---|---|---|---|
+| j-brief-path | Capture to unprompted brief with the churn bridge | capture, extraction, boundary, bridge, drafts, ledger | not driven | not driven |
+| j-answer-escalation | Asked answer flags restricted material and drafts an escalation | drafts, boundary, restricted, ledger | not driven | not driven |
+| j-approve | Partner sees the memo, approves, and the decision is logged | approval, inspector, ledger | not driven | not driven |
+
+## j-brief-path
+
+Touches: `capture-talk-audio`, `capture-slide-photo`, `capture-enterprise`, `extraction-claims`, `extraction-resolver`, `boundary-assemble`, `bridge-candidates`, `bridge-judge`, `drafts-brief`, `drafts-crossing-count`, `ledger-events`.
+
+Invariants:
+1. The brief's churn bridge cites one Personal Fact and one Enterprise Fact.
+2. The crossing chip equals the personal claims listed in the work-call manifests.
+3. Every brief sentence carries ≥1 citation; dropped sentences are counted in the inspector.
+
+Drive:
+
+```bash
+export STEVENS_VERIFY_INSTANCE=journey
+CC=.claude/skills/verify-stevens/stevensctl
+$CC doctor && $CC stack up && $CC seed
+$CC browser run brief
+```
+
+Result (2026-10-26): NOT DRIVEN, nothing is built yet.
+
+## j-answer-escalation
+
+Touches: `drafts-answer`, `boundary-assemble`, `boundary-policy`, `restricted-check`, `restricted-escalation`, `ledger-events`.
+
+Invariants:
+1. The Associate answer prompt contains no partner-only or wall text.
+2. The escalation event carries no content.
+3. With the conflicts memo removed, the same question produces no escalation.
+
+Drive:
+
+```bash
+export STEVENS_VERIFY_INSTANCE=journey
+CC=.claude/skills/verify-stevens/stevensctl
+$CC doctor && $CC stack up && $CC seed
+$CC api --as Associate answer --expect 200 --field '.escalation'
+```
+
+Result (2026-10-26): NOT DRIVEN, nothing is built yet.
+
+## j-approve
+
+Touches: `approval-role-switch`, `approval-decision`, `inspector-manifests`, `inspector-hidden`, `ledger-events`.
+
+Invariants:
+1. The conflicts memo is visible to the Partner and absent for the Associate.
+2. The approve call logs `draft.approved` with the draft id and the Partner role.
+3. The inspector shows the role switch and the decision in order.
+
+Drive:
+
+```bash
+export STEVENS_VERIFY_INSTANCE=journey
+CC=.claude/skills/verify-stevens/stevensctl
+$CC doctor && $CC stack up && $CC seed
+$CC browser run role-switch
+$CC api --as Partner approve answer --expect 200 --field '.status'
+```
+
+Result (2026-10-26): NOT DRIVEN, nothing is built yet.
