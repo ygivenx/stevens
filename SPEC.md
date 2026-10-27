@@ -326,7 +326,7 @@ create table connector_state (
 
 **Form D import** (`scripts/import-formd.ts`, run once by the developer; its output is committed):
 - Downloads the 2025 Q4 and 2026 Q1 quarterly ZIPs listed on [the DERA Form D page](https://www.sec.gov/dera/data/form-d), sending `User-Agent` from `SEC_USER_AGENT` (SEC's fair-access policy requires a declared agent; the developer sets it).
-- **First hour of day 12:** read the data set's readme PDF and record here the actual file names, columns and the industry-group value(s) used. Expected (unverified): tab-separated `FORMDSUBMISSION`, `ISSUERS` and `OFFERING` tables joined on `ACCESSIONNUMBER`.
+- **First hour of day 12 (done, recorded):** the quarterly ZIPs at `https://www.sec.gov/files/structureddata/data/form-d-data-sets/<yyyy>q<d>_d.zip` unpack to `FORMDSUBMISSION.tsv`, `ISSUERS.tsv` and `OFFERING.tsv` (plus recipients, related persons, signatures), joined on `ACCESSIONNUMBER`. Technology is `INDUSTRYGROUPTYPE` in (`Other Technology`, `Computers`, `Telecommunications`); equity is `ISEQUITYTYPE = true`; amounts are `TOTALOFFERINGAMOUNT` / `TOTALAMOUNTSOLD`. The 2025Q4+2026Q1 technology equity slice between $2M and $50M is 853 rows (2025Q4: 449, median $7.0M; 2026Q1: 404, median $8.0M).
 - Keeps technology-industry equity offerings with a total offering between $2M and $50M, and writes `fixtures/enterprise/formd/tech-2025q4-2026q1.json` (≤ 2,000 rows).
 - Real issuer names appear only in the Market table on a deal page and in the Sources page. They never appear in a fictional deal record or memo, and no fictional company is matched to a real issuer.
 

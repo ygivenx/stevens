@@ -1,6 +1,6 @@
 import type { AccessRule, Purpose } from '../../../shared/data.js';
 
-const ALL: Purpose[] = ['extract', 'bridge', 'brief', 'privy', 'answer'];
+const ALL: Purpose[] = ['extract', 'bridge', 'brief', 'privy', 'answer', 'decision'];
 
 export const RULES: AccessRule[] = [
   { id: 'r-personal-owner-associate', vault: 'personal', owner: true, viewer: 'Associate', purposes: ALL, access: 'visible' },

@@ -5,8 +5,9 @@ import { extractClaims, extractModel, readImage, visionModel } from '../common/m
 import { quoteIn } from '../common/resolver/resolve.js';
 import { nowIso } from '../common/clock.js';
 import { CrmConnector, loadCrm } from './connectors/crm.js';
+import { SecFormDConnector, loadFormD } from './connectors/formd.js';
 import type { ConnectorDocument } from './connectors/connector.js';
-import { documentBody, setConnectorState, syncCrmSnapshot, upsertDocument } from './store.js';
+import { documentBody, setConnectorState, syncCrmSnapshot, syncFilings, upsertDocument } from './store.js';
 
 export const FIRM_VERBATIM_PROMPT = 'Transcribe every word visible in this photo verbatim, in reading order. Return only the transcribed text.';
 
@@ -91,7 +92,25 @@ export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents
     extracted += claims.length;
   }
   setConnectorState(connector.id, docs.length, nowIso());
-  return { documents: docs.length, extracted };
+  const formd = new SecFormDConnector();
+  const fixture = loadFormD();
+  syncFilings(fixture.filings);
+  const compsDocs = await formd.documents();
+  for (const doc of compsDocs) {
+    upsertDocument(formd.id, doc, doc.acl);
+    if (done.has(doc.id)) continue;
+    const key = stageKey('extract', [doc.id], PROMPT_VERSION, 'code');
+    if (findCompleted(key)) continue;
+    const body = doc.body as string;
+    const claims: Claim[] = [{ id: doc.id + '-c0', sourceId: doc.id, entity: 'market', quote: body }];
+    append({
+      at: new Date().toISOString(), type: 'claims.extracted', sourceId: doc.id, claims,
+      api: { model: 'code', responseId: 'code:' + key, usage: { costUsd: 0 }, stageKey: key },
+    });
+    extracted += claims.length;
+  }
+  setConnectorState(formd.id, compsDocs.length, nowIso());
+  return { documents: docs.length + compsDocs.length, extracted };
 }
 
 export function firmSourceFor(doc: { id: string; kind: Source['kind']; title: string; createdAt: string; body?: string | null; mediaPath?: string | null }, classification: Source['classification']): Source {

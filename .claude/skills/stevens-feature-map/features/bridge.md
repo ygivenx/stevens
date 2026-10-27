@@ -2,7 +2,7 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-The bridge is the judged link from off-the-clock learning to a work decision: code proposes candidate claim pairs sharing an entity or metric, and the reasoning model labels each `contradicts | supports | context` with a reason, or rejects it. The demo bridge is mid-market churn 6–8% (talk) against the deck's net churn 1.8%. Day 5 built and drove it live: 4 pairs judged, talk×deal among them. Overall maturity: everything api-only.
+The bridge is the judged link from off-the-clock learning to a work decision: code proposes candidate claim pairs sharing an entity or metric, and the reasoning model labels each `contradicts | supports | context` with a reason, or rejects it. The demo bridge is mid-market churn 6–8% (talk) against the deck's net churn 1.8%. Day 5 built and drove it live: 4 pairs judged, talk×deal among them. Overall maturity: beta, no UI yet (bridge block arrives day 13).
 
 ## Sub-features
 

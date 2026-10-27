@@ -2,7 +2,7 @@ export type Role = 'Associate' | 'Partner';
 export type Vault = 'personal' | 'enterprise';
 export type Classification = 'team' | 'partner-only' | 'wall';
 export type Access = 'visible' | 'privy' | 'excluded';
-export type Purpose = 'extract' | 'bridge' | 'brief' | 'privy' | 'answer';
+export type Purpose = 'extract' | 'bridge' | 'brief' | 'privy' | 'answer' | 'decision';
 export type Verdict = { verdict: 'proceed' | 'hold' | 'decline'; routeTo: Role | null };
 export type Usage = { inputTokens?: number; outputTokens?: number; audioSeconds?: number; costUsd: number };
 export type Api = { model: string; responseId: string; usage: Usage; stageKey: string };
@@ -39,6 +39,13 @@ export type Citation =
 export interface Bridge { id: string; personalClaimId: string; workClaimId: string;
   relation: 'contradicts' | 'supports' | 'context'; reason: string }
 
+export interface Receipt {
+  callId: string; purpose: Purpose; model: string; at: string; costUsd: number;
+  included: { label: string; access: Access; ruleId: string }[];
+  withheld: { label: string | null; access: Access; ruleId: string }[];
+  privyHidden: boolean; webSearch: boolean; tokens: { raw: number; assembled: number };
+}
+
 export interface Manifest {
   callId: string; purpose: Purpose; viewerRole: Role; model: string; stageKey: string;
   included: { sourceId: string; access: Access; ruleId: string }[];
@@ -46,9 +53,11 @@ export interface Manifest {
   webSearch: boolean; tokens: { raw: number; assembled: number };
 }
 
-export interface Draft { id: string; kind: 'brief' | 'answer'; question?: string; viewerRole: Role;
+export interface Draft {
+  id: string; kind: 'brief' | 'answer' | 'decision'; dealId?: string; question?: string; questionId?: string;
+  viewerId?: string; viewerRole: Role;
   sentences: { text: string; citations: Citation[] }[]; droppedSentences: number;
-  verdict?: Verdict; status: 'draft' | 'approved' | 'rejected' }
+  bridges?: Bridge[]; verdict?: Verdict; status: 'draft' | 'approved' | 'rejected' }
 
 export type Origin = 'glasses' | 'readwise' | 'notes';
 export type ItemKind = 'audio' | 'photo' | 'video' | 'highlight' | 'note';
@@ -73,12 +82,16 @@ export type LedgerEvent = { at: string } & (
   | { type: 'claims.extracted'; sourceId: string; itemId?: string; claims: Claim[]; api: Api }
   | { type: 'bridge.judged'; bridge: Bridge | null; candidate: [string, string]; manifest: Manifest; api: Api }
   | { type: 'draft.created'; draft: Draft; manifest: Manifest; api: Api }
-  | { type: 'privy.judged'; questionId: string; verdict: Verdict; manifest: Manifest; api?: Api; failedClosed: boolean }
-  | { type: 'escalation.drafted'; draftId: string; to: Role }
-  | { type: 'personal.released'; claimId: string; by: Role }
+  | { type: 'privy.judged'; questionId: string; dealId?: string; personId?: string; verdict: Verdict; manifest: Manifest; api?: Api; failedClosed: boolean }
+  | { type: 'escalation.drafted'; escalationId?: string; questionId?: string; dealId?: string; from?: string; to: Role; draftId?: string }
+  | { type: 'personal.released'; documentId?: string; dealId?: string; claimId: string; by: Role }
+  | { type: 'verdict.received'; questionId: string; dealId: string; verdict: Verdict; failedClosed: boolean }
+  | { type: 'escalation.sent' | 'escalation.queued'; questionId: string; dealId: string; to: Role | null }
+  | { type: 'share.sent'; claimId: string; dealId: string; documentId: string }
   | { type: 'item.ingested'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; api?: Api }
   | { type: 'item.rejected'; origin: Origin; originId: string; reason: string }
   | { type: 'sync.completed'; adapter: Origin; added: number; cursor?: string }
+  | { type: 'context.fetched'; dealId: string; purpose: Purpose; sourceIds: string[]; titles?: { id: string; title: string }[] }
   | { type: 'context.served'; personId: string; dealId: string; purpose: Purpose; sourceIds: string[] }
   | { type: 'attempt.failed'; stageKey: string; model: string; error: string; usage?: Usage }
   | { type: 'role.switched'; role: Role }

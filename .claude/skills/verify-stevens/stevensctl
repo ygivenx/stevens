@@ -60,15 +60,31 @@ def port_free(port):
     return True
 
 
-def http_json(method, path, role=None, timeout=30, data=None):
+def read_agent_token():
+    env_path = os.path.join(ROOT, '.env.local')
+    if not os.path.exists(env_path):
+        return None
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith('STEVENS_AGENT_TOKEN='):
+                return line.strip().split('=', 1)[1]
+    return None
+
+
+def http_json(method, path, role=None, timeout=30, data=None, base='http://localhost:8787', agent=False):
     headers = {}
-    if role:
+    if agent:
+        if role != 'nobody':
+            token = read_agent_token()
+            if token:
+                headers['X-Stevens-Agent'] = token
+    elif role:
         headers['X-Viewer-Role'] = role
     body = None
     if data is not None:
         body = json.dumps(data).encode()
         headers['Content-Type'] = 'application/json'
-    req = urllib.request.Request('http://localhost:8787' + path, data=body, headers=headers, method=method)
+    req = urllib.request.Request(base + path, data=body, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.status, json.load(resp)
 
@@ -325,8 +341,11 @@ def json_path(doc, path):
 def cmd_api(argv):
     if '--help' in argv or '--as' not in argv:
         print('stevensctl api: drive the app HTTP surface as a role.\n')
-        print('Usage: stevensctl api --as Associate|Partner SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
-        print('Surfaces: health, state, ingest, extract, bridge, brief, ask, switch, transcript/<id>, release/<id>, approve/<id>, reject/<id>, media/<id>.')
+        print('Usage: stevensctl api --as Associate|Partner [--via yours|firm|agent] SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
+        print('Surfaces (yours :8788): health, state, items/<id>, ask, share/<claimId>, receipts/<id>.')
+        print('Surfaces (firm :8787): health, state, approve/<id>, reject/<id>, media/<id>.')
+        print('Surfaces (agent :8787): me, meetings, context, privy.')
+        print('Legacy v2.1 surfaces (firm :8787): ingest, extract, bridge, brief, ask, switch, transcript/<id>, release/<id>.')
         print('--field prints one JSON path; --until polls until it is truthy (30s); --data sends a JSON body; --save stores it.')
         print('until that path is truthy (30s); --save stores the body under evidence.\n')
         print('Examples:')
@@ -334,10 +353,14 @@ def cmd_api(argv):
         print('  stevensctl api --as Associate ingest --expect 200')
         return 0 if '--help' in argv else 2
     role = argv[argv.index('--as') + 1]
-    if role not in ('Associate', 'Partner'):
-        print('--as must be Associate or Partner.', file=sys.stderr)
+    if role not in ('Associate', 'Partner', 'p-alex', 'p-morgan', 'nobody'):
+        print('--as must be Associate, Partner, p-alex, p-morgan, or nobody.', file=sys.stderr)
         return 2
-    skip = {'--as', '--expect', '--field', '--save', '--until', '--instance', '--data'}
+    via = argv[argv.index('--via') + 1] if '--via' in argv else 'firm'
+    if via not in ('yours', 'firm', 'agent'):
+        print('--via must be yours, firm, or agent.', file=sys.stderr)
+        return 2
+    skip = {'--as', '--via', '--expect', '--field', '--save', '--until', '--instance', '--data'}
     surface = None
     i = 0
     while i < len(argv):
@@ -348,9 +371,27 @@ def cmd_api(argv):
             surface = argv[i]
             break
         i += 1
+    base = 'http://localhost:8788' if via == 'yours' else 'http://localhost:8787'
+    agent = via == 'agent'
     methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest'), 'extract': ('POST', '/api/extract'), 'bridge': ('POST', '/api/bridge'), 'brief': ('POST', '/api/brief'), 'ask': ('POST', '/api/ask'), 'switch': ('POST', '/api/switch')}
     raw = False
-    if surface in methods:
+    if agent and surface == 'me':
+        method, path = 'GET', '/agent/me'
+    elif agent and surface == 'meetings':
+        method, path = 'GET', '/agent/meetings?withinHours=72'
+    elif agent and surface == 'context':
+        method, path = 'GET', '/agent/context?dealId=helios&purpose=answer'
+    elif agent and surface == 'privy':
+        method, path = 'POST', '/agent/privy'
+    elif not agent and via == 'yours' and surface == 'ask':
+        method, path = 'POST', '/api/ask'
+    elif not agent and via == 'yours' and surface and surface.startswith('share/'):
+        method, path = 'POST', '/api/' + surface
+    elif not agent and via == 'yours' and surface and surface.startswith('items/'):
+        method, path = 'GET', '/api/' + surface
+    elif not agent and via == 'yours' and surface and surface.startswith('receipts/'):
+        method, path = 'GET', '/api/' + surface
+    elif surface in methods:
         method, path = methods[surface]
     elif surface and surface.startswith('release/'):
         method, path = 'POST', '/api/' + surface
@@ -362,7 +403,7 @@ def cmd_api(argv):
         method, path = 'GET', '/api/' + surface
         raw = True
     else:
-        print('unknown surface: %s (health, state, ingest, extract, bridge, brief, ask, switch, release/<id>, approve/<id>, reject/<id>, transcript/<id>, media/<id>).' % surface, file=sys.stderr)
+        print('unknown surface for --via %s: %s.' % (via, surface), file=sys.stderr)
         return 2
     expect = int(argv[argv.index('--expect') + 1]) if '--expect' in argv else None
     field = argv[argv.index('--field') + 1] if '--field' in argv else None
@@ -370,14 +411,21 @@ def cmd_api(argv):
     until = argv[argv.index('--until') + 1] if '--until' in argv else None
     data = json.loads(argv[argv.index('--data') + 1]) if '--data' in argv else None
     name = instance_name(argv) or 'default'
-    plus('%s %s as %s' % (method, path, role))
+    plus('%s %s%s as %s' % (method, base, path, role))
     try:
-        http_json('GET', '/api/health', timeout=5)
+        http_json('GET', '/api/health', timeout=5, base=base)
     except Exception:
         print('api refuses: the local stack is not up (run stevensctl stack up first).', file=sys.stderr)
         return 2
     if raw:
-        req = urllib.request.Request('http://localhost:8787' + path, headers={'X-Viewer-Role': role}, method=method)
+        raw_headers = {}
+        if agent:
+            token = read_agent_token()
+            if token and role != 'nobody':
+                raw_headers['X-Stevens-Agent'] = token
+        else:
+            raw_headers['X-Viewer-Role'] = role
+        req = urllib.request.Request(base + path, headers=raw_headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 body = {'bytes': len(resp.read()), 'contentType': resp.headers.get('Content-Type')}
@@ -391,7 +439,7 @@ def cmd_api(argv):
     deadline = time.time() + 30
     while True:
         try:
-            status, body = http_json(method, path, role, timeout=300, data=data)
+            status, body = http_json(method, path, role, timeout=300, data=data, base=base, agent=agent)
         except urllib.error.HTTPError as e:
             try:
                 body = json.load(e)

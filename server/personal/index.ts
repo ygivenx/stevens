@@ -7,7 +7,11 @@ import { readAll } from '../common/ledger/store.js';
 import { InboxAdapter } from './adapters/inbox.js';
 import { NotesAdapter, seedNotes } from './adapters/notes.js';
 import { ReadwiseAdapter } from './adapters/readwise.js';
+import { askQuestion } from './answer.js';
 import { ingestRaws, runInboxPoll, type IngestDeps } from './ingest.js';
+import { startEscalationRetry, startTriggerLoop, runMeetingTrigger } from './triggers.js';
+import { receiptsFor } from './receipts.js';
+import { shareClaim } from './share.js';
 import { ensureDb, getItemBundle, mediaPathForItem } from './store.js';
 
 if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'personal');
@@ -45,6 +49,35 @@ export const app = createApp({
       if (!devEnabled()) return c.json({ error: 'not found' }, 404);
       return c.json(await runInboxPoll());
     });
+
+    extra.post('/api/ask', async (c) => {
+      const body = (await c.req.json().catch(() => ({}))) as { dealId?: string; question?: string };
+      if (!body.dealId || !body.question) return c.json({ error: 'dealId and question are required' }, 400);
+      try {
+        const result = await askQuestion(body.dealId, body.question);
+        return c.json({ questionId: result.questionId }, 202);
+      } catch (err) {
+        return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+      }
+    });
+
+    extra.post('/api/share/:claimId', async (c) => {
+      const body = (await c.req.json().catch(() => ({}))) as { dealId?: string };
+      if (!body.dealId) return c.json({ error: 'dealId is required' }, 400);
+      try {
+        const result = await shareClaim(c.req.param('claimId'), body.dealId);
+        return c.json(result, 201);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.startsWith('unknown claim')) return c.json({ error: message }, 404);
+        if (message.includes('500 characters')) return c.json({ error: message }, 400);
+        return c.json({ error: 'firm unreachable' }, 502);
+      }
+    });
+
+    extra.get('/api/receipts/:draftId', (c) => {
+      return c.json(receiptsFor(c.req.param('draftId')));
+    });
   },
 });
 
@@ -69,6 +102,9 @@ export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: numbe
   } catch {
     void 0;
   }
+  if (counts.inbox + counts.readwise + counts.notes > 0) {
+    void runMeetingTrigger().catch(() => {});
+  }
   return counts;
 }
 
@@ -77,18 +113,26 @@ export function bootPersonal(): () => void {
   ensureDb(readAll());
   void pollSources().catch(() => {});
   const stopInbox = inbox.watch((raws) => {
-    void ingestRaws(raws).catch(() => {});
+    void ingestRaws(raws).then((result) => {
+      if (result.added > 0) void runMeetingTrigger().catch(() => {});
+    }).catch(() => {});
   });
   const stopNotes = notes.watch((raws) => {
-    void ingestRaws(raws).catch(() => {});
+    void ingestRaws(raws).then((result) => {
+      if (result.added > 0) void runMeetingTrigger().catch(() => {});
+    }).catch(() => {});
   });
   const interval = setInterval(() => {
     void readwise.poll().then((raws) => ingestRaws(raws)).catch(() => {});
   }, 15 * 60 * 1000);
+  const stopTriggers = startTriggerLoop();
+  const stopRetries = startEscalationRetry();
   return () => {
     stopInbox();
     stopNotes();
     clearInterval(interval);
+    stopTriggers();
+    stopRetries();
   };
 }
 

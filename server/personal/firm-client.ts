@@ -9,6 +9,8 @@ export interface FirmMeeting {
   startsAt: string;
 }
 
+import type { Claim, SourceRef, Verdict } from '../../shared/data.js';
+
 export interface FirmPerson {
   id: string;
   name: string;
@@ -32,18 +34,26 @@ export function firmMeetings(withinHours: number): Promise<FirmMeeting[]> {
   return agent<FirmMeeting[]>('/agent/meetings?withinHours=' + withinHours);
 }
 
-export function firmContext(dealId: string, purpose: string): Promise<{ sources: unknown[]; claims: unknown[] }> {
+export function firmContext(dealId: string, purpose: string): Promise<{ sources: SourceRef[]; claims: Claim[] }> {
   return agent('/agent/context?dealId=' + encodeURIComponent(dealId) + '&purpose=' + encodeURIComponent(purpose));
 }
 
-export function firmPrivy(dealId: string, question: string): Promise<{ questionId: string; verdict: unknown; failedClosed: boolean }> {
-  return agent('/agent/privy', { method: 'POST', body: JSON.stringify({ dealId, question }) });
+export function firmPrivy(dealId: string, question: string, extra: { questionId: string }): Promise<{ questionId: string; verdict: Verdict; failedClosed: boolean }> {
+  return agent('/agent/privy', { method: 'POST', body: JSON.stringify({ dealId, question, questionId: extra.questionId }) });
 }
 
-export function firmEscalate(dealId: string, questionId: string): Promise<{ escalationId: string; to: string | null }> {
+export function firmEscalate(dealId: string, questionId: string): Promise<{ escalationId: string; to: 'Associate' | 'Partner' | null }> {
   return agent('/agent/escalations', { method: 'POST', body: JSON.stringify({ dealId, questionId }) });
 }
 
-export function firmRelease(payload: { dealId: string; claimId: string; quote: string; provenance: Record<string, string> }): Promise<{ documentId: string }> {
+export interface ReleaseProvenance {
+  title: string;
+  origin: 'glasses' | 'readwise' | 'notes';
+  capturedAt: string;
+  speaker?: string;
+  at?: string;
+}
+
+export function firmRelease(payload: { dealId: string; claimId: string; quote: string; provenance: ReleaseProvenance }): Promise<{ documentId: string }> {
   return agent('/agent/releases', { method: 'POST', body: JSON.stringify(payload) });
 }
