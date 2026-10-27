@@ -1,15 +1,15 @@
 # Approval
 
-Last verified: uncommitted on 2026-10-26 (source)
+Last verified: uncommitted on 2026-10-27 (live)
 
-Approval closes the demo loop: switching to Partner reveals the conflicts memo (Helios competes with portfolio company Lumen) plus the released churn quote while every other personal source stays owner-only, the Partner approves "take the meeting after conflict review", and the decision is logged. The role switcher sends `X-Viewer-Role` and the server enforces it; the switcher is labeled "simulated sign-in". Day 6 UI. Overall maturity: everything planned.
+Approval closes the demo loop: switching to Partner reveals the conflicts memo (Helios competes with portfolio company Lumen) plus the released churn quote while every other personal source stays owner-only, the Partner approves "take the meeting after conflict review", and the decision is logged. The role switcher sends `X-Viewer-Role` and the server enforces it; the switcher is labeled "simulated sign-in". Routes live day 5; role-switch UI day 6. Overall maturity: everything api-only.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| approval-role-switch | Associate/Partner switch changes what is visible: the Partner sees the conflicts memo and released quote the Associate's firm view never shows | planned | UI+API | - | not driven | SPEC.md § Demo, SPEC.md § Architecture |
-| approval-decision | The Partner approves or rejects a draft and the decision is logged with the draft id and role | planned | UI+API | - | not driven | SPEC.md § Demo, SPEC.md § Contracts |
+| approval-role-switch | Associate/Partner switch changes what is visible: the Partner sees the conflicts memo and released quote the Associate's firm view never shows | api-only | UI+API | - | 2026-10-27 | `server/index.ts`, `/tmp/stevens-verify/day4/evidence/assoc2.json` |
+| approval-decision | The Partner approves or rejects a draft and the decision is logged with the draft id and role | api-only | UI+API | - | 2026-10-27 | `server/index.ts` |
 
 ## How to get to it (user POV)
 
@@ -23,8 +23,8 @@ Planned UI; no build exists yet. Intended path:
 
 Preconditions: baseline.
 
-- **approval-role-switch**: switch roles → `stevensctl browser run role-switch` → conflicts memo visible as Partner, absent as Associate.
-- **approval-decision**: approve as Partner → `stevensctl api --as Partner approve answer --expect 200 --field '.status'` → `approved` with a `draft.approved` ledger event.
+- **approval-role-switch**: switch roles → `stevensctl api --as Associate switch --data '{"role":"Partner"}'` logs `role.switched`; per-role state verified day 4 (switcher UI day 6).
+- **approval-decision**: approve as Partner → `stevensctl api --as Partner approve/<draftId> --expect 200` → `approved` with a `draft.approved` ledger event.
 
 ## Gotchas
 

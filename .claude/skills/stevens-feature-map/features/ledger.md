@@ -2,7 +2,7 @@
 
 Last verified: uncommitted on 2026-10-27 (live)
 
-The ledger is the append-only event log at `data/ledger.jsonl` (gitignored) recording the whole pipeline (`source.ingested` through `draft.approved`), with every real model call logging its model, response ID, usage, and stage key inside its event. Every stage call has a stage key and is reused if it already completed; events are appended before the UI hears of them; a crash resumes with no repeated paid call; replay never re-calls the API. Day 2 built it and drove it live: append/read with stage keys, kill-and-resume with no repeated completed call, failed-attempt logging, and state re-read with a static call counter. Overall maturity: events and resume api-only, replay planned until drafts exist.
+The ledger is the append-only event log at `data/ledger.jsonl` (gitignored) recording the whole pipeline (`source.ingested` through `draft.approved`), with every real model call logging its model, response ID, usage, and stage key inside its event. Every stage call has a stage key and is reused if it already completed; events are appended before the UI hears of them; a crash resumes with no repeated paid call; replay never re-calls the API. Day 2 built it and drove it live: append/read with stage keys, kill-and-resume with no repeated completed call, failed-attempt logging, and state re-read with a static call counter. Overall maturity: everything api-only.
 
 ## Sub-features
 
@@ -10,7 +10,7 @@ The ledger is the append-only event log at `data/ledger.jsonl` (gitignored) reco
 |---|---|---|---|---|---|---|
 | ledger-events | Every pipeline step appends a typed event; real calls log model, response ID, usage, and stage key in theirs; failed attempts log usage too | api-only | API | - | 2026-10-27 | `server/ledger/store.ts`, `server/ledger/store.test.ts`, `/tmp/stevens-verify/day2/evidence/ingest1.json` |
 | ledger-resume | A crash or API error resumes from the last completed stage, so no completed paid call repeats | api-only | API | - | 2026-10-27 | `server/pipeline/ingest.ts`, `/tmp/stevens-verify/day2/evidence/ingest-resumed.json` |
-| ledger-replay | A refresh replays the same brief, answer, and inspector from the ledger with zero new API calls | planned | UI+API | - | not driven | SPEC.md § Server components, SPEC.md § Validation |
+| ledger-replay | A refresh replays the same brief, answer, and inspector from the ledger with zero new API calls | api-only | UI+API | - | 2026-10-27 | `server/ledger/store.ts`, `/tmp/stevens-verify/day5/evidence/state5b.json` |
 
 ## How to get to it (user POV)
 
@@ -22,7 +22,7 @@ Preconditions: baseline.
 
 - **ledger-events**: ingest then read state → `stevensctl api --as Associate ingest --expect 200` then `stevensctl api --as Associate state --field '.events'` → 10 typed `source.ingested` events with model, response ID, usage, and stage key on paid calls.
 - **ledger-resume**: slow the fake, ingest in background, `kill -9` the stack pgid, `stack up`, re-ingest → `talk-oct20` reused, every source ingested exactly once, counter grows only for incomplete stages.
-- **ledger-replay**: reload and count API calls → `stevensctl meta calls` before and after `api state` → counter unchanged (full brief/answer/inspector replay needs day 5 drafts).
+- **ledger-replay**: reload and count API calls → `stevensctl meta calls` before and after `api state` → counter unchanged, same brief and answer (inspector UI day 6).
 
 ## Gotchas
 

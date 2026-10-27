@@ -33,11 +33,11 @@ Snapshot (GitHub Pages, 2026-10-26):
 
 ## Unmerged
 
-`day4-boundary`: rules, assembler, release gate, media route (open PR to `main`).
+`day5-pipeline`: bridge, brief, privy, answer, approve (open PR to `main`).
 
 ## Test evidence
 
-"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 4: policy, assembler, release, and media join the `api-only` set; 26 vitest tests pass via `stevensctl test`. No CI exists; `stevensctl` has no `ci status` until CI does.
+"Tests pass" in this map means a local `stevensctl test` run at the file's `Last verified` commit. Day 5: bridge, drafts, privy, and approval join the `api-only` set; the full pipeline runs live. 31 vitest tests pass via `stevensctl test`. No CI exists; `stevensctl` has no `ci status` until CI does.
 
 ## Baseline preconditions for driving
 
@@ -111,14 +111,14 @@ Table rows have exactly 7 cells (`render-map` fails on any other count). `Surfac
 |---|---|---|---|
 | [capture.md](capture.md) | Glasses captures and fixtures into the two vaults | all | api-only |
 | [extraction.md](extraction.md) | Transcript/photo text to structured claims + citation resolver | all | api-only |
-| [bridge.md](bridge.md) | Personal claims bearing on work claims | all | planned |
+| [bridge.md](bridge.md) | Personal claims bearing on work claims | all | api-only |
 | [policy.md](policy.md) | Rules table + exhaustive test | all | api-only |
 | [assembler.md](assembler.md) | Context assembler, manifests, token budget | all | api-only |
-| [privy.md](privy.md) | Privy verdict channel + escalation, fail closed | Associate, Partner | planned |
+| [privy.md](privy.md) | Privy verdict channel + escalation, fail closed | Associate, Partner | api-only |
 | [release.md](release.md) | Personal → firm release gate | Associate, Partner | api-only |
-| [drafts.md](drafts.md) | Unprompted brief + Q&A answer | Associate, Partner | planned |
+| [drafts.md](drafts.md) | Unprompted brief + Q&A answer | Associate, Partner | api-only |
 | [inspector.md](inspector.md) | Boundary inspector over every model call | Associate, Partner | planned |
-| [approval.md](approval.md) | Role switch + approve/reject with logging | Associate, Partner | planned |
+| [approval.md](approval.md) | Role switch + approve/reject with logging | Associate, Partner | api-only |
 | [ledger.md](ledger.md) | Durable pipeline ledger + replay | all | api-only |
 | [server.md](server.md) | Stevens API, media route, SSE | all | api-only |
 | [chat.md](chat.md) | Follow-up chat (gated stretch) | Associate, Partner | deferred |
