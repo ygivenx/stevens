@@ -8,8 +8,8 @@ The bridge is the judged link from off-the-clock learning to a work decision: co
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| bridge-candidates | Code proposes candidate pairs sharing an entity or metric across the two vaults | planned | API | - | not driven | SPEC.md:46 |
-| bridge-judge | Wonder at high effort labels each pair with a relation and reason, or rejects it; text claims only | planned | API | - | not driven | SPEC.md:28, SPEC.md:46 |
+| bridge-candidates | Code proposes candidate pairs sharing an entity or metric across the two vaults | planned | API | - | not driven | SPEC.md § Server components |
+| bridge-judge | Wonder at high effort labels each pair with a relation and reason, or rejects it; text claims only | planned | API | - | not driven | SPEC.md § Models, SPEC.md § Server components |
 
 ## How to get to it (user POV)
 
@@ -28,6 +28,6 @@ Preconditions: baseline.
 
 ## Gotchas
 
-- Wonder is unverified until the day 1 A/B against Spark `high`; the fallback is Spark 1.3 `high` (SPEC.md:28).
-- Wonder gets text only: image and audio input pricing is reported inconsistently (SPEC.md:28).
-- Code prefilters candidates so the judge makes few calls; prompt iteration happens on Spark (SPEC.md:28).
+- Wonder is unverified until the day 1 A/B against Spark `high` on the bridge and privy prompts; the fallback is Spark 1.3 `high` (SPEC.md § Models).
+- Wonder gets text only: image and audio input is reported inconsistently (SPEC.md § Models).
+- Code prefilters candidates so the judge makes few calls; prompt iteration happens on Spark (SPEC.md § Models).

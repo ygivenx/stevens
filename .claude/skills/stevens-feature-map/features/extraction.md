@@ -2,14 +2,14 @@
 
 Last verified: uncommitted on 2026-10-26 (source)
 
-Extraction turns captured text (transcripts, photo text, documents) into structured claims via Spark at low effort with JSON-schema output, and the runtime citation resolver guards everything Stevens displays: every sentence needs a citation, Fact quotes must be verbatim, and failing sentences are dropped and counted. Day 3 build. Overall maturity: everything planned.
+Extraction turns captured text (transcripts, photo text, documents) into structured claims via Spark at low effort with JSON output, and the runtime citation resolver guards everything Stevens displays: every sentence needs a citation, Fact quotes must be verbatim, and failing sentences are dropped and counted. Day 3 build. Overall maturity: everything planned.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| extraction-claims | Transcript and photo text become structured claims (entity, metric, value, verbatim quote, timestamp, speaker) | planned | API | - | not driven | SPEC.md:28, SPEC.md:56 |
-| extraction-resolver | Every displayed sentence resolves ≥1 citation; Fact quotes are verbatim substrings; unsupported sentences are dropped and counted | planned | UI+API | - | not driven | SPEC.md:46 |
+| extraction-claims | Transcript and photo text become structured claims (entity, metric, value, verbatim quote, timestamp, speaker) | planned | API | - | not driven | SPEC.md § Models, SPEC.md § Contracts |
+| extraction-resolver | Every displayed sentence resolves ≥1 citation; Fact quotes are verbatim substrings; unsupported sentences are dropped and counted | planned | UI+API | - | not driven | SPEC.md § Server components |
 
 ## How to get to it (user POV)
 
@@ -28,6 +28,8 @@ Preconditions: baseline.
 
 ## Gotchas
 
-- `Claim.quote` must be a verbatim substring of its source's `text`; `at` and `speaker` come from Voice timestamps and speaker labels (SPEC.md:56).
-- The resolver drops failures silently from the draft but counts them for the inspector ("1 unsupported sentence removed") (SPEC.md:46).
-- Stevens says "nothing relevant" rather than inventing when no claim resolves (SPEC.md:46).
+- `Claim.quote` must be a verbatim substring of its source's `text`; `at` and `speaker` come from Voice timestamps and speaker labels (SPEC.md § Contracts).
+- A Fact's quote must resolve against the claim and the claim's quote against the source text; the resolver drops failures from the draft but counts them for the inspector ("1 unsupported sentence removed") (SPEC.md § Server components).
+- Stevens says "nothing relevant" rather than inventing when no claim resolves (SPEC.md § Server components).
+- The cheaper `muse-spark-1.3-contributor` tier is tried for extraction during the day-1 A/B and kept if quality holds (SPEC.md § Models).
+- Every structured response is validated against a zod schema, retried once, then fails closed (SPEC.md § Architecture).

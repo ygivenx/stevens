@@ -2,16 +2,16 @@
 
 Last verified: uncommitted on 2026-10-26 (source)
 
-Capture stages what Stevens reasons over: Ray-Ban Meta glasses captures (a staged ~90s conference talk, a slide photo, article highlights) into the personal vault, and the fictional Helios deal data (deck photo, CRM record, memos) into the enterprise vault. Day 1 proves both perception gates with live calls; day 2 commits the final fixtures. Overall maturity: everything planned.
+Capture stages what Stevens reasons over: Ray-Ban Meta glasses captures (a staged ~90s conference talk, a slide photo, article highlights) into the personal vault, and the fictional Helios deal data (deck photo, CRM record, memos) into the enterprise vault. Fixtures live in the server-only `fixtures/` directory and reach the browser only through the policy-checked media route. Day 1 proves both perception gates with live calls; day 2 commits the final fixtures. Overall maturity: everything planned.
 
 ## Sub-features
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| capture-talk-audio | Staged ~90s two-voice talk transcribes via Voice batch with speaker labels and timestamps into the personal vault | planned | UI+API | - | not driven | SPEC.md:124, SPEC.md:28 |
-| capture-slide-photo | Glasses slide photo reads to verbatim text via Spark vision at low effort, stored for Fact checks | planned | UI+API | - | not driven | SPEC.md:124, SPEC.md:28 |
-| capture-articles | 3 article highlights land in the personal vault as text claims | planned | UI+API | - | not driven | SPEC.md:124 |
-| capture-enterprise | Helios deal, CRM record, deck photo, team memo, partner-only conflicts memo, and one wall item seed the enterprise vault | planned | API | - | not driven | SPEC.md:124, SPEC.md:56 |
+| capture-talk-audio | Staged ~90s two-voice talk transcribes via Voice batch with speaker labels and timestamps into the personal vault | planned | UI+API | - | not driven | SPEC.md § Fixtures, SPEC.md § Models |
+| capture-slide-photo | Glasses slide photo reads to verbatim text via Spark vision at low effort, stored for Fact checks | planned | UI+API | - | not driven | SPEC.md § Fixtures, SPEC.md § Models |
+| capture-articles | 3 article highlights land in the personal vault as text claims | planned | UI+API | - | not driven | SPEC.md § Fixtures |
+| capture-enterprise | Helios deal + CRM record, deck photo, team memo, partner-only conflicts memo, and one wall item seed the enterprise vault | planned | API | - | not driven | SPEC.md § Fixtures, SPEC.md § Contracts |
 
 ## How to get to it (user POV)
 
@@ -32,8 +32,8 @@ Preconditions: baseline.
 
 ## Gotchas
 
-- The Voice endpoint, upload format, and timestamp/speaker response shape are unknown until the day 1 spike, and `client.ts` is designed after it (SPEC.md:116).
-- Glasses-mic audio of a distant speaker may transcribe poorly; the fallback is phone audio near the speaker with glasses video (SPEC.md:161).
-- Captures are pre-recorded files, not streamed; live glasses streaming via the Device Access Toolkit is out of scope (SPEC.md:124).
-- SAM 3.1 screen-cropping is built only if day 1 shows Spark misreads the uncropped photo (SPEC.md:28).
-- `Source.fixture` is a `public/fixtures/...` path, never a blob URL, so refresh still works (SPEC.md:56).
+- The Voice endpoint, upload format, and timestamp/speaker response shape are unknown until the day 1 spike, and the client signature is designed after it (SPEC.md § Meta API wiring).
+- Glasses-mic audio of a distant speaker may transcribe poorly; the fallback is phone audio near the speaker with glasses video (SPEC.md § Non-goals and risks).
+- Captures are pre-recorded files, not streamed; live glasses streaming via the Device Access Toolkit is out of scope (SPEC.md § Fixtures).
+- SAM 3.1 screen-cropping is built only if day 1 shows Spark misreads the uncropped photo (SPEC.md § Models).
+- `Source.fixture` is a path under the server-only `fixtures/` directory, never `public/` and never a blob URL; media reaches the browser only through `GET /api/media/:sourceId` (SPEC.md § Contracts).
