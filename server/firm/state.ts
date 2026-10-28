@@ -4,7 +4,7 @@ import { nowIso } from '../common/clock.js';
 import { policy } from '../common/boundary/policy.js';
 import { getFirmDb } from './store.js';
 import { classifyAcl, aclLabel, ACL_TABLE } from './connectors/acl-map.js';
-import { documentAcl, firmDocuments, getReleaseProvenance } from './store.js';
+import { connectorError, documentAcl, firmDocuments, getReleaseProvenance, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
 import { buildComps, loadFormD, marketSample } from './connectors/formd.js';
 
@@ -38,7 +38,7 @@ export interface FirmState {
   drafts: Draft[];
   claims: Claim[];
   market: FirmMarket[];
-  connectors: { id: 'crm' | 'sec-form-d'; label: string; lastSyncAt: string | null; documents: number; simulated?: string }[];
+  connectors: { id: 'crm' | 'sec-form-d'; label: string; lastSyncAt: string | null; documents: number; simulated?: string; lastError?: { message: string; at: string } }[];
   aclMap: { principal: string; classification: 'team' | 'partner-only' | 'wall' }[];
   simulated: string[];
 }
@@ -109,7 +109,7 @@ export function buildFirmState(viewer: Person): FirmState {
         { id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
         classifyAcl(acl).classification,
       );
-      const decision = policy(source, viewer.role, 'brief');
+      const decision = policy(source, viewer.role, 'brief', isMember(viewer.id, acl));
       if (decision.access !== 'visible') continue;
       visibleSourceIds.add(doc.id);
       const ref: SourceRef = {
@@ -138,6 +138,7 @@ export function buildFirmState(viewer: Person): FirmState {
   for (const event of events) {
     if (event.type === 'draft.created' && event.draft.kind === 'decision') {
       if (viewer.role !== 'Partner') continue;
+      if (!isMember(viewer.id, ['deal-team:' + event.draft.dealId])) continue;
       const status = draftStatus(event.draft.id);
       drafts.push({ ...event.draft, status });
       if (event.draft.questionId) decisionByQuestion.set(event.draft.questionId, event.draft.id);
@@ -149,9 +150,11 @@ export function buildFirmState(viewer: Person): FirmState {
   for (const event of events) {
     if (event.type === 'escalation.drafted' && event.escalationId && event.to === viewer.role) {
       const from = event.from ? people.get(event.from) ?? personByRole(people, 'Associate') : personByRole(people, 'Associate');
+      const dealId = event.dealId ?? '';
+      const seesDraft = dealId !== '' && isMember(viewer.id, ['deal-team:' + dealId]);
       inbox.push({
-        kind: 'escalation', id: event.escalationId, dealId: event.dealId ?? '', from,
-        at: event.at, decisionDraftId: event.questionId ? decisionByQuestion.get(event.questionId) : undefined,
+        kind: 'escalation', id: event.escalationId, dealId, from,
+        at: event.at, decisionDraftId: event.questionId && seesDraft ? decisionByQuestion.get(event.questionId) : undefined,
       });
     }
     if (event.type === 'personal.released' && event.documentId && event.dealId) {
@@ -186,16 +189,18 @@ export function buildFirmState(viewer: Person): FirmState {
 
   const connectorRows = db.prepare(`select connector, last_sync_at as lastSyncAt, documents from connector_state`).all() as unknown as { connector: string; lastSyncAt: string | null; documents: number }[];
   const connectorMeta: Record<string, { label: string; simulated?: string }> = {
-    crm: { label: 'Firm CRM (fictional)', simulated: 'Simulated — fictional firm CRM' },
+    crm: { label: 'Fictional firm data' },
     'sec-form-d': { label: 'SEC Form D (public)' },
   };
   const connectors: FirmState['connectors'] = (['crm', 'sec-form-d'] as const).map((id) => {
     const row = connectorRows.find((entry) => entry.connector === id);
     const docs = id === 'crm' ? firmDocuments().filter((doc) => doc.connector === 'crm').length : firmDocuments().filter((doc) => doc.connector === 'sec-form-d').length;
+    const error = connectorError(id);
     return {
       id, label: connectorMeta[id].label,
       lastSyncAt: row?.lastSyncAt ?? null, documents: row?.documents ?? docs,
       simulated: connectorMeta[id].simulated,
+      ...(error ? { lastError: error } : {}),
     };
   });
 
@@ -209,7 +214,7 @@ export function buildFirmState(viewer: Person): FirmState {
     market,
     connectors,
     aclMap: ACL_TABLE.map((entry) => ({ principal: entry.principal, classification: entry.classification })),
-    simulated: ['Simulated — fictional firm CRM', 'Simulated sign-in'],
+    simulated: ['Simulated sign-in'],
   };
 }
 

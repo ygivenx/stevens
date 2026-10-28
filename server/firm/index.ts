@@ -6,12 +6,12 @@ import { agentContext, agentFromHeader, agentMedia, agentMeetings, isAgentPurpos
 import { draftEscalation } from './decision.js';
 import { inboundRelease } from './release.js';
 import { runPrivy } from './privy.js';
-import { runConnectorSync } from './sync.js';
+import { ensureFirmDb, runConnectorSync } from './sync.js';
 import { buildFirmState, viewerFromHeader } from './state.js';
 import { append as appendFirmEvent, readAll as readFirmLedger } from '../common/ledger/store.js';
 import { receiptsForDraft } from './receipts.js';
 import { classifyAcl } from './connectors/acl-map.js';
-import { documentAcl, firmDocuments, getFirmDb } from './store.js';
+import { documentAcl, firmDocuments, getFirmDb, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
 import { policy } from '../common/boundary/policy.js';
 import { join as joinPath, extname as extName } from 'node:path';
@@ -60,7 +60,7 @@ export const app = createApp({
         { id: doc.id, kind: doc.kind as Parameters<typeof firmSourceFor>[0]['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
         classifyAcl(documentAcl(doc.id)).classification,
       );
-      if (policy(source, viewer.role, 'brief').access !== 'visible') return c.json({ error: 'unknown source' }, 404);
+      if (policy(source, viewer.role, 'brief', isMember(viewer.id, documentAcl(doc.id))).access !== 'visible') return c.json({ error: 'unknown source' }, 404);
       if (!doc.mediaPath) return c.json({ error: 'unknown source' }, 404);
       const path = joinPath(process.env.STEVENS_FIXTURES_DIR ?? joinPath(process.cwd(), 'fixtures'), doc.mediaPath);
       if (!existsSyncFs(path)) return c.json({ error: 'unknown source' }, 404);
@@ -74,7 +74,7 @@ export const app = createApp({
     agent.get('/api/receipts/:draftId', (c) => {
       const viewer = viewerFromHeader(c.req.header('X-Viewer-Id'));
       if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
-      return c.json(receiptsForDraft(viewer.role, c.req.param('draftId')));
+      return c.json(receiptsForDraft(viewer, c.req.param('draftId')));
     });
 
     agent.post('/api/approve/:draftId', (c) => {
@@ -82,8 +82,9 @@ export const app = createApp({
       if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
       if (viewer.role !== 'Partner') return c.json({ error: 'Partner only' }, 403);
       const draftId = c.req.param('draftId');
-      const exists = readFirmLedger().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
-      if (!exists) return c.json({ error: 'unknown draft' }, 404);
+      const created = readFirmLedger().find((e) => e.type === 'draft.created' && e.draft.id === draftId);
+      if (!created || created.type !== 'draft.created') return c.json({ error: 'unknown draft' }, 404);
+      if (!isMember(viewer.id, ['deal-team:' + created.draft.dealId])) return c.json({ error: 'not on the deal team' }, 403);
       appendFirmEvent({ at: new Date().toISOString(), type: 'draft.approved', draftId, by: viewer.role });
       return c.json({ approved: true });
     });
@@ -93,8 +94,9 @@ export const app = createApp({
       if (!viewer) return c.json({ error: 'unknown viewer' }, 401);
       if (viewer.role !== 'Partner') return c.json({ error: 'Partner only' }, 403);
       const draftId = c.req.param('draftId');
-      const exists = readFirmLedger().some((e) => e.type === 'draft.created' && e.draft.id === draftId);
-      if (!exists) return c.json({ error: 'unknown draft' }, 404);
+      const created = readFirmLedger().find((e) => e.type === 'draft.created' && e.draft.id === draftId);
+      if (!created || created.type !== 'draft.created') return c.json({ error: 'unknown draft' }, 404);
+      if (!isMember(viewer.id, ['deal-team:' + created.draft.dealId])) return c.json({ error: 'not on the deal team' }, 403);
       appendFirmEvent({ at: new Date().toISOString(), type: 'draft.rejected', draftId, by: viewer.role });
       return c.json({ rejected: true });
     });
@@ -172,8 +174,14 @@ export const app = createApp({
   },
 });
 
-export function bootFirm(): void {
-  void runConnectorSync().catch(() => {});
+export function bootFirm(): () => void {
+  void ensureFirmDb(readFirmLedger())
+    .then(() => runConnectorSync())
+    .catch(() => {});
+  const interval = setInterval(() => {
+    void runConnectorSync().catch(() => {});
+  }, 60 * 1000);
+  return () => clearInterval(interval);
 }
 
 if (!process.env.VITEST) {
