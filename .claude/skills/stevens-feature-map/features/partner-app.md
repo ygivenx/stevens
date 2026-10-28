@@ -1,6 +1,6 @@
 # Partner app
 
-Last verified: uncommitted on 2026-10-28 (live)
+Last verified: uncommitted on 2026-10-28 (source)
 
 Stevens · firm (:5174 → :8787) is the Partner's product: a simulated sign-in, a live Inbox of escalations, shared quotes and decision drafts with Approve, a deal page with ACL chips and market comps, and the Sources page showing connectors and the ACL mapping. Partner (and the Associate's firm view). Day 14 landed sign-in, Inbox, deal pages, Sources and the demo harness with live updates. Overall maturity: beta.
 
@@ -13,6 +13,7 @@ Stevens · firm (:5174 → :8787) is the Partner's product: a simulated sign-in,
 | partner-decision | Decision draft with citations; Partner-only Approve and Reject, logged | beta | UI+API | - | 2026-10-28 | `server/firm/index.ts`, browser `partner-approve` PASS |
 | partner-deal-page | Deal record, documents with ACL chips, market comps with SEC links, shared quotes | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, live Helios page |
 | partner-sources | Connectors, last sync, ACL mapping and rules table | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, browser `partner-sources` PASS |
+| partner-sources-unreachable | Sources shows CRM unreachable since a time when the connector errors, and the Fictional firm data label | beta | UI+API | - | not driven | `web/firm/App.tsx`, `server/firm/state.ts` |
 | partner-demo-harness | web/demo.html shows both apps side by side | beta | UI | - | 2026-10-28 | `web/demo.html`, browser `demo-two-screens` PASS |
 
 ## How to get to it (user POV)

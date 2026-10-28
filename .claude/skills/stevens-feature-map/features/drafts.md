@@ -11,6 +11,7 @@ Drafts are what Stevens writes: the unprompted brief for the next Helios meeting
 | drafts-brief | Unprompted brief carries the churn bridge with 2 Fact citations and the "ask how they define churn" inference; the personal quote is chipped visible to you only | beta | UI+API | - | 2026-10-27 | `web/src/brief.tsx`, `/tmp/stevens-verify/day6/evidence/run-brief.png` |
 | drafts-answer | Asked answer uses visible data plus the privy verdict and recommends hold with an escalation when the conflicts memo applies | beta | UI+API | - | 2026-10-27 | `web/src/answer.tsx`, `/tmp/stevens-verify/day6/evidence/run-answer.png` |
 | drafts-solo | Solo brief is written under From your notes and reading with no bridge section; a solo answer carries proceed with no privy check and no escalation | beta | UI+API | - | not driven | `server/personal/brief.ts`, `server/personal/answer.ts`, `server/personal/solo.test.ts` |
+| drafts-decision-recipient | An escalation to a role resolves to the teammate on the deal; outsiders never see the draft, its receipts, or approve it | beta | UI+API | - | not driven | `server/firm/decision.ts`, `server/firm/state.ts`, `server/firm/crm.test.ts` |
 
 ## How to get to it (user POV)
 

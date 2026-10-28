@@ -12,6 +12,7 @@ The release gate in `server/boundary/release.ts` is the personal→firm boundary
 | release-gate | Escalations, approved decisions, and non-owner responses pass the gate; unreleased personal text renders owner-only or the response is withheld | api-only | API | - | 2026-10-27 | `server/boundary/release.ts`, `server/boundary/filter.ts` |
 | release-owner-only | A release attempt by anyone but the claim's owner is rejected | api-only | API | - | 2026-10-27 | `server/boundary/release.test.ts` |
 | release-solo-refusal | In solo mode a share attempt is refused with 409 before any claim is read | api-only | API | - | not driven | `server/personal/share.ts`, `server/personal/index.ts`, `server/personal/routes.test.ts` |
+| release-rebuildable | A release appends the document, quote, and provenance to the ledger before `firm.db` updates, so rebuilds keep shared quotes | api-only | API | - | 2026-10-28 | `server/firm/release.ts`, `server/firm/postgres.test.ts` (live rebuild) |
 
 ## How to get to it (user POV)
 

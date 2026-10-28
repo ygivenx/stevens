@@ -30,7 +30,7 @@ export interface FirmState {
   drafts: Draft[];
   claims: Claim[];
   market: FirmMarket[];
-  connectors: { id: string; label: string; lastSyncAt: string | null; documents: number; simulated?: string }[];
+  connectors: { id: string; label: string; lastSyncAt: string | null; documents: number; simulated?: string; lastError?: { message: string; at: string } }[];
   aclMap: { principal: string; classification: string }[];
   simulated: string[];
 }
