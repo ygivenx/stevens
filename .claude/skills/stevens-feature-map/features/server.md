@@ -14,6 +14,7 @@ The server owns the boundary: day 9b runs two Hono processes from one shared fac
 | server-events | GET /api/events sends only empty `changed` signals over server-sent events, on both processes | api-only | API | - | 2026-10-27 | `server/common/app.ts`, `server/firm/routes.test.ts` |
 | server-solo-routes | Solo routes: /api/state reports solo with five sources, /api/ask accepts an empty dealId, /api/share answers 409 | api-only | API | - | not driven | `server/personal/index.ts`, `server/personal/routes.test.ts` |
 | server-firm-rebuild | The firm rebuilds `firm.db` from its ledger with Postgres stopped and zero calls, then syncs every 60 seconds | api-only | API | - | 2026-10-28 | `server/firm/sync.ts`, `server/firm/index.ts`, `server/firm/postgres.test.ts` (live rebuild) |
+| server-demo-replay | `record-replay` records the fixture-only flow to `fixtures/replay/` and refuses owner sources; `npm run demo` serves it with no key and no Postgres; both status lines read Replaying a recorded run | beta | UI+API | - | 2026-10-28 | `scripts/demo.ts`, `fixtures/replay/`, alt-port replay drive 2026-10-28 |
 
 ## How to get to it (user POV)
 

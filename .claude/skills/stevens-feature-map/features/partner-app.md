@@ -14,6 +14,7 @@ Stevens · firm (:5174 → :8787) is the Partner's product: a simulated sign-in,
 | partner-deal-page | Deal record, documents with ACL chips, market comps with SEC links, shared quotes | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, live Helios page |
 | partner-sources | Connectors, last sync, ACL mapping and rules table | beta | UI+API | - | 2026-10-28 | `web/firm/App.tsx`, browser `partner-sources` PASS |
 | partner-sources-unreachable | Sources shows CRM unreachable since a time when the connector errors, and the Fictional firm data label | beta | UI+API | - | not driven | `web/firm/App.tsx`, `server/firm/state.ts` |
+| partner-status | The firm header shows a status line: CRM sync state, unreachable time, or the replay line | beta | UI+API | - | not driven | `web/firm/App.tsx`, `server/firm/state.ts`, `server/firm/crm.test.ts` |
 | partner-demo-harness | web/demo.html shows both apps side by side | beta | UI | - | 2026-10-28 | `web/demo.html`, browser `demo-two-screens` PASS |
 
 ## How to get to it (user POV)
