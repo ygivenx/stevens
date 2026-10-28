@@ -24,7 +24,7 @@ export async function runBrief(viewer: Role): Promise<{ draft: Draft; reused: bo
     const again = existingBrief(readAll(), viewer);
     if (again) return { draft: again, reused: true };
   }
-  const { prompt, manifest } = assemble('brief', viewer, WONDER_MODEL, key, allSources, allClaims);
+  const { prompt, manifest } = assemble('brief', viewer, WONDER_MODEL, key, allSources, allClaims, undefined, () => true);
   const bridges = events
     .filter((e) => e.type === 'bridge.judged' && e.bridge !== null)
     .map((e) => {

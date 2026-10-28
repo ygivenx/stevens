@@ -10,13 +10,13 @@ export function matchPrivy(question: string, viewer: Role, claims: Claim[], sour
   const visibleEntities = new Set<string>();
   for (const claim of claims) {
     const source = sources.get(claim.sourceId);
-    if (source && policy(source, viewer, 'privy').access === 'visible') visibleEntities.add(claim.entity.toLowerCase());
+    if (source && policy(source, viewer, 'privy', true).access === 'visible') visibleEntities.add(claim.entity.toLowerCase());
   }
   const lowered = question.toLowerCase();
   const matched: Source[] = [];
   for (const source of sources.values()) {
     if (!source.text) continue;
-    if (policy(source, viewer, 'privy').access !== 'privy') continue;
+    if (policy(source, viewer, 'privy', true).access !== 'privy') continue;
     const mine = [...claims.values()].filter((c) => c.sourceId === source.id);
     if (mine.some((c) => lowered.includes(c.entity.toLowerCase()) || visibleEntities.has(c.entity.toLowerCase()))) {
       matched.push(source);
@@ -47,7 +47,7 @@ export async function runAsk(viewer: Role, question: string): Promise<{ draft: D
   const allClaims = [...claims.values()];
   const matched = matchPrivy(question, viewer, allClaims, sources);
   const privyKey = stageKey('privy', [questionId], PROMPT_VERSION, WONDER_MODEL);
-  const assembled = assemble('privy', viewer, WONDER_MODEL, privyKey, [...sources.values()].filter((s) => !!s.text), allClaims);
+  const assembled = assemble('privy', viewer, WONDER_MODEL, privyKey, [...sources.values()].filter((s) => !!s.text), allClaims, undefined, () => true);
   let verdict: Verdict;
   let api: LedgerEvent & { type: 'privy.judged' };
   let failedClosed = false;
@@ -76,7 +76,7 @@ export async function runAsk(viewer: Role, question: string): Promise<{ draft: D
   append({ ...api, at: new Date().toISOString() });
   const answerKey = stageKey('answer', [questionId, viewer], PROMPT_VERSION, WONDER_MODEL);
   const allSources = [...sources.values()].filter((s) => !!s.text);
-  const built = assemble('answer', viewer, WONDER_MODEL, answerKey, allSources, allClaims, verdict);
+  const built = assemble('answer', viewer, WONDER_MODEL, answerKey, allSources, allClaims, verdict, () => true);
   const answerTask = `${built.prompt}\n\nTask: answer "${question}" for a ${viewer}. Every sentence carries at least one citation with verbatim Fact quotes. ${
     verdict.verdict === 'hold' ? 'Recommend holding until a Partner reviews, without hinting at what the restricted sources contain.' : 'Answer directly from the visible record.'
   }`;

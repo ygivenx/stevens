@@ -18,12 +18,12 @@ function claimVisible(claim: Claim, sources: Map<string, Source>, viewer: Role, 
   const source = sources.get(claim.sourceId);
   if (!source) return false;
   if (source.vault === 'personal') return personalQuoteVisible(claim, source, viewer, events);
-  return policy(source, viewer, 'brief').access === 'visible';
+  return policy(source, viewer, 'brief', true).access === 'visible';
 }
 
 function entryVisible(sourceId: string, sources: Map<string, Source>, viewer: Role): boolean {
   const source = sources.get(sourceId);
-  return source !== undefined && policy(source, viewer, 'brief').access === 'visible';
+  return source !== undefined && policy(source, viewer, 'brief', true).access === 'visible';
 }
 
 function redactManifest(manifest: Manifest, sources: Map<string, Source>, viewer: Role): Manifest {
@@ -36,7 +36,7 @@ export function filterState(events: LedgerEvent[], viewer: Role): LedgerEvent[] 
   const { claims, sources } = indexEvents(events);
   return events.flatMap((event): LedgerEvent[] => {
     if (event.type === 'source.ingested') {
-      if (policy(event.source, viewer, 'brief').access === 'visible') return [event];
+      if (policy(event.source, viewer, 'brief', true).access === 'visible') return [event];
       return [];
     }
     if (event.type === 'claims.extracted') {
@@ -84,7 +84,7 @@ export function filterState(events: LedgerEvent[], viewer: Role): LedgerEvent[] 
             if (source.vault === 'personal' && !personalQuoteVisible(claim, source, viewer, events)) {
               return [{ ...citation, quote: OWNER_ONLY }];
             }
-            if (policy(source, viewer, 'brief').access !== 'visible') return [];
+            if (policy(source, viewer, 'brief', true).access !== 'visible') return [];
             return [citation];
           }),
         }))
