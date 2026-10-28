@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Play, CalendarDays, Library, Share2, Building2, Ear, Sparkles, Send } from 'lucide-react';
+import { Play, CalendarDays, Library, Share2, Building2, Ear, Sparkles, Send, Database } from 'lucide-react';
 import type { Claim, Draft, SourceRef } from '../../shared/data.js';
 import {
   getState, getBundle, askQuestion, shareClaim, getReceipts,
@@ -11,12 +11,12 @@ import {
   StatusLine, Skeleton, Toast, Drawer, Sheet, Rule, HonestyBadge, FailedLine,
 } from '../ui/components.js';
 
-type Route = 'today' | 'captures' | 'shared';
+type Route = 'today' | 'captures' | 'shared' | 'sources';
 
 function useRoute(): [Route, (r: Route) => void] {
   const read = (): Route => {
     const hash = window.location.hash.replace('#/', '');
-    if (hash === 'captures' || hash === 'shared') return hash;
+    if (hash === 'captures' || hash === 'shared' || hash === 'sources') return hash;
     return 'today';
   };
   const [route, setRoute] = useState<Route>(read);
@@ -71,6 +71,7 @@ export default function App() {
     { key: 'today', label: 'Today', icon: CalendarDays },
     { key: 'captures', label: 'Captures', icon: Library },
     { key: 'shared', label: 'Shared', icon: Share2 },
+    { key: 'sources', label: 'Sources', icon: Database },
   ];
   return (
     <div className="min-h-screen">
@@ -135,6 +136,7 @@ export default function App() {
         )}
         {route === 'captures' && <CapturesView state={state} onShare={(claimId, dealId) => setShareFor({ claimId, dealId })} onToast={setToast} />}
         {route === 'shared' && <SharedView state={state} claimsById={claimsById} />}
+        {route === 'sources' && <SourcesView state={state} />}
       </main>
       <footer className="mt-10 border-t border-hairline pt-4 text-xs leading-relaxed text-smoke">
         <p>Your notebook stays yours. The firm&apos;s secrets stay the firm&apos;s. <span className="font-semibold text-ink/80">Stevens drafts; the human decides.</span></p>
@@ -289,7 +291,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
     try {
       await askQuestion(meeting.dealId, question.trim());
       onAsk();
-      onToast('Question sent. Stevens is weighing what it may tell you.');
+      onToast(state.solo ? 'Answered from your notebook.' : 'Question sent. Stevens is weighing what it may tell you.');
     } catch {
       onToast('Could not reach Stevens. Try again.');
     }
@@ -303,7 +305,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
           <CalendarDays size={19} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="eyebrow text-brass">{meeting.company} · second meeting</p>
+          <p className="eyebrow text-brass">{meeting.origin === 'calendar' ? 'From your calendar' : meeting.company + ' · second meeting'}</p>
           <h2 className="mt-1 font-display text-[26px] leading-tight">{meeting.title}</h2>
           <p className="mt-1 text-sm font-medium text-smoke">{formatMeetingTime(meeting.startsAt)}</p>
         </div>
@@ -337,6 +339,11 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
               onShare={onShare}
             />
           ))}
+          {state.solo && (
+            <div className="flex items-center gap-2">
+              <Kicker>From your notes and reading</Kicker>
+            </div>
+          )}
           <SentenceList sentences={brief.sentences} claimsById={claimsById} sourcesById={sourcesById} />
           <SuggestedQuestion sentences={brief.sentences} />
           <BriefFooter brief={brief} now={state.now} onReceipts={() => onReceipts(brief.id)} />
@@ -367,7 +374,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
             Should we take the second meeting?
           </button>
         </div>
-        <p className="mt-2 text-xs text-smoke">Your question goes to the firm&apos;s privy check. Nothing from your notebook does.</p>
+        <p className="mt-2 text-xs text-smoke">{state.solo ? 'Answered from your notebook. No firm is connected.' : 'Your question goes to the firm\u2019s privy check. Nothing from your notebook does.'}</p>
       </div>
       {answers.map((answer) => (
         <AnswerCard key={answer.id} answer={answer} state={state} claimsById={claimsById} sourcesById={sourcesById} onReceipts={() => onReceipts(answer.id)} />
@@ -590,7 +597,7 @@ function AnswerCard({ answer, state, claimsById, sourcesById, onReceipts }: {
       <div className="mt-3">
         <SentenceList sentences={answer.sentences} claimsById={claimsById} sourcesById={sourcesById} />
       </div>
-      <p className="mt-3 text-sm text-smoke">Stevens weighed information you are not privy to.</p>
+      <p className="mt-3 text-sm text-smoke">{state.solo ? 'Answered from your notebook. No firm is connected.' : 'Stevens weighed information you are not privy to.'}</p>
       {escalation && (
         <p data-testid="escalation" className="mt-2 text-sm">
           {escalation.status === 'sent' ? (
@@ -648,10 +655,9 @@ function CapturesView({ state, onShare, onToast }: {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
-        {(state.adapters ?? []).map((adapter) => (
-          <span key={adapter.origin} className="inline-flex items-center gap-2 rounded-full border border-hairline px-3 py-1 text-xs text-smoke">
-            {adapter.label} · {adapter.lastSyncAt ? 'synced ' + formatClock(adapter.lastSyncAt) : 'never synced'}
-            {adapter.simulated && <span>· {adapter.simulated}</span>}
+        {(state.sourceStatus ?? []).map((source) => (
+          <span key={source.id} className="inline-flex items-center gap-2 rounded-full border border-hairline px-3 py-1 text-xs text-smoke">
+            {source.label} · {source.lastSyncAt ? 'synced ' + formatClock(source.lastSyncAt) : 'never synced'}
           </span>
         ))}
       </div>
@@ -805,6 +811,29 @@ function SharedView({ state, claimsById }: { state: PersonalState | null; claims
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function SourcesView({ state }: { state: PersonalState | null }) {
+  if (!state) return <Skeleton label="Loading sources…" />;
+  return (
+    <div className="space-y-4">
+      {state.solo && (
+        <Card>
+          <p className="text-sm">Running solo — no firm is connected. Briefs and answers come only from your notebook.</p>
+        </Card>
+      )}
+      {state.sourceStatus.map((source) => (
+        <Card key={source.id}>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="font-display text-xl">{source.label}</h2>
+            <p className="text-xs text-smoke">{source.lastSyncAt ? 'synced ' + formatClock(source.lastSyncAt) : 'never synced'}</p>
+          </div>
+          {source.lastError && <div className="mt-3"><FailedLine message={source.lastError} /></div>}
+          {source.simulated && <div className="mt-3"><HonestyBadge label={source.simulated} /></div>}
+        </Card>
+      ))}
     </div>
   );
 }

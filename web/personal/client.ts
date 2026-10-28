@@ -5,7 +5,8 @@ export interface PersonalState {
   now: string;
   vaultName: string;
   status: { line: string; busy: boolean };
-  adapters: { origin: string; label: string; lastSyncAt: string | null; simulated?: string }[];
+  solo: boolean;
+  sourceStatus: { id: string; label: string; lastSyncAt: string | null; lastError: string | null; simulated?: string }[];
   items: Item[];
   meetings: (Meeting & { briefId?: string; team?: Person[] })[];
   drafts: Draft[];
