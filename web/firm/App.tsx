@@ -554,6 +554,9 @@ function SourcesView({ state }: { state: FirmState | null }) {
               <p className="mt-1 text-xs text-smoke">
                 {connector.documents} documents{connector.lastSyncAt ? ' · synced ' + formatClock(connector.lastSyncAt) : ' · never synced'}{connector.simulated ? ' · ' + connector.simulated : ''}
               </p>
+              {connector.lastError && (
+                <div className="mt-2"><FailedLine message={'CRM unreachable since ' + formatClock(connector.lastError.at)} /></div>
+              )}
             </li>
           ))}
         </ul>

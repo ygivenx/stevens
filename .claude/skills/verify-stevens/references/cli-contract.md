@@ -12,6 +12,9 @@ Status: every v2.1 command is implemented (day 7). The v3 changes below are **pl
 | Stevens · yours (Hono, `server/personal/index.ts`) | 8788 | `GET /api/state` → 200 |
 | Associate app (Vite, `web/personal/`) | 5173 | `GET /` → 200 |
 | Partner app (Vite, `web/firm/`) | 5174 | `GET /` → 200 |
+| Firm CRM (Postgres, `darlington_crm`) | 5433 | connect as `dh_stevens`, `select 1` → 1 |
+
+`stack up` does not start the CRM; `crm-db up` bootstraps it in the `pw` sandbox and `stack status` reports it. (v3.1: day R3.)
 
 State: `data/firm/{firm.db,ledger.jsonl}` and `data/personal/{personal.db,ledger.jsonl,inbox/,vault/}`. Verify flows never use this tree: `stack up` seals the instance to `/tmp/stevens-verify/<instance>/data/` with fixture sources and real tokens unset, so default flows never touch owner data (v3.1: day R1).
 
@@ -28,6 +31,7 @@ Checks the tools and credentials the demo needs:
 - `node` 24+ (for `node:sqlite`), `uv`, and `ffmpeg` are present; `sips` on macOS.
 - `MODEL_API_KEY` and `STEVENS_AGENT_TOKEN` are set in `.env.local` (never printed). `READWISE_TOKEN` is optional; without it, doctor notes "Readwise: export file (simulated)".
 - `GET /v1/models` succeeds and lists the SPEC models (`muse-voice-transcribe-1.0`, `muse-spark-1.3`, `muse-spark-1.3-contributor`, `muse-wonder-1.0`).
+- `FIRM_ADMIN_DATABASE_URL` and `FIRM_DATABASE_URL` are set and connect (never printed); on failure doctor names the fix (`crm-db up`, then `firm-crm-setup`). (v3.1: day R3.)
 - Ports 8787, 8788, 5173 and 5174 are free or held by this instance. (v3: day 9b.)
 
 Exit 1 names the missing piece and the fix.
@@ -43,10 +47,18 @@ Configures Stevens for a real owner: writes the v3.1 keys to `.env.local` (merge
 ### seed
 
 Rebuilds this instance's state from fixtures, with fresh ledgers:
-- **firm:** `firm.db` from `fixtures/enterprise/crm.json` and `fixtures/enterprise/formd/*.json`, then a connector sync;
+- **firm:** `firm-crm-setup` builds the Postgres CRM from `fixtures/enterprise/crm.json`, then a connector sync fills `firm.db`; Form D rows come from `fixtures/enterprise/formd/*.json` (v3.1: day R3);
 - **yours:** the instance `vault/` from `fixtures/personal/vault/`; Readwise from `fixtures/personal/readwise-export.json` (the sealed stack unsets `READWISE_TOKEN`); an **empty** inbox.
 
 `--with-captures` also drops the talk and the slide, and waits until both items are `ready`. Synthetic and fictional only (plus public Form D rows); refuses to run against anything but the local stack. (v3: day 9b for the databases, day 10–11 for the adapters.)
+
+### crm-db up|status
+
+Idempotent bootstrap of the Postgres firm CRM inside the `pw` sandbox, and only there: installs Postgres 18, enables remote scram-sha-256 auth, starts cluster `18 main`, creates the `stevens_admin` login and `darlington_crm` database, and publishes `127.0.0.1:5433`. Writes `FIRM_ADMIN_DATABASE_URL` to `.env.local` when missing (never printed). Needs no Postgres on the Mac. (v3.1: day R3.)
+
+### crm grant|revoke <documentId> <principal>
+
+Dev drills on CRM document grants (`STEVENS_DEV=1` only). The change takes effect at the next connector sync, within 60 seconds. (v3.1: day R3.)
 
 ### drop <talk|slide|path> [--wait]
 

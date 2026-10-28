@@ -47,7 +47,7 @@ export async function runBridge(viewer: Role): Promise<{ judged: string[]; reuse
   });
   const work = [...claims.values()].filter((c) => {
     const s = sources.get(c.sourceId);
-    return s?.vault === 'enterprise' && s !== undefined && policy(s, viewer, 'bridge').access === 'visible';
+    return s?.vault === 'enterprise' && s !== undefined && policy(s, viewer, 'bridge', true).access === 'visible';
   });
   const judged: string[] = [];
   const reused: string[] = [];
@@ -61,7 +61,7 @@ export async function runBridge(viewer: Role): Promise<{ judged: string[]; reuse
     }
     const pSource = sources.get(p.sourceId) as Source;
     const wSource = sources.get(w.sourceId) as Source;
-    const { prompt, manifest } = assemble('bridge', viewer, WONDER_MODEL, key, [pSource, wSource], [p, w]);
+    const { prompt, manifest } = assemble('bridge', viewer, WONDER_MODEL, key, [pSource, wSource], [p, w], undefined, () => true);
     const task = `${prompt}\n\nTask: does the personal claim bear on the work claim? Reply with relation (contradicts, supports, context, reject) and a one-sentence reason. Quote nothing beyond the claims above.`;
     let result;
     try {

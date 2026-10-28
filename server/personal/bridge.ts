@@ -19,6 +19,10 @@ export function ownerRole(): 'Associate' | 'Partner' {
   return process.env.STEVENS_OWNER_ROLE === 'Partner' ? 'Partner' : 'Associate';
 }
 
+export function vettedMembership(): (source: Source) => boolean {
+  return () => true;
+}
+
 export function classificationFromRule(ruleId: string): 'team' | 'partner-only' | 'wall' {
   if (ruleId.startsWith('r-team')) return 'team';
   if (ruleId.startsWith('r-partner-only')) return 'partner-only';
@@ -104,7 +108,7 @@ export async function judgeBridges(slice: FirmSlice, deps: BridgeDeps = {}): Pro
     const mineSources = personalSources(ownerRole());
     const personalSource = mineSources.find((source) => source.id === personal.sourceId);
     if (!personalSource || !workSource) continue;
-    const { prompt, manifest } = assemble('bridge', ownerRole(), WONDER_MODEL, key, [personalSource, workSource], [personal, work]);
+    const { prompt, manifest } = assemble('bridge', ownerRole(), WONDER_MODEL, key, [personalSource, workSource], [personal, work], undefined, vettedMembership());
     const task = `${prompt}\n\nTask: does the personal claim bear on the work claim? Reply with relation (contradicts, supports, context, reject) and a one-sentence reason. Quote nothing beyond the claims above.`;
     let result;
     try {

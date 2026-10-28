@@ -167,7 +167,7 @@ export function createApp(options: AppOptions): Hono {
     const { sources } = indexEvents(readAll());
     const source = sources.get(c.req.param('sourceId'));
     if (!source) return c.json({ error: 'unknown source' }, 404);
-    if (policy(source, viewer, 'brief').access !== 'visible') return c.json({ error: 'unknown source' }, 404);
+    if (policy(source, viewer, 'brief', true).access !== 'visible') return c.json({ error: 'unknown source' }, 404);
     const path = join(dataDir(), 'derived', source.id + '.json');
     if (!existsSync(path)) return c.json({ error: 'unknown source' }, 404);
     return c.json(JSON.parse(readFileSync(path, 'utf8')));
@@ -178,7 +178,7 @@ export function createApp(options: AppOptions): Hono {
     const { sources } = indexEvents(readAll());
     const source = sources.get(c.req.param('sourceId'));
     if (!source) return c.json({ error: 'unknown source' }, 404);
-    if (policy(source, viewer, 'brief').access !== 'visible') return c.json({ error: 'unknown source' }, 404);
+    if (policy(source, viewer, 'brief', true).access !== 'visible') return c.json({ error: 'unknown source' }, 404);
     const path = join(process.cwd(), 'fixtures', source.fixture);
     if (!existsSync(path)) return c.json({ error: 'unknown source' }, 404);
     const body = readFileSync(path);

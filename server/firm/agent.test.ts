@@ -7,7 +7,7 @@ import { readAll } from '../common/ledger/store.js';
 import { closeFirmDb } from './store.js';
 import { seedPeople } from './agent-auth.js';
 import { getFirmDb } from './store.js';
-import { runConnectorSync } from './sync.js';
+import { runConnectorSync, testReader } from './sync.js';
 import { agentContext, agentFromHeader, agentMedia, agentMeetings } from './agent.js';
 
 const TOKEN = 'test-agent-token-11';
@@ -34,7 +34,7 @@ beforeAll(async () => {
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
   seedPeople(getFirmDb(), TOKEN);
-  await runConnectorSync();
+  await runConnectorSync({ reader: testReader() });
   const mod = await import('./index.js');
   app = mod.app;
 });
@@ -48,20 +48,20 @@ describe('crm sync', () => {
   it('loads documents, acl rows, and people into firm.db', () => {
     const db = getFirmDb();
     const docs = db.prepare(`select count(*) as n from documents`).get() as unknown as { n: number };
-    expect(docs.n).toBe(7);
+    expect(docs.n).toBe(9);
     const acl = db.prepare(`select count(*) as n from document_acl`).get() as unknown as { n: number };
-    expect(acl.n).toBe(7);
+    expect(acl.n).toBe(9);
     const people = db.prepare(`select count(*) as n from people`).get() as unknown as { n: number };
     expect(people.n).toBe(3);
   });
 
   it('extracts verbatim claims for every document with a second sync costing nothing', async () => {
     const spent = calls(dir);
-    const second = await runConnectorSync();
-    expect(second.documents).toBe(7);
+    const second = await runConnectorSync({ reader: testReader() });
+    expect(second.documents).toBe(9);
     expect(calls(dir)).toBe(spent);
     const extracted = readAll().filter((e) => e.type === 'claims.extracted');
-    expect(extracted.length).toBeGreaterThanOrEqual(7);
+    expect(extracted.length).toBe(8);
   });
 });
 

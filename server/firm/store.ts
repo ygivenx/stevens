@@ -151,9 +151,110 @@ export function getReleaseProvenance(documentId: string): ReleaseProvenance | nu
 }
 
 export function setConnectorState(connector: string, documents: number, lastSyncAt: string): void {
+  ensureConnectorErrorAt();
   const db = getFirmDb();
   db.prepare(
-    `insert into connector_state (connector, last_sync_at, documents, last_error) values (?, ?, ?, null)
-     on conflict(connector) do update set last_sync_at = excluded.last_sync_at, documents = excluded.documents, last_error = null`,
+    `insert into connector_state (connector, last_sync_at, documents, last_error, last_error_at) values (?, ?, ?, null, null)
+     on conflict(connector) do update set last_sync_at = excluded.last_sync_at, documents = excluded.documents, last_error = null, last_error_at = null`,
   ).run(connector, lastSyncAt, documents);
+}
+
+export function ensureConnectorErrorAt(): void {
+  const columns = getFirmDb().prepare(`pragma table_info(connector_state)`).all() as unknown as { name: string }[];
+  if (!columns.some((column) => column.name === 'last_error_at')) {
+    getFirmDb().exec(`alter table connector_state add column last_error_at text`);
+  }
+}
+
+export function setConnectorError(connector: string, error: string, at: string): void {
+  ensureConnectorErrorAt();
+  const db = getFirmDb();
+  db.prepare(
+    `insert into connector_state (connector, last_sync_at, documents, last_error, last_error_at) values (?, null, 0, ?, ?)
+     on conflict(connector) do update set last_error = excluded.last_error, last_error_at = excluded.last_error_at`,
+  ).run(connector, error, at);
+}
+
+export function connectorError(connector: string): { message: string; at: string } | null {
+  ensureConnectorErrorAt();
+  const db = getFirmDb();
+  const row = db.prepare(`select last_error as message, last_error_at as at from connector_state where connector = ?`).get(connector) as unknown as { message: string | null; at: string | null } | undefined;
+  if (!row?.message) return null;
+  return { message: row.message, at: row.at ?? '' };
+}
+
+export function ensureMemberships(): void {
+  getFirmDb().exec(`create table if not exists memberships (
+    person_id text not null references people(id),
+    principal text not null,
+    primary key (person_id, principal)
+  )`);
+}
+
+export function syncMemberships(rows: { personId: string; principal: string }[]): void {
+  ensureMemberships();
+  const db = getFirmDb();
+  db.exec('BEGIN');
+  try {
+    db.prepare(`delete from memberships`).run();
+    const insert = db.prepare(`insert into memberships (person_id, principal) values (?, ?)`);
+    for (const row of rows) insert.run(row.personId, row.principal);
+    db.exec('COMMIT');
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      void 0;
+    }
+    throw err;
+  }
+}
+
+export function isMember(personId: string, acl: string[]): boolean {
+  ensureMemberships();
+  const rows = getFirmDb().prepare(`select principal from memberships where person_id = ?`).all(personId) as unknown as { principal: string }[];
+  const mine = new Set(rows.map((row) => row.principal));
+  if (!acl.some((principal) => mine.has(principal))) return false;
+  return acl.filter((principal) => principal.startsWith('legal-hold:')).every((principal) => mine.has(principal));
+}
+
+export function recipientFor(role: string, dealId: string): string | null {
+  ensureMemberships();
+  const db = getFirmDb();
+  const team = db.prepare(
+    `select p.id as id from people p join memberships m on m.person_id = p.id
+     where p.role = ? and m.principal = ? order by p.id limit 1`,
+  ).get(role, 'deal-team:' + dealId) as unknown as { id: string } | undefined;
+  if (team) return team.id;
+  const fallback = db.prepare(`select id from people where role = ? order by id limit 1`).get(role) as unknown as { id: string } | undefined;
+  return fallback?.id ?? null;
+}
+
+export function syncDealTeam(rows: { dealId: string; personId: string }[]): void {
+  const db = getFirmDb();
+  db.exec('BEGIN');
+  try {
+    db.prepare(`delete from deal_team`).run();
+    const insert = db.prepare(`insert into deal_team (deal_id, person_id) values (?, ?)`);
+    for (const row of rows) insert.run(row.dealId, row.personId);
+    db.exec('COMMIT');
+  } catch (err) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      void 0;
+    }
+    throw err;
+  }
+}
+
+export function deleteDocument(documentId: string): void {
+  const db = getFirmDb();
+  db.prepare(`delete from document_acl where document_id = ?`).run(documentId);
+  db.prepare(`delete from documents where id = ?`).run(documentId);
+}
+
+export function crmDocumentIds(): string[] {
+  const rows = getFirmDb().prepare(`select id from documents where connector = 'crm'`).all() as unknown as { id: string }[];
+  return rows.map((row) => row.id);
 }

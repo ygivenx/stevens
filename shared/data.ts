@@ -23,7 +23,7 @@ export interface SourceRef {
 
 export interface AccessRule {
   id: string; vault: Vault; classification?: Classification; owner?: boolean;
-  viewer: Role; purposes: Purpose[]; access: Access;
+  viewer: Role; purposes: Purpose[]; access: Access; member?: boolean;
 }
 
 export interface Claim {
@@ -88,7 +88,15 @@ export type LedgerEvent = { at: string } & (
   | { type: 'draft.created'; draft: Draft; manifest: Manifest; api: Api }
   | { type: 'privy.judged'; questionId: string; dealId?: string; personId?: string; verdict: Verdict; manifest: Manifest; api?: Api; failedClosed: boolean }
   | { type: 'escalation.drafted'; escalationId?: string; questionId?: string; dealId?: string; from?: string; to: Role; draftId?: string }
-  | { type: 'personal.released'; documentId?: string; dealId?: string; claimId: string; by: Role }
+  | { type: 'personal.released'; documentId?: string; dealId?: string; claimId: string; by: Role; sharedBy?: string;
+      document?: { id: string; dealId: string; kind: string; title: string; createdAt: string; body: string; acl: string[] };
+      provenance?: { title: string; origin: string; capturedAt: string; speaker?: string; at?: string } }
+  | { type: 'connector.synced'; connector: 'crm'; cursor: string;
+      upserted: { people: { id: string; name: string; title: string }[]; deals: { id: string; company: string; sector: string; stage: string; askUsd: number }[];
+        meetings: { id: string; dealId: string; title: string; startsAt: string }[];
+        documents: { id: string; dealId: string | null; kind: string; title: string; createdAt: string; body: string | null; mediaPath: string | null; acl: string[] }[] };
+      deletedDocumentIds: string[]; grants: { documentId: string; grantee: string }[];
+      memberships: { personId: string; principal: string }[]; portfolio: { company: string; sector: string }[] }
   | { type: 'verdict.received'; questionId: string; dealId: string; verdict: Verdict; failedClosed: boolean }
   | { type: 'escalation.sent' | 'escalation.queued'; questionId: string; dealId: string; to: Role | null }
   | { type: 'share.sent'; claimId: string; dealId: string; documentId: string }

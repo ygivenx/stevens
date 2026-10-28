@@ -1,6 +1,6 @@
 # Policy
 
-Last verified: uncommitted on 2026-10-27 (source)
+Last verified: uncommitted on 2026-10-28 (source)
 
 Policy is data: a table of rules in `server/boundary/rules.ts`, each with an `id`, mapping (vault, classification, owner?, viewer role, purpose) to `visible | privy | excluded`. `policy()` is a lookup into that table; no `if (role === …)` access logic exists anywhere else. The inspector shows the rule ID behind every included or withheld source. Day 4 built it with the exhaustive test. Overall maturity: everything api-only.
 
@@ -8,9 +8,9 @@ Policy is data: a table of rules in `server/boundary/rules.ts`, each with an `id
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| policy-table | Rules table maps vault, classification, owner, viewer role, and purpose to an access level with a rule ID | api-only | API | - | not driven | `server/boundary/rules.ts`, `server/boundary/policy.test.ts` |
-| policy-defaults | Personal is visible to its owner and excluded for others; team is visible for all; partner-only is Partner-visible and Associate-privy; wall is excluded for all | api-only | API | - | not driven | `server/boundary/policy.ts`, `server/boundary/policy.test.ts` |
-| policy-exhaustive | An exhaustive test checks every role × source × purpose: the prompt includes a source if and only if the table allows it, and each manifest entry names the rule | api-only | API | - | not driven | `server/boundary/policy.test.ts` |
+| policy-table | Rules table maps vault, classification, owner, viewer role, purpose, and deal-team membership to an access level with a rule ID | api-only | API | - | not driven | `server/common/boundary/rules.ts`, `server/common/boundary/policy.test.ts` |
+| policy-defaults | Personal is visible to its owner and excluded for others; team is visible to members and privy to outsiders; partner-only is Partner-visible to members and privy otherwise; wall is excluded for all | api-only | API | - | not driven | `server/common/boundary/policy.ts`, `server/common/boundary/policy.test.ts` |
+| policy-exhaustive | An exhaustive test checks every role × source × purpose × membership: the prompt includes a source if and only if the table allows it, and each manifest entry names the rule | api-only | API | - | not driven | `server/common/boundary/policy.test.ts` |
 
 ## How to get to it (user POV)
 

@@ -16,7 +16,8 @@ export function assemble(
   stageKey: string,
   sources: Source[],
   claims: Claim[],
-  verdict?: Verdict,
+  verdict: Verdict | undefined,
+  memberFor: (source: Source) => boolean,
 ): Assembled {
   callCounter += 1;
   const included: Manifest['included'] = [];
@@ -24,7 +25,7 @@ export function assemble(
   const parts: string[] = [];
   let rawTokens = 0;
   for (const source of sources) {
-    const decision = policy(source, viewer, purpose);
+    const decision = policy(source, viewer, purpose, memberFor(source));
     const entry = { sourceId: source.id, access: decision.access, ruleId: decision.ruleId };
     const usable = decision.access === 'visible' || (decision.access === 'privy' && purpose === 'privy');
     if (!usable || !source.text) {

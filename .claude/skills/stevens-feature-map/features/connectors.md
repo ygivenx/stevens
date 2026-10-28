@@ -1,6 +1,6 @@
 # Connectors
 
-Last verified: uncommitted on 2026-10-27 (source)
+Last verified: uncommitted on 2026-10-28 (source)
 
 Stevens · firm (:8787) reads the firm's systems through connectors into `firm.db` and mirrors each source system's ACL into a classification, so access levels come from the source, not a hand-typed field. Connectors: a fictional firm CRM and public SEC Form D filings. All roles. Day 11 landed the CRM connector, ACL mirroring, firm extraction and the agent meetings/context/media API; Form D and the Partner UI arrive days 12 and 14. Overall maturity: crm beta, formd planned.
 
@@ -8,7 +8,9 @@ Stevens · firm (:8787) reads the firm's systems through connectors into `firm.d
 
 | ID | What it does | Maturity | Surface | Since | Live | Evidence |
 |---|---|---|---|---|---|---|
-| connectors-crm | Firm CRM connector: people, deals, deal teams, meetings, documents with ACLs, portfolio | beta | infra | - | not driven | `server/firm/connectors/crm.ts`, `fixtures/enterprise/crm.json` |
+| connectors-crm | Firm CRM connector reads Postgres as `dh_stevens`: changed documents since the cursor, full grants and memberships, deletions; `crm.json` stays the fixture source built by `firm-crm-setup` | beta | infra | - | 2026-10-28 | `server/firm/connectors/crm.ts`, `scripts/firm-crm-setup.ts`, `server/firm/postgres.test.ts` (live) |
+| connectors-memberships | Deal-team membership mirrored from Postgres roles into `memberships`, filled by the connector and nowhere else; legal-hold bodies never leave Postgres via RLS | beta | infra | - | 2026-10-28 | `server/firm/store.ts`, `server/firm/crm/schema.sql`, `server/firm/postgres.test.ts` (live cross-check) |
+| connectors-synced | Each changed sync appends `connector.synced` with rows, grants, and memberships before `firm.db` updates; unreachable Postgres keeps the snapshot and records the error | beta | infra | - | not driven | `server/firm/sync.ts`, `server/firm/crm.test.ts` |
 | connectors-acl-map | ACL principals to classification as data; legal hold wins; unknown or empty maps to wall | beta | infra | - | not driven | `server/firm/connectors/acl-map.ts`, `server/firm/connectors/acl-map.test.ts` |
 | connectors-firm-extract | Firm-side vision on the deck photo and extraction on firm documents | beta | infra | - | not driven | `server/firm/sync.ts`, `server/firm/agent.test.ts` |
 | connectors-formd-import | One-time script downloads SEC Form D quarters and commits a filtered subset | beta | infra | - | 2026-10-27 | `scripts/import-formd.ts`, `fixtures/enterprise/formd/tech-2025q4-2026q1.json` (853 rows) |

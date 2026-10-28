@@ -8,7 +8,7 @@ import type { AgentPerson } from './agent-auth.js';
 import { personForToken } from './agent-auth.js';
 import { getFirmDb } from './store.js';
 import { classifyAcl, aclLabel } from './connectors/acl-map.js';
-import { documentAcl, firmDocuments } from './store.js';
+import { documentAcl, firmDocuments, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
 
 const AGENT_PURPOSES: Purpose[] = ['bridge', 'brief', 'answer'];
@@ -62,7 +62,7 @@ export function agentContext(person: AgentPerson, dealId: string, purpose: Purpo
   for (const doc of docs) {
     const acl = documentAcl(doc.id);
     const source = firmSourceFor({ id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath }, classifyAcl(acl).classification);
-    const decision = policy(source, person.role, purpose);
+    const decision = policy(source, person.role, purpose, isMember(person.id, acl));
     if (decision.access !== 'visible') continue;
     visibleIds.add(doc.id);
     sources.push({
@@ -92,7 +92,7 @@ export function agentMedia(person: AgentPerson, sourceId: string): { bytes: Buff
   const doc = docs[0];
   const acl = documentAcl(doc.id);
   const source = firmSourceFor({ id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath }, classifyAcl(acl).classification);
-  if (policy(source, person.role, 'brief').access !== 'visible') return null;
+  if (policy(source, person.role, 'brief', isMember(person.id, acl)).access !== 'visible') return null;
   const path = join(fixturesDir(), doc.mediaPath as string);
   if (!existsSync(path)) return null;
   const ext = '.' + (doc.mediaPath as string).split('.').pop()?.toLowerCase();

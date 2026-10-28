@@ -6,7 +6,7 @@ import { writeDraft, WONDER_MODEL, type Written } from '../common/meta/client.js
 import { resolveSentences } from '../common/resolver/resolve.js';
 import { allPersonalClaims, personalSources } from './store.js';
 import { ensureExtractedForTerms, queryTerms } from './extract.js';
-import { firmShells, ownerRole, type FirmSlice } from './bridge.js';
+import { firmShells, ownerRole, vettedMembership, type FirmSlice } from './bridge.js';
 
 export interface WriterDeps {
   writeFn?: (prompt: string, claims: Claim[], sources: Source[]) => Promise<Written>;
@@ -29,7 +29,7 @@ export async function writeMeetingBrief(dealId: string, company: string, slice: 
   const key = briefKey(dealId, claims, slice.sources.map((source) => source.id));
   const found = findCompleted(key);
   if (found && found.type === 'draft.created') return found.draft;
-  const { prompt, manifest } = assemble('brief', viewer, WONDER_MODEL, key, sources, claims);
+  const { prompt, manifest } = assemble('brief', viewer, WONDER_MODEL, key, sources, claims, undefined, vettedMembership());
   const solo = slice.claims.length === 0 && slice.sources.length === 0;
   const scope = solo
     ? `Write under the section heading 'From your notes and reading'. There is no firm context and no bridge section.`
@@ -68,7 +68,7 @@ export async function writeAnswer(questionId: string, dealId: string, question: 
   const key = stageKey('answer', [questionId], PROMPT_VERSION, WONDER_MODEL);
   const found = findCompleted(key);
   if (found && found.type === 'draft.created') return found.draft;
-  const { prompt, manifest } = assemble('answer', viewer, WONDER_MODEL, key, sources, claims, verdict);
+  const { prompt, manifest } = assemble('answer', viewer, WONDER_MODEL, key, sources, claims, verdict, vettedMembership());
   const task = `${prompt}\n\nTask: answer this question about deal ${dealId}: ${question}. Every sentence needs at least one citation. Never reveal the contents of sources you cannot quote.`;
   let written;
   try {

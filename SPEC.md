@@ -783,6 +783,7 @@ Titles and grants are readable by all staff, like a file listing; bodies are not
 - `policy()` gains the input `member`: the viewer belongs to at least one principal on the source's ACL and to every legal-hold principal on it.
 - The rules table gains a `member` column. A rule that yields `visible` requires `member = yes`; the same source with `member = no` is at most `privy` (Stevens can read it, the viewer cannot). Form D comps (`all-staff`) are `member = yes` for everyone.
 - For the cast: Jordan sees the Helios memo as `privy`; Alex sees the new Beacon memo as `privy` and the Meridian notes as `visible`.
+- **Decision recipient.** Escalations route to a role, but membership is per person, so `draftEscalation` resolves the routed role to one recipient: the lowest person id with that role on the deal team, or the lowest id with that role when nobody on the team holds it. The decision draft is written with that person's membership. At read time a viewer sees the draft, its inbox link, and its receipts only when they are a member of the deal team, and approve/reject refuse non-members; the inbox row itself stays role-visible because it carries no content.
 
 **Seed additions** to `crm.json`: `d-beacon-memo` (`deal-team:beacon`) and `d-meridian-notes` (`deal-team:meridian`), both fictional.
 

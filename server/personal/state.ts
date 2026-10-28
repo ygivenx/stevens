@@ -264,7 +264,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
   const adapters = adapterEntries();
   const readwise = adapters.find((a) => a.origin === 'readwise');
   if (readwise?.simulated) simulated.push(readwise.simulated);
-  simulated.push('Simulated — fictional firm CRM');
+  if (!soloMode()) simulated.push('Fictional firm data');
   simulated.push('Real glasses captures, pre-recorded, imported not streamed');
   return {
     owner,

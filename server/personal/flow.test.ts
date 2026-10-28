@@ -7,7 +7,7 @@ import { readAll } from '../common/ledger/store.js';
 import { assemble } from '../common/boundary/assemble.js';
 import { seedPeople } from '../firm/agent-auth.js';
 import { getFirmDb, closeFirmDb } from '../firm/store.js';
-import { runConnectorSync } from '../firm/sync.js';
+import { runConnectorSync, testReader } from '../firm/sync.js';
 import { agentContext, agentFromHeader } from '../firm/agent.js';
 import { classificationFromRule, firmShells, judgeBridges, type FirmSlice } from './bridge.js';
 import { runInboxPoll } from './ingest.js';
@@ -65,7 +65,7 @@ beforeAll(async () => {
   process.env.STEVENS_NOW = '2026-10-28T14:00:00-04:00';
   useFirm();
   seedPeople(getFirmDb(), TOKEN);
-  await runConnectorSync();
+  await runConnectorSync({ reader: testReader() });
   usePersonal();
   copyFileSync(join(process.cwd(), 'fixtures', 'personal', 'talk.wav'), join(base, 'personal', 'inbox', 'talk.wav'));
   await runInboxPoll();
@@ -119,7 +119,7 @@ describe('bridge over firm context', () => {
     expect(classificationFromRule('r-partner-only-associate')).toBe('partner-only');
     const shells = firmShells(forged);
     expect(shells[0].classification).toBe('partner-only');
-    const { manifest } = assemble('brief', 'Associate', 'm', 'k', shells, forged.claims as Claim[]);
+    const { manifest } = assemble('brief', 'Associate', 'm', 'k', shells, forged.claims as Claim[], undefined, () => true);
     expect(manifest.included).toHaveLength(0);
     expect(manifest.withheld.map((entry) => entry.sourceId)).toContain('x');
   });

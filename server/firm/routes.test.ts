@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeFirmDb, getFirmDb } from './store.js';
 import { seedPeople } from './agent-auth.js';
-import { runConnectorSync } from './sync.js';
+import { runConnectorSync, testReader } from './sync.js';
 import type { FirmState } from './state.js';
 
 let app: typeof import('./index.js')['app'];
@@ -18,7 +18,7 @@ beforeEach(async () => {
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
   seedPeople(getFirmDb(), 'test-agent-token-9b');
-  await runConnectorSync();
+  await runConnectorSync({ reader: testReader() });
   const mod = await import('./index.js');
   app = mod.app;
 });

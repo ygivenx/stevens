@@ -4,7 +4,7 @@ import { assemble } from '../common/boundary/assemble.js';
 import { policy } from '../common/boundary/policy.js';
 import { judgePrivy, WONDER_MODEL } from '../common/meta/client.js';
 import { classifyAcl } from './connectors/acl-map.js';
-import { documentAcl, firmDocuments } from './store.js';
+import { documentAcl, firmDocuments, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
 import type { AgentPerson } from './agent-auth.js';
 
@@ -23,7 +23,7 @@ export function privySourcesFor(person: AgentPerson, dealId: string): { sources:
       { id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
       classifyAcl(acl).classification,
     );
-    if (policy(source, person.role, 'privy').access !== 'privy') continue;
+    if (policy(source, person.role, 'privy', isMember(person.id, acl)).access !== 'privy') continue;
     sources.push(source);
     ids.add(doc.id);
   }
@@ -59,7 +59,7 @@ export async function runPrivy(person: AgentPerson, dealId: string, question: st
     }
   }
   const { sources, claims } = privySourcesFor(person, dealId);
-  const { prompt, manifest } = assemble('privy', person.role, WONDER_MODEL, key, sources, claims);
+  const { prompt, manifest } = assemble('privy', person.role, WONDER_MODEL, key, sources, claims, undefined, (source) => isMember(person.id, documentAcl(source.id)));
   const task = `${prompt}\n\nTask: the user asks about deal ${dealId}: ${question}. Reply with exactly a verdict (proceed, hold, decline) and where to route it (Associate, Partner, or null). Return nothing else.`;
   let attempts = 0;
   let result: { verdict: Verdict; responseId: string; usage: Usage } | null = null;
