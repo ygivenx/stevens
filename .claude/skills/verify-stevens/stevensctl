@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
+import datetime
 import json
 import os
+import re
 import shutil
 import signal
 import socket
@@ -44,6 +46,25 @@ def evidence_dir(name):
     path = os.path.join(instance_dir(name), 'evidence')
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def instance_data_dir(name):
+    return os.path.join(instance_dir(name), 'data')
+
+
+def sealed_env(name):
+    data = instance_data_dir(name)
+    return {
+        'STEVENS_DATA_DIR': data,
+        'STEVENS_VAULT_DIR': os.path.join(data, 'personal', 'vault'),
+        'STEVENS_VAULT_EXCLUDE': 'Archive',
+        'STEVENS_INBOX_DIR': os.path.join(data, 'personal', 'inbox'),
+        'STEVENS_CALENDAR_ICS': '',
+        'READWISE_TOKEN': '',
+        'STEVENS_FIRM_URL': 'http://localhost:8787',
+        'STEVENS_OWNER': 'p-alex',
+        'STEVENS_BACKFILL_DAYS': '3650',
+    }
 
 
 def port_free(port):
@@ -208,6 +229,8 @@ def cmd_stack(argv):
         print('stevensctl stack: run the local stack for one instance.\n')
         print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME] [--now ISO]\n')
         print('up starts npm run dev (yours :5173+:8788, firm :5174+:8787) and waits for health;')
+        print('the stack is sealed: STEVENS_DATA_DIR points at this instance, sources point')
+        print('at fixtures, and real tokens are unset, so verify flows never touch owner data;')
         print('down stops only this instance; logs tails its log; status prints health.\n')
         print('Examples:')
         print('  export STEVENS_VERIFY_INSTANCE=day2')
@@ -231,6 +254,16 @@ def cmd_stack(argv):
         plus('npm run dev > %s' % logpath)
         log = open(logpath, 'a')
         env = dict(os.environ)
+        data = instance_data_dir(name)
+        for processdir in ('firm', 'personal'):
+            processdir_path = os.path.join(data, processdir)
+            os.makedirs(processdir_path, exist_ok=True)
+            with open(os.path.join(processdir_path, 'meta-fake.json'), 'w') as f:
+                json.dump({'mode': 'normal'}, f)
+            with open(os.path.join(processdir_path, 'meta-calls.json'), 'w') as f:
+                json.dump({'count': 0}, f)
+        env.update(sealed_env(name))
+        plus('STEVENS_DATA_DIR=%s (sealed: fixtures only, real sources unset)' % data)
         if now:
             env['STEVENS_NOW'] = now
             plus('STEVENS_NOW=%s' % now)
@@ -287,6 +320,7 @@ def cmd_stack(argv):
         print('port 8788 (yours): %s' % ('free' if port_free(8788) else 'in use'))
         print('health firm :8787: %s' % ('ok' if server_healthy(8787) else 'down'))
         print('health yours :8788: %s' % ('ok' if server_healthy(8788) else 'down'))
+        print('data dir: %s' % instance_data_dir(name))
         return 0
     print('unknown stack verb: %s (see stevensctl stack --help)' % verb, file=sys.stderr)
     return 2
@@ -295,14 +329,15 @@ def cmd_stack(argv):
 def cmd_seed(argv):
     name = instance_name(argv)
     if name is None or '--help' in argv:
-        print('stevensctl seed: stage fixtures + fresh ledger for the local stack.\n')
-        print('Verifies fixtures/manifest.json, truncates both process ledgers, resets the')
-        print('Meta call counter, sets the fake to normal, clears derived caches.\n')
+        print('stevensctl seed: stage fixtures + fresh ledger for this instance.\n')
+        print('Verifies fixtures/manifest.json, rebuilds this instance vault from')
+        print('fixtures/personal/vault/, empties its inbox, truncates both process')
+        print('ledgers, resets the Meta call counter and sets the fake to normal.\n')
         print('Examples:')
         print('  stevensctl stack up && stevensctl seed')
         return 0
-    if not stack_healthy():
-        print('seed refuses: the local stack is not up (run stevensctl stack up first).', file=sys.stderr)
+    if not stack_running(name):
+        print('seed refuses: this instance stack is not up (run stevensctl stack up first).', file=sys.stderr)
         return 2
     manifest = os.path.join(ROOT, 'fixtures', 'manifest.json')
     if not os.path.exists(manifest):
@@ -313,9 +348,12 @@ def cmd_seed(argv):
         blob = os.path.join(ROOT, 'fixtures', entry['file'])
         if not os.path.exists(blob):
             return fail('fixture blob %s is missing; cannot seed' % entry['file'])
-    datadir = os.path.join(ROOT, 'data')
+    vault_src = os.path.join(ROOT, 'fixtures', 'personal', 'vault')
+    if not os.path.isdir(vault_src):
+        return fail('fixtures/personal/vault/ is missing; cannot seed')
+    datadir = instance_data_dir(name)
     os.makedirs(datadir, exist_ok=True)
-    plus('truncate both ledgers, clear databases and caches, fake mode normal')
+    plus('rebuild instance vault + inbox, truncate both ledgers, fake mode normal')
     for processdir in ('firm', 'personal'):
         processdir_path = os.path.join(datadir, processdir)
         os.makedirs(processdir_path, exist_ok=True)
@@ -327,11 +365,13 @@ def cmd_seed(argv):
             elif os.path.exists(stale_path):
                 os.remove(stale_path)
     inbox = os.path.join(datadir, 'personal', 'inbox')
+    if os.path.isdir(inbox):
+        shutil.rmtree(inbox)
     os.makedirs(inbox, exist_ok=True)
-    for inbox_name in os.listdir(inbox):
-        inbox_path = os.path.join(inbox, inbox_name)
-        if os.path.isfile(inbox_path):
-            os.remove(inbox_path)
+    vault = os.path.join(datadir, 'personal', 'vault')
+    if os.path.isdir(vault):
+        shutil.rmtree(vault)
+    shutil.copytree(vault_src, vault)
     for processdir in ('firm', 'personal'):
         with open(os.path.join(datadir, processdir, 'meta-calls.json'), 'w') as f:
             json.dump({'count': 0}, f)
@@ -519,8 +559,9 @@ def cmd_meta(argv):
         return 0
     if argv[0] == 'calls':
         total = 0
+        inst = instance_name(argv) or 'default'
         for processdir in ('firm', 'personal'):
-            path = os.path.join(ROOT, 'data', processdir, 'meta-calls.json')
+            path = os.path.join(instance_data_dir(inst), processdir, 'meta-calls.json')
             if os.path.exists(path):
                 with open(path) as f:
                     total += json.load(f).get('count', 0)
@@ -531,8 +572,9 @@ def cmd_meta(argv):
         if mode not in FAKE_MODES:
             print('unknown mode: %s (%s).' % (mode, '|'.join(FAKE_MODES)), file=sys.stderr)
             return 2
+        inst = instance_name(argv) or 'default'
         for processdir in ('firm', 'personal'):
-            processdatadir = os.path.join(ROOT, 'data', processdir)
+            processdatadir = os.path.join(instance_data_dir(inst), processdir)
             os.makedirs(processdatadir, exist_ok=True)
             with open(os.path.join(processdatadir, 'meta-fake.json'), 'w') as f:
                 json.dump({'mode': mode}, f)
@@ -594,11 +636,12 @@ def cmd_browser(argv):
         print('stevensctl browser: drive UI flows with headless Chromium.\n')
         print('Usage: stevensctl browser run <flow> [--instance NAME]')
         print('       stevensctl browser snapshot [--tab TAB] [--instance NAME]\n')
-        print('Flows: capture, brief, answer, inspector, role-switch, release, approve.')
+        print('Flows: associate-today, associate-ask, associate-share, associate-receipts,')
+        print('associate-captures, partner-inbox, partner-approve, partner-sources, demo-two-screens.')
         print('Precondition: seeded stack with the pipeline run (ingest through ask).\n')
         print('Examples:')
-        print('  stevensctl browser run brief')
-        print('  stevensctl browser snapshot --tab Inspector')
+        print('  stevensctl browser run associate-today')
+        print('  stevensctl browser snapshot')
         return 0
     if not stack_healthy():
         print('browser refuses: the local stack is not up.', file=sys.stderr)
@@ -628,6 +671,9 @@ def cmd_cleanup(argv):
     logpath = stack_logfile(name)
     if os.path.exists(logpath):
         os.remove(logpath)
+    statedir = instance_data_dir(name)
+    if os.path.isdir(statedir):
+        shutil.rmtree(statedir)
     print('cleanup: instance %s stopped, evidence kept at %s' % (name, evidence_dir(name)))
     return 0
 
@@ -662,10 +708,10 @@ def cmd_report(argv):
 
 def cmd_drop(argv):
     if '--help' in argv or not argv:
-        print('stevensctl drop: land a glasses capture in the personal inbox.\n')
-        print('Usage: stevensctl drop talk|slide\n')
-        print('Copies the staged fixture into data/personal/inbox/; the watcher')
-        print('ingests it with no UI action.\n')
+        print('stevensctl drop: land a glasses capture in this instance inbox.\n')
+        print('Usage: stevensctl drop talk|slide [--instance NAME]\n')
+        print('Copies the staged fixture into this instance inbox/; the watcher')
+        print('ingests it with no UI action. Needs this instance stack up.\n')
         print('Examples:')
         print('  stevensctl drop talk')
         print('  stevensctl drop slide')
@@ -675,18 +721,276 @@ def cmd_drop(argv):
     if name not in fixtures:
         print('unknown capture: %s (talk|slide).' % name, file=sys.stderr)
         return 2
-    if not stack_healthy():
-        print('drop refuses: the local stack is not up (run stevensctl stack up first).', file=sys.stderr)
+    inst = instance_name(argv) or 'default'
+    if not stack_running(inst):
+        print('drop refuses: this instance stack is not up (run stevensctl stack up first).', file=sys.stderr)
         return 2
     src = os.path.join(ROOT, 'fixtures', 'personal', fixtures[name])
     if not os.path.exists(src):
         return fail('fixture %s is missing; cannot drop' % fixtures[name])
-    inbox = os.path.join(ROOT, 'data', 'personal', 'inbox')
+    inbox = os.path.join(instance_data_dir(inst), 'personal', 'inbox')
     os.makedirs(inbox, exist_ok=True)
     dest = os.path.join(inbox, fixtures[name])
     plus('cp %s -> %s' % (src, dest))
     shutil.copyfile(src, dest)
     print('drop: %s landed in the glasses inbox' % fixtures[name])
+    return 0
+
+
+INIT_FLAGS = [
+    ('--data-dir', 'STEVENS_DATA_DIR'),
+    ('--vault-dir', 'STEVENS_VAULT_DIR'),
+    ('--vault-exclude', 'STEVENS_VAULT_EXCLUDE'),
+    ('--inbox-dir', 'STEVENS_INBOX_DIR'),
+    ('--readwise-token', 'READWISE_TOKEN'),
+    ('--calendar-ics', 'STEVENS_CALENDAR_ICS'),
+    ('--firm-url', 'STEVENS_FIRM_URL'),
+    ('--owner', 'STEVENS_OWNER'),
+    ('--backfill-days', 'STEVENS_BACKFILL_DAYS'),
+    ('--daily-tokens', 'STEVENS_DAILY_TOKENS'),
+]
+
+
+def default_data_dir():
+    home = os.path.expanduser('~')
+    if sys.platform == 'darwin':
+        return os.path.join(home, 'Library', 'Application Support', 'Stevens')
+    xdg = os.environ.get('XDG_DATA_HOME') or os.path.join(home, '.local', 'share')
+    return os.path.join(xdg, 'stevens')
+
+
+def read_env_values():
+    env_path = os.path.join(ROOT, '.env.local')
+    entries = {}
+    if not os.path.exists(env_path):
+        return entries
+    with open(env_path) as f:
+        for line in f:
+            if '=' in line and not line.startswith('#'):
+                key, value = line.strip().split('=', 1)
+                entries[key] = value
+    return entries
+
+
+def write_env_updates(updates):
+    env_path = os.path.join(ROOT, '.env.local')
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            lines = f.read().splitlines()
+    seen = set()
+    out = []
+    for line in lines:
+        if '=' in line and not line.startswith('#'):
+            key = line.split('=', 1)[0]
+            if key in updates:
+                out.append('%s=%s' % (key, updates[key]))
+                seen.add(key)
+                continue
+        out.append(line)
+    for key, value in updates.items():
+        if key not in seen:
+            out.append('%s=%s' % (key, value))
+    with open(env_path, 'w') as f:
+        f.write('\n'.join(out) + '\n')
+
+
+def vault_counts(root, excludes):
+    taken = 0
+    skipped = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+        for filename in filenames:
+            if not filename.endswith('.md'):
+                continue
+            rel = os.path.relpath(os.path.join(dirpath, filename), root)
+            if any(rel == prefix or rel.startswith(prefix + '/') for prefix in excludes):
+                skipped += 1
+                continue
+            try:
+                with open(os.path.join(dirpath, filename)) as f:
+                    head = f.read(2000)
+            except OSError:
+                skipped += 1
+                continue
+            if re.match(r'^---\r?\n', head):
+                front = head.split('---', 2)
+                if len(front) > 2 and re.search(r'(?m)^stevens:\s*skip\s*$', front[1]):
+                    skipped += 1
+                    continue
+            taken += 1
+    return taken, skipped
+
+
+def calendar_week_count(body):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    end = now + datetime.timedelta(days=7)
+    count = 0
+    for match in re.finditer(r'DTSTART[^:]*:(\d{8}T\d{6})(Z?)', body):
+        stamp, zoned = match.group(1), match.group(2)
+        try:
+            moment = datetime.datetime.strptime(stamp, '%Y%m%dT%H%M%S')
+        except ValueError:
+            continue
+        if zoned:
+            moment = moment.replace(tzinfo=datetime.timezone.utc)
+        else:
+            moment = moment.astimezone().astimezone(datetime.timezone.utc)
+        if now <= moment <= end:
+            count += 1
+    return count
+
+
+def cmd_init(argv):
+    if '--help' in argv:
+        print('stevensctl init: configure Stevens for a real owner.\n')
+        print('Usage: stevensctl init [--data-dir DIR] [--vault-dir DIR] [--vault-exclude CSV]')
+        print('  [--inbox-dir DIR] [--readwise-token TOKEN] [--calendar-ics URL] [--firm-url URL|off]')
+        print('  [--owner NAME] [--backfill-days N] [--daily-tokens N]\n')
+        print('Writes .env.local (merged, other keys kept), checks MODEL_API_KEY plus each')
+        print('source, and prints one line per source without ever printing a token or URL.')
+        print('Missing values prompt in a terminal; elsewhere they are an error. --firm-url')
+        print('off (the default) means solo mode: no firm checks run.\n')
+        print('Examples:')
+        print('  stevensctl init --vault-dir ~/notes --owner "Alex Rivera"')
+        print('  stevensctl init --firm-url http://localhost:8787 --owner p-alex')
+        return 0
+    flag_for = {flag: key for flag, key in INIT_FLAGS}
+    flagged = {}
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if '=' in arg and arg.split('=', 1)[0] in flag_for:
+            flag, value = arg.split('=', 1)
+            flagged[flag_for[flag]] = value
+            i += 1
+        elif arg in flag_for:
+            if i + 1 >= len(argv):
+                print('init: %s needs a value.' % arg, file=sys.stderr)
+                return 2
+            flagged[flag_for[arg]] = argv[i + 1]
+            i += 2
+        else:
+            print('unknown init flag: %s (see stevensctl init --help).' % arg, file=sys.stderr)
+            return 2
+    current = read_env_values()
+    values = dict(current)
+    values.update(flagged)
+    if 'STEVENS_DATA_DIR' not in values or not values['STEVENS_DATA_DIR']:
+        values['STEVENS_DATA_DIR'] = default_data_dir()
+    if 'STEVENS_FIRM_URL' not in values or not values['STEVENS_FIRM_URL']:
+        values['STEVENS_FIRM_URL'] = 'off'
+    if 'STEVENS_BACKFILL_DAYS' not in values or not values['STEVENS_BACKFILL_DAYS']:
+        values['STEVENS_BACKFILL_DAYS'] = '90'
+    if 'STEVENS_DAILY_TOKENS' not in values or not values['STEVENS_DAILY_TOKENS']:
+        values['STEVENS_DAILY_TOKENS'] = '3000000'
+    tty = sys.stdin.isatty()
+    for key, label in (('STEVENS_VAULT_DIR', 'vault dir'), ('STEVENS_OWNER', 'owner name')):
+        if key not in values or not values[key]:
+            if not tty:
+                print('init needs --%s (or run in a terminal).' % label.replace(' ', '-'), file=sys.stderr)
+                return 2
+            values[key] = input('%s: ' % label).strip()
+            if not values[key]:
+                print('init: %s is required.' % label, file=sys.stderr)
+                return 2
+    if tty:
+        for key, label in (('STEVENS_INBOX_DIR', 'inbox dir (empty skips)'),
+                            ('STEVENS_VAULT_EXCLUDE', 'vault exclude prefixes (empty skips)'),
+                            ('READWISE_TOKEN', 'Readwise token (empty skips)'),
+                            ('STEVENS_CALENDAR_ICS', 'calendar ICS URL (empty skips)')):
+            if key not in values or not values[key]:
+                values[key] = input('%s: ' % label).strip()
+    for key in ('STEVENS_DATA_DIR', 'STEVENS_VAULT_DIR', 'STEVENS_INBOX_DIR'):
+        if values.get(key):
+            values[key] = os.path.abspath(os.path.expanduser(values[key]))
+    updates = {flag: values[flag] for _, flag in INIT_FLAGS if values.get(flag)}
+    plus('write %d keys to .env.local (other keys kept)' % len(updates))
+    write_env_updates(updates)
+    failed = []
+
+    def report(source, ok, detail):
+        print('%s: %s %s' % (source, 'OK' if ok else 'FAIL', detail))
+        if not ok:
+            failed.append(source)
+
+    key = read_env_values().get('MODEL_API_KEY', '')
+    if not key:
+        report('key', False, 'MODEL_API_KEY is not set; add it to .env.local by hand')
+    else:
+        try:
+            req = urllib.request.Request('https://api.meta.ai/v1/models', headers={'Authorization': 'Bearer ' + key})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                listed = [m['id'] for m in json.load(resp)['data']]
+            missing = [m for m in EXPECTED_MODELS if m not in listed]
+            if missing:
+                report('key', False, 'GET /v1/models lacks %s' % ', '.join(missing))
+            else:
+                report('key', True, 'GET /v1/models lists the SPEC models')
+        except Exception as e:
+            report('key', False, 'GET /v1/models failed (%s)' % e)
+    vault = values.get('STEVENS_VAULT_DIR', '')
+    if not os.path.isdir(vault):
+        report('vault', False, '%s is not a directory' % vault)
+    else:
+        excludes = [p for p in values.get('STEVENS_VAULT_EXCLUDE', '').split(',') if p.strip()]
+        taken, skipped = vault_counts(vault, [p.strip().rstrip('/') for p in excludes])
+        report('vault', True, '%d notes (%d excluded) at %s' % (taken, skipped, vault))
+    inbox = values.get('STEVENS_INBOX_DIR', '')
+    if inbox:
+        try:
+            os.makedirs(inbox, exist_ok=True)
+        except OSError as e:
+            report('inbox', False, '%s (%s)' % (inbox, e))
+        else:
+            if not os.access(inbox, os.W_OK):
+                report('inbox', False, '%s is not writable' % inbox)
+            else:
+                waiting = sum(1 for n in os.listdir(inbox) if os.path.isfile(os.path.join(inbox, n)))
+                report('inbox', True, '%s (%d files waiting)' % (inbox, waiting))
+    else:
+        print('inbox: SKIP not configured')
+    token = values.get('READWISE_TOKEN', '')
+    if token:
+        try:
+            req = urllib.request.Request('https://readwise.io/api/v2/auth/', headers={'Authorization': 'Token ' + token})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                if resp.status == 204:
+                    report('readwise', True, 'live account reachable')
+                else:
+                    report('readwise', False, 'auth returned %d' % resp.status)
+        except Exception as e:
+            report('readwise', False, 'auth failed (%s)' % e)
+    else:
+        print('readwise: SKIP not configured (export file)')
+    calendar = values.get('STEVENS_CALENDAR_ICS', '')
+    if calendar:
+        try:
+            with urllib.request.urlopen(calendar, timeout=20) as resp:
+                count = calendar_week_count(resp.read().decode('utf-8', 'replace'))
+            report('calendar', True, '%d events in the next 7 days' % count)
+        except Exception as e:
+            report('calendar', False, 'fetch failed (%s)' % e)
+    else:
+        print('calendar: SKIP not configured')
+    firm = values.get('STEVENS_FIRM_URL', 'off')
+    if not firm or firm == 'off':
+        print('firm: SKIP solo mode (STEVENS_FIRM_URL=off)')
+    else:
+        agent_token = read_env_values().get('STEVENS_AGENT_TOKEN', '')
+        if not agent_token:
+            report('firm', False, 'STEVENS_AGENT_TOKEN is not set in .env.local')
+        else:
+            try:
+                req = urllib.request.Request(firm.rstrip('/') + '/agent/me', headers={'X-Stevens-Agent': agent_token})
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    person = json.load(resp)
+                report('firm', True, '%s as %s' % (firm, person.get('name', person.get('id', '?'))))
+            except Exception as e:
+                report('firm', False, '%s unreachable (%s)' % (firm, e))
+    if failed:
+        return fail('init: %s' % ', '.join(failed))
+    print('init: PASS (%s)' % ('solo mode' if firm == 'off' else 'connected to ' + firm))
     return 0
 
 
@@ -713,7 +1017,8 @@ def main(argv):
         print('  cleanup   stop this instance, keep evidence')
         print('  report    print the report shape')
         print('  meta      fake --mode ... | calls')
-        print('  drop      land talk|slide in the glasses inbox\n')
+        print('  drop      land talk|slide in the glasses inbox')
+        print('  init      configure Stevens for a real owner\n')
         print('Examples:')
         print('  stevensctl doctor')
         print('  stevensctl stack up && stevensctl seed')
@@ -742,6 +1047,8 @@ def main(argv):
         return cmd_cleanup(argv[1:])
     if name == 'report':
         return cmd_report(argv[1:])
+    if name == 'init':
+        return cmd_init(argv[1:])
     if name in PENDING:
         return cmd_pending(name, argv[1:])
     print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)
