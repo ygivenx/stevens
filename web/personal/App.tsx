@@ -277,7 +277,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
   onReceipts: (draftId: string) => void;
   onToast: (message: string) => void;
 }) {
-  const brief = state.drafts.find((d) => d.kind === 'brief' && d.dealId === meeting.dealId);
+  const brief = state.drafts.find((d) => d.id === meeting.briefId) ?? state.drafts.find((d) => d.kind === 'brief' && d.dealId === meeting.dealId);
   const answers = state.drafts.filter((d) => d.kind === 'answer' && d.dealId === meeting.dealId);
   const [question, setQuestion] = useState('Should we take the second meeting?');
   const [asking, setAsking] = useState(false);
@@ -612,7 +612,7 @@ function CapturesView({ state, onShare, onToast }: {
   onShare: (claimId: string, dealId: string) => void;
   onToast: (message: string) => void;
 }) {
-  const [filter, setFilter] = useState<'all' | 'glasses' | 'readwise' | 'notes'>('all');
+  const [filter, setFilter] = useState<'all' | 'glasses' | 'readwise' | 'vault'>('all');
   const [bundles, setBundles] = useState<Map<string, ItemBundle>>(new Map());
   useEffect(() => {
     if (!state) return;
@@ -656,7 +656,7 @@ function CapturesView({ state, onShare, onToast }: {
         ))}
       </div>
       <div className="flex gap-2" role="tablist" aria-label="Filter">
-        {(['all', 'glasses', 'readwise', 'notes'] as const).map((name) => (
+        {(['all', 'glasses', 'readwise', 'vault'] as const).map((name) => (
           <button
             key={name}
             onClick={() => setFilter(name)}

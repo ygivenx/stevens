@@ -3,6 +3,7 @@ import type { Claim, Draft, Item, Meeting, Person, Receipt, Role, Segment, Sourc
 export interface PersonalState {
   owner: Person;
   now: string;
+  vaultName: string;
   status: { line: string; busy: boolean };
   adapters: { origin: string; label: string; lastSyncAt: string | null; simulated?: string }[];
   items: Item[];
