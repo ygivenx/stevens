@@ -39,7 +39,7 @@ export async function writeMeetingBrief(dealId: string, company: string, slice: 
   try {
     written = await writeFn(task, claims, sources);
   } catch (err) {
-    append({ at: new Date().toISOString(), type: 'attempt.failed', stageKey: key, model: WONDER_MODEL, error: err instanceof Error ? err.message : String(err) });
+    append({ at: new Date().toISOString(), type: 'attempt.failed', stageKey: key, stage: 'brief', model: WONDER_MODEL, error: err instanceof Error ? err.message : String(err), dealId });
     throw err;
   }
   const resolved = resolveSentences(written.sentences, claimById, sourceById);
@@ -74,7 +74,7 @@ export async function writeAnswer(questionId: string, dealId: string, question: 
   try {
     written = await writeFn(task, claims, sources);
   } catch (err) {
-    append({ at: new Date().toISOString(), type: 'attempt.failed', stageKey: key, model: WONDER_MODEL, error: err instanceof Error ? err.message : String(err) });
+    append({ at: new Date().toISOString(), type: 'attempt.failed', stageKey: key, stage: 'answer', model: WONDER_MODEL, error: err instanceof Error ? err.message : String(err), dealId, questionId });
     throw err;
   }
   const resolved = resolveSentences(written.sentences, claimById, sourceById);

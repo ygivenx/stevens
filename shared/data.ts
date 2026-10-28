@@ -107,6 +107,6 @@ export type LedgerEvent = { at: string } & (
   | { type: 'sync.completed'; adapter: Origin; added: number; cursor?: string }
   | { type: 'context.fetched'; dealId: string; purpose: Purpose; sourceIds: string[]; titles?: { id: string; title: string }[] }
   | { type: 'context.served'; personId: string; dealId: string; purpose: Purpose; sourceIds: string[] }
-  | { type: 'attempt.failed'; stageKey: string; model: string; error: string; usage?: Usage }
+  | { type: 'attempt.failed'; stageKey: string; stage?: string; model: string; error: string; usage?: Usage; dealId?: string; questionId?: string }
   | { type: 'role.switched'; role: Role }
   | { type: 'draft.approved' | 'draft.rejected'; draftId: string; by: Role });
