@@ -17,6 +17,7 @@ Stevens · yours (:5173 → :8788) is the Associate's product: Today with a self
 | associate-receipts | Per-draft drawer: calls, what went in, what was held back, rule ids, tokens | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, `server/personal/receipts.ts`, browser `associate-receipts` PASS |
 | associate-sources | Sources section lists glasses, Readwise, vault, calendar, and the firm with sync time, errors, and a solo banner | beta | UI+API | - | not driven | `web/personal/App.tsx`, `server/personal/routes.test.ts` |
 | associate-solo | Solo: ask disclosure says the notebook answers, briefs head From your notes and reading, share and escalation rows never appear, calendar meetings read From your calendar | beta | UI+API | - | not driven | `web/personal/App.tsx`, `server/personal/routes.test.ts` |
+| associate-brief-failed | A meeting whose brief write failed shows Couldn't write the brief instead of a forever skeleton | beta | UI+API | - | not driven | `web/personal/App.tsx`, `server/personal/state.ts`, `server/personal/solo.test.ts` |
 
 ## How to get to it (user POV)
 

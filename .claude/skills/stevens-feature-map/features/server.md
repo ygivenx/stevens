@@ -15,6 +15,8 @@ The server owns the boundary: day 9b runs two Hono processes from one shared fac
 | server-solo-routes | Solo routes: /api/state reports solo with five sources, /api/ask accepts an empty dealId, /api/share answers 409 | api-only | API | - | not driven | `server/personal/index.ts`, `server/personal/routes.test.ts` |
 | server-firm-rebuild | The firm rebuilds `firm.db` from its ledger with Postgres stopped and zero calls, then syncs every 60 seconds | api-only | API | - | 2026-10-28 | `server/firm/sync.ts`, `server/firm/index.ts`, `server/firm/postgres.test.ts` (live rebuild) |
 | server-demo-replay | `record-replay` records the fixture-only flow to `fixtures/replay/` and refuses owner sources; `npm run demo` serves it with no key and no Postgres; both status lines read Replaying a recorded run | beta | UI+API | - | 2026-10-28 | `scripts/demo.ts`, `fixtures/replay/`, alt-port replay drive 2026-10-28 |
+| server-failure-drills | 16 failure drills green: firm down/up (hold, queued, sent on return), meta fail/garbage/empty/slow, readwise down, CRM unreachable with snapshot kept | beta | infra | - | 2026-10-28 | `.claude/skills/verify-stevens/drills.py`, `stevensctl firm down\|up` |
+| server-firm-timeout | Firm agent calls time out at 120s (STEVENS_FIRM_TIMEOUT_MS overrides) instead of hanging on a black hole | api-only | API | - | not driven | `server/personal/firm-client.ts`, `server/personal/firm-client.test.ts` |
 
 ## How to get to it (user POV)
 
