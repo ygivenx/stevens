@@ -1,0 +1,24 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Stevens//Fixtures//EN
+BEGIN:VEVENT
+UID:cal-helios-followup-1
+DTSTAMP:20261027T120000Z
+DTSTART:20261029T130000Z
+DTEND:20261029T133000Z
+SUMMARY:Helios follow-up with Priya
+DESCRIPTION:Thirty minutes with CFO Priya Nair ahead of the second meeting. Get the logo churn number and the definition in her words.
+LOCATION:Call
+ATTENDEE:mailto:priya.nair@example.com
+ORGANIZER:mailto:alex.rivera@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:cal-dentist-1
+DTSTAMP:20261027T120000Z
+DTSTART:20261105T140000Z
+DTEND:20261105T150000Z
+SUMMARY:Dentist
+DESCRIPTION:Routine cleaning. No prep needed.
+LOCATION:Downtown Dental
+END:VEVENT
+END:VCALENDAR
