@@ -212,7 +212,12 @@ export function setAdapterState(adapter: string, state: { cursor?: string | null
   db.prepare(
     `insert into adapter_state (adapter, cursor, last_sync_at, last_error) values (?, ?, ?, ?)
      on conflict(adapter) do update set cursor = excluded.cursor, last_sync_at = excluded.last_sync_at, last_error = excluded.last_error`,
-  ).run(adapter, state.cursor ?? current?.cursor ?? null, state.lastSyncAt ?? current?.lastSyncAt ?? null, state.lastError ?? current?.lastError ?? null);
+  ).run(
+    adapter,
+    state.cursor !== undefined ? state.cursor : (current?.cursor ?? null),
+    state.lastSyncAt !== undefined ? state.lastSyncAt : (current?.lastSyncAt ?? null),
+    state.lastError !== undefined ? state.lastError : (current?.lastError ?? null),
+  );
 }
 
 export function allPersonalClaims(): Claim[] {

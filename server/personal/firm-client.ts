@@ -22,10 +22,16 @@ export interface FirmPerson {
   role: string;
 }
 
+export function firmTimeoutMs(): number {
+  const raw = Number(process.env.STEVENS_FIRM_TIMEOUT_MS ?? 120000);
+  return Number.isFinite(raw) && raw > 0 ? raw : 120000;
+}
+
 async function agent<T>(path: string, init?: RequestInit): Promise<T> {
   if (soloMode()) throw new Error('solo mode: no firm configured');
   const res = await fetch(firmUrl() + path, {
     ...init,
+    signal: AbortSignal.timeout(firmTimeoutMs()),
     headers: { 'X-Stevens-Agent': agentToken(), 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
   if (!res.ok) throw new Error('firm ' + path + ' failed with ' + res.status);
