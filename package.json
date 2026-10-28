@@ -13,6 +13,7 @@
     "dev:web:personal": "npm run dev:personal --workspace web",
     "dev:web:firm": "npm run dev:firm --workspace web",
     "build": "npm run build --workspace web && tsc -p tsconfig.server.json",
+    "demo": "NODE_OPTIONS=--disable-warning=ExperimentalWarning npx tsx scripts/demo.ts",
     "start": "concurrently -n firm,personal \"npm run start:firm\" \"npm run start:personal\"",
     "start:firm": "node dist-server/server/firm/index.js",
     "start:personal": "node dist-server/server/personal/index.js",

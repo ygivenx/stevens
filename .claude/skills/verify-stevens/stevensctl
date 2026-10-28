@@ -1239,6 +1239,201 @@ def cmd_crm(argv):
     print('crm %s: %s %s (applies at the next connector sync)' % (verb, document_id, principal))
     return 0
 
+
+REPLAY_NOW = '2026-10-28T14:00:00-04:00'
+RECORD_FIRM_PORT = 18887
+RECORD_PERSONAL_PORT = 18888
+
+
+def record_http(method, port, path, data=None, viewer=None):
+    url = 'http://localhost:%d%s' % (port, path)
+    body = json.dumps(data).encode() if data is not None else None
+    headers = {}
+    if data is not None:
+        headers['Content-Type'] = 'application/json'
+    if viewer:
+        headers['X-Viewer-Id'] = viewer
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status, resp.read().decode()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+
+
+def record_state(port, viewer=None):
+    status, body = record_http('GET', port, '/api/state', viewer=viewer)
+    if status != 200:
+        raise RuntimeError('GET :%d/api/state -> %d' % (port, status))
+    return json.loads(body)
+
+
+def cmd_record_replay(argv):
+    if '--help' in argv:
+        print('stevensctl record-replay: record the fixture-only demo ledgers.\n')
+        print('Runs the full flow (sync, talk, slide, brief, ask, share, approve) against')
+        print('a fresh data dir with fixtures only, then commits nothing: it writes')
+        print('fixtures/replay/{firm,personal}.jsonl plus now.txt for review.\n')
+        print('Refuses to run when owner sources are configured: a non-empty READWISE_TOKEN')
+        print('or STEVENS_CALENDAR_ICS, or a STEVENS_VAULT_DIR outside /tmp/stevens-verify.')
+        print('Needs Postgres up (stevensctl crm-db up) and ports 18887/18888 free.\n')
+        print('Examples:')
+        print('  stevensctl record-replay')
+        return 0
+    if os.environ.get('READWISE_TOKEN'):
+        print('record-replay refuses: READWISE_TOKEN is set (owner data).', file=sys.stderr)
+        return 2
+    if os.environ.get('STEVENS_CALENDAR_ICS'):
+        print('record-replay refuses: STEVENS_CALENDAR_ICS is set (owner data).', file=sys.stderr)
+        return 2
+    vault = os.environ.get('STEVENS_VAULT_DIR')
+    if vault and not vault.startswith('/tmp/stevens-verify/'):
+        print('record-replay refuses: STEVENS_VAULT_DIR points outside /tmp/stevens-verify.', file=sys.stderr)
+        return 2
+    for port in (RECORD_FIRM_PORT, RECORD_PERSONAL_PORT):
+        if not port_free(port):
+            return fail('port %d is held; record-replay needs 18887 and 18888 free' % port)
+    record = os.path.join('/tmp/stevens-verify', 'record')
+    data = os.path.join(record, 'data')
+    if os.path.isdir(record):
+        shutil.rmtree(record)
+    for processdir in ('firm', 'personal'):
+        processdir_path = os.path.join(data, processdir)
+        os.makedirs(processdir_path, exist_ok=True)
+        with open(os.path.join(processdir_path, 'meta-fake.json'), 'w') as f:
+            json.dump({'mode': 'normal'}, f)
+        with open(os.path.join(processdir_path, 'meta-calls.json'), 'w') as f:
+            json.dump({'count': 0}, f)
+    inbox = os.path.join(data, 'personal', 'inbox')
+    os.makedirs(inbox, exist_ok=True)
+    vault_dir = os.path.join(data, 'personal', 'vault')
+    shutil.copytree(os.path.join(ROOT, 'fixtures', 'personal', 'vault'), vault_dir)
+    hour_ago = time.time() - 3600
+    for root, _, files in os.walk(vault_dir):
+        for name in files:
+            os.utime(os.path.join(root, name), (hour_ago, hour_ago))
+    plus('npx tsx scripts/firm-crm-setup.ts')
+    setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
+    print(setup.stdout, end='')
+    if setup.returncode != 0:
+        return fail('firm-crm-setup failed; run stevensctl crm-db up first')
+    env = dict(os.environ)
+    env.update({
+        'STEVENS_DATA_DIR': data,
+        'STEVENS_NOW': REPLAY_NOW,
+        'STEVENS_DEV': '1',
+        'STEVENS_FIRM_URL': 'http://localhost:%d' % RECORD_FIRM_PORT,
+        'STEVENS_AGENT_TOKEN': 'test-record',
+        'STEVENS_VAULT_DIR': vault_dir,
+        'STEVENS_VAULT_EXCLUDE': 'Archive',
+        'STEVENS_INBOX_DIR': inbox,
+        'STEVENS_CALENDAR_ICS': '',
+        'READWISE_TOKEN': '',
+        'STEVENS_OWNER': 'p-alex',
+        'FIRM_PORT': str(RECORD_FIRM_PORT),
+        'PERSONAL_PORT': str(RECORD_PERSONAL_PORT),
+        'NODE_OPTIONS': '--disable-warning=ExperimentalWarning',
+    })
+    log = open(os.path.join(record, 'servers.log'), 'a')
+    procs = []
+    try:
+        for entry in ('server/firm/index.ts', 'server/personal/index.ts'):
+            plus('npx tsx %s' % entry)
+            procs.append(subprocess.Popen(['npx', 'tsx', entry], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env))
+        for port in (RECORD_FIRM_PORT, RECORD_PERSONAL_PORT):
+            for _ in range(60):
+                try:
+                    status, _ = record_http('GET', port, '/api/health')
+                    if status == 200:
+                        break
+                except Exception:
+                    pass
+                time.sleep(2)
+            else:
+                return fail('server :%d never turned healthy; see %s/servers.log' % (port, record))
+        for name in ('talk.wav', 'slide.jpg'):
+            shutil.copyfile(os.path.join(ROOT, 'fixtures', 'personal', name), os.path.join(inbox, name))
+        plus('dropped talk.wav and slide.jpg; waiting for ready')
+        state = None
+        for _ in range(150):
+            state = record_state(RECORD_PERSONAL_PORT)
+            ready = [item['originId'] for item in state['items'] if item['status'] == 'ready' and item['origin'] == 'glasses']
+            if 'talk.wav' in ready and 'slide.jpg' in ready:
+                break
+            time.sleep(2)
+        else:
+            return fail('talk and slide never reached ready; see %s/servers.log' % record)
+        plus('captures ready; waiting for the Helios brief')
+        briefed = None
+        for _ in range(120):
+            state = record_state(RECORD_PERSONAL_PORT)
+            briefed = [meeting for meeting in state['meetings'] if meeting.get('briefId')]
+            if briefed:
+                break
+            time.sleep(2)
+        else:
+            return fail('no meeting brief appeared; see %s/servers.log' % record)
+        plus('POST /api/ask (helios)')
+        status, body = record_http('POST', RECORD_PERSONAL_PORT, '/api/ask',
+                                   {'dealId': 'helios', 'question': 'Should we take the second meeting?'})
+        if status != 202:
+            return fail('ask failed: %d %s' % (status, body))
+        question_id = json.loads(body)['questionId']
+        plus('waiting for the answer and the escalation')
+        for _ in range(120):
+            state = record_state(RECORD_PERSONAL_PORT)
+            answers = [draft for draft in state['drafts'] if draft['kind'] == 'answer' and draft.get('questionId') == question_id]
+            escalated = [e for e in state['escalations'] if e['questionId'] == question_id and e['status'] == 'sent']
+            if answers and escalated:
+                break
+            time.sleep(2)
+        else:
+            return fail('answer or escalation never landed; see %s/servers.log' % record)
+        claim_id = state['claims'][0]['id']
+        plus('POST /api/share/%s (helios)' % claim_id)
+        status, body = record_http('POST', RECORD_PERSONAL_PORT, '/api/share/' + claim_id, {'dealId': 'helios'})
+        if status != 201:
+            return fail('share failed: %d %s' % (status, body))
+        plus('waiting for the release')
+        for _ in range(60):
+            firm = record_state(RECORD_FIRM_PORT, viewer='p-morgan')
+            if any(entry['kind'] == 'released-quote' for entry in firm['inbox']):
+                break
+            time.sleep(2)
+        else:
+            return fail('release never reached the firm inbox; see %s/servers.log' % record)
+        decisions = [draft for draft in firm['drafts'] if draft['kind'] == 'decision']
+        if not decisions:
+            return fail('no decision draft to approve; see %s/servers.log' % record)
+        plus('POST /api/approve/%s as p-morgan' % decisions[0]['id'])
+        status, body = record_http('POST', RECORD_FIRM_PORT, '/api/approve/' + decisions[0]['id'], {}, viewer='p-morgan')
+        if status != 200:
+            return fail('approve failed: %d %s' % (status, body))
+    finally:
+        for proc in procs:
+            try:
+                os.killpg(proc.pid, signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
+    replay = os.path.join(ROOT, 'fixtures', 'replay')
+    os.makedirs(replay, exist_ok=True)
+    for processdir, name in (('firm', 'firm.jsonl'), ('personal', 'personal.jsonl')):
+        with open(os.path.join(data, processdir, 'ledger.jsonl')) as f:
+            content = f.read()
+        for banned in ('/Users/', '/home/', 'postgres://', 'READWISE_TOKEN'):
+            if banned in content:
+                return fail('recorded %s mentions %s; refusing to write it' % (name, banned))
+        content = content.replace(inbox + '/', 'fixtures/personal/')
+        if '/tmp/' in content:
+            return fail('recorded %s still mentions /tmp; refusing to write it' % name)
+        with open(os.path.join(replay, name), 'w') as f:
+            f.write(content)
+        plus('wrote fixtures/replay/%s' % name)
+    with open(os.path.join(replay, 'now.txt'), 'w') as f:
+        f.write(REPLAY_NOW + '\n')
+    print('record-replay: fixtures/replay written from a fixture-only run; review and commit it')
+    return 0
+
 def main(argv):
     if not argv or argv[0] in ('--help', '-h', 'help'):
         print('stevensctl: verify Stevens end to end.\n')
@@ -1257,7 +1452,8 @@ def main(argv):
         print('  drop      land talk|slide in the glasses inbox')
         print('  init      configure Stevens for a real owner')
         print('  crm-db    up|status the Postgres firm CRM sandbox')
-        print('  crm       grant|revoke a document principal (dev drill)\n')
+        print('  crm       grant|revoke a document principal (dev drill)')
+        print('  record-replay  record the fixture-only demo ledgers\n')
         print('Examples:')
         print('  stevensctl doctor')
         print('  stevensctl stack up && stevensctl seed')
@@ -1292,6 +1488,8 @@ def main(argv):
         return cmd_crm_db(argv[1:])
     if name == 'crm':
         return cmd_crm(argv[1:])
+    if name == 'record-replay':
+        return cmd_record_replay(argv[1:])
     if name in PENDING:
         return cmd_pending(name, argv[1:])
     print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)

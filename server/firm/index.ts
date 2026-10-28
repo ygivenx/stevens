@@ -175,6 +175,10 @@ export const app = createApp({
 });
 
 export function bootFirm(): () => void {
+  if (process.env.STEVENS_REPLAY === '1') {
+    void ensureFirmDb(readFirmLedger()).catch(() => {});
+    return () => {};
+  }
   void ensureFirmDb(readFirmLedger())
     .then(() => runConnectorSync())
     .catch(() => {});

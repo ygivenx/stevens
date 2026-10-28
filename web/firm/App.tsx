@@ -191,6 +191,7 @@ function TopBar({ state, people, onSwitch }: { state: FirmState | null; people: 
           ))}
         </div>
       )}
+      {state && <div className="mt-3"><StatusLine line={state.status.line} busy={state.status.busy} /></div>}
     </header>
   );
 }

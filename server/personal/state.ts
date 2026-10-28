@@ -99,6 +99,7 @@ function sourceEntries(firmReachable: boolean, checkedAt: string): PersonalState
 }
 
 function statusLine(items: Item[], firmReachable: boolean, lastBriefAt: string | null): { line: string; busy: boolean } {
+  if (process.env.STEVENS_REPLAY === '1') return { line: 'Replaying a recorded run', busy: false };
   const pending = pendingInboxTitle(items);
   if (pending) return { line: 'Reading the ' + pending + '…', busy: true };
   try {

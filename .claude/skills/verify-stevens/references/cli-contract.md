@@ -60,6 +60,10 @@ Idempotent bootstrap of the Postgres firm CRM inside the `pw` sandbox, and only 
 
 Dev drills on CRM document grants (`STEVENS_DEV=1` only). The change takes effect at the next connector sync, within 60 seconds. (v3.1: day R3.)
 
+### record-replay
+
+Runs the full fixture-only flow (CRM sync, talk, slide, brief, ask, escalation, share, approve) against a fresh data dir on ports 18887/18888, then writes `fixtures/replay/{firm,personal}.jsonl` plus `now.txt` for review. Refuses to run when owner sources are configured (non-empty `READWISE_TOKEN` or `STEVENS_CALENDAR_ICS`, or `STEVENS_VAULT_DIR` outside `/tmp/stevens-verify`), and refuses to write ledgers mentioning user paths or database URLs. Media paths are rewritten to fixture-relative. (v3.1: day R4.)
+
 ### drop <talk|slide|path> [--wait]
 
 Copies a fixture (or any file) into this instance's `inbox/`, which is exactly what the glasses import does. Needs this instance's stack up. `--wait` polls the personal `/api/state` until the item is `ready`, `failed` or rejected, and prints its status, segment count and claim count. (v3: day 10.)

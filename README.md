@@ -6,7 +6,7 @@ Future knowledge workers won't mostly write; they'll read, listen and absorb. St
 
 Stevens is named after the butler in *The Remains of the Day*: he prepares you before the delegation arrives, and he is discreet about everything. **Stevens drafts; the human decides.**
 
-Built solo for the Meta Global AI Developer Hackathon (Build for Your World). Status: v2.1 works; v3 (this README) is in development per [SPEC.md](SPEC.md). Submission due Nov 4, 2026.
+Built solo for the Meta Global AI Developer Hackathon (Build for Your World). Status: v3.1 works per [SPEC.md](SPEC.md), on real personal sources with a real Postgres firm CRM. Submission due Nov 4, 2026.
 
 ## The access rule
 
@@ -34,8 +34,8 @@ The rules are a data table, checked by a test against every role × source × pu
 
 ## Real vs simulated
 
-- **Real:** the Meta model calls; the Ray-Ban Meta captures (pre-recorded and imported, not streamed); public SEC Form D filings; the Readwise API when a token is set.
-- **Simulated and labeled:** the VC firm, its CRM and its people (fictional); the staged talk; sign-in; Readwise highlights from an export file when no token is set; permission scopes modeled on Meta's Personal Agent Protocol.
+- **Real:** the Meta model calls; the Ray-Ban Meta captures (pre-recorded and imported, not streamed); public SEC Form D filings; the Readwise API when a token is set; the Postgres firm CRM as a system (roles, grants, row-level security).
+- **Simulated and labeled:** the VC firm, its records and its people (fictional); the staged talk; sign-in; Readwise highlights from an export file when no token is set; permission scopes modeled on Meta's Personal Agent Protocol.
 
 ## Send to Stevens (iPhone Shortcut)
 
@@ -50,17 +50,38 @@ Ray-Ban Meta captures reach Stevens through the Meta AI app and the Photos share
 7. A file iCloud has not downloaded yet is picked up on a later check, not rejected.
 8. Supported types: `.wav`, `.m4a`, `.mp3`, `.jpg`, `.jpeg`, `.png`, `.heic`, `.mp4`, `.mov`. Anything else is skipped with a reason.
 
-## Run (v2.1, until the v3 split lands)
+## Run it on your own notes
 
-Requires Node 24+ and a Meta Model API key.
+Requires Node 24+ and a Meta Model API key. Stevens · yours reads your Obsidian vault, Readwise, calendar, and glasses inbox, with or without a firm. Nothing leaves your machine except Meta model calls.
 
 ```bash
 npm install
 echo "MODEL_API_KEY=..." > .env.local
+.claude/skills/verify-stevens/stevensctl init --vault-dir ~/notes --owner "Your Name"
 npm run dev
 ```
 
-Open http://localhost:5173. The Stevens server (:8787) holds the key and is the only thing that talks to Meta; the key never reaches the browser. In v3, `npm run dev` starts Stevens · firm (:8787), Stevens · yours (:8788), the Associate app (:5173) and the Partner app (:5174); `web/demo.html` shows both apps side by side.
+`init` checks every source and prints one line each, without ever printing a token. Then open http://localhost:5173: your notes are indexed, recent ones extracted, and calendar meetings within 24 hours get briefs written from your notebook. `--firm-url off` (the default) is solo mode: no firm checks run and sharing is refused. Point `--inbox-dir` at an iCloud Drive folder and use the Send to Stevens shortcut to capture from your phone.
+
+## Run the firm
+
+The firm's CRM is a real Postgres database with roles, grants, and row-level security; every record in it is fictional. From the repo root:
+
+```bash
+.claude/skills/verify-stevens/stevensctl crm-db up
+npx tsx scripts/firm-crm-setup.ts
+npm run dev
+```
+
+`crm-db up` bootstraps Postgres 18 in the `pw` sandbox (idempotent, nothing else touched) and writes the admin URL to `.env.local`, never printed. `firm-crm-setup` builds the roles and loads `fixtures/enterprise/crm.json` as rows and grants. Then open http://localhost:5174/?as=p-morgan: Morgan sees the Helios and Beacon deals, Jordan sees Beacon and Meridian, and the legal-hold note stays out of every Stevens store. `STEVENS_DEV=1 stevensctl crm revoke <document> <principal>` downgrades a document within a minute.
+
+## Recorded demo (no key, no Postgres)
+
+```bash
+npm run demo
+```
+
+`npm run demo` rebuilds both databases from the committed, fixture-only ledgers in `fixtures/replay/`, pins the clock, serves both apps, and opens `web/demo.html` with the Associate and Partner laptops side by side. Both status lines read "Replaying a recorded run". To re-record after changing the flow: `stevensctl record-replay`, which refuses to run when any real source is configured, then review and commit `fixtures/replay/`.
 
 ## Repo map
 
@@ -74,4 +95,4 @@ Open http://localhost:5173. The Stevens server (:8787) holds the key and is the 
 
 ## Not in scope
 
-Real auth/SSO, real CRM or Drive connectors, MCP, vector stores, fine-tuning, live glasses streaming, on-device models, and SAM segmentation unless the real slide photo needs it.
+Real auth/SSO, real Drive connectors, MCP, vector stores, fine-tuning, live glasses streaming, on-device models, and SAM segmentation unless the real slide photo needs it.

@@ -33,6 +33,7 @@ export interface FirmMarket {
 export interface FirmState {
   viewer: Person;
   now: string;
+  status: { line: string; busy: boolean };
   deals: FirmDeal[];
   inbox: FirmInboxEntry[];
   drafts: Draft[];
@@ -83,6 +84,16 @@ function eventAt(predicate: (event: { type: string }) => boolean): string {
     if (predicate(event as { type: string }) && (event as { at: string }).at > at) at = (event as { at: string }).at;
   }
   return at;
+}
+
+function clockShort(iso: string): string {
+  const date = new Date(iso);
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+  return hours + ':' + minutes + ' ' + suffix;
 }
 
 export function viewerFromHeader(header: string | undefined): Person | null {
@@ -204,9 +215,17 @@ export function buildFirmState(viewer: Person): FirmState {
     };
   });
 
+  const error = connectorError('crm');
+  const crmRow = connectorRows.find((entry) => entry.connector === 'crm');
+  const status = process.env.STEVENS_REPLAY === '1'
+    ? { line: 'Replaying a recorded run', busy: false }
+    : error
+      ? { line: 'CRM unreachable since ' + clockShort(error.at), busy: false }
+      : { line: crmRow?.lastSyncAt ? 'Up to date · CRM synced ' + clockShort(crmRow.lastSyncAt) : 'CRM never synced', busy: false };
   return {
     viewer,
     now,
+    status,
     deals,
     inbox,
     drafts,
