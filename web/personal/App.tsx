@@ -318,9 +318,14 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
         </div>
       </div>
       <div className="divider-fade mt-5" />
-      {!brief && (
+      {!brief && !meeting.briefFailed && (
         <div className="mt-5">
           <Skeleton label="Preparing your brief…" />
+        </div>
+      )}
+      {!brief && meeting.briefFailed && (
+        <div className="mt-5">
+          <FailedLine message="Couldn't write the brief. Stevens will retry before the meeting." />
         </div>
       )}
       {brief && (

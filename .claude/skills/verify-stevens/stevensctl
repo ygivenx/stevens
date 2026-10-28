@@ -297,6 +297,14 @@ def cmd_stack(argv):
             os.killpg(pgid, signal.SIGTERM)
         except ProcessLookupError:
             pass
+        respawned = firm_pidfile(name)
+        if os.path.exists(respawned):
+            try:
+                with open(respawned) as f:
+                    os.kill(int(f.read().strip()), signal.SIGTERM)
+            except (ProcessLookupError, ValueError):
+                pass
+            os.remove(respawned)
         os.remove(pidfile)
         print('stack down: instance %s stopped' % name)
         return 0
@@ -1434,6 +1442,81 @@ def cmd_record_replay(argv):
     print('record-replay: fixtures/replay written from a fixture-only run; review and commit it')
     return 0
 
+
+def firm_pidfile(name):
+    return os.path.join(instance_dir(name), 'firm.pid')
+
+
+def firm_child_pids(pgid):
+    try:
+        out = subprocess.run(['pgrep', '-g', str(pgid), '-f', 'server/firm/index.ts'], capture_output=True, text=True, timeout=10)
+    except Exception:
+        return []
+    return [int(line) for line in out.stdout.split() if line.strip().isdigit()]
+
+
+def cmd_firm(argv):
+    name = instance_name(argv)
+    if name is None or '--help' in argv or not argv or argv[0] not in ('down', 'up'):
+        print('stevensctl firm: stop or restart only the firm server (failure drill).\n')
+        print('Usage: stevensctl firm down|up [--instance NAME]\n')
+        print('down kills the firm server of this instance; up restarts it with the same')
+        print('sealed env. While the firm is down, yours fails closed: questions yield')
+        print('hold with a queued escalation, and the escalation is sent on return.\n')
+        print('Examples:')
+        print('  stevensctl firm down')
+        print('  stevensctl firm up')
+        return 0 if '--help' in argv else 2
+    pidfile = stack_pidfile(name)
+    if not os.path.exists(pidfile):
+        return fail('instance %s is not up; run stack up first' % name)
+    with open(pidfile) as f:
+        pgid = int(f.read().strip())
+    firm_port = int(os.environ.get('FIRM_PORT', '8787'))
+    if argv[0] == 'down':
+        pids = firm_child_pids(pgid)
+        if not pids:
+            return fail('firm server not found in instance %s (already down?)' % name)
+        for pid in pids:
+            plus('kill firm server pid %d' % pid)
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        for _ in range(30):
+            if not firm_child_pids(pgid):
+                break
+            time.sleep(1)
+        else:
+            return fail('firm server did not stop; see stevensctl stack logs')
+        print('firm down: instance %s runs without its firm server' % name)
+        return 0
+    if firm_child_pids(pgid):
+        return fail('firm server is already up for instance %s' % name)
+    env = dict(os.environ)
+    env.update(sealed_env(name))
+    env['STEVENS_DEV'] = '1'
+    env['NODE_OPTIONS'] = '--disable-warning=ExperimentalWarning'
+    for key in ('FIRM_PORT', 'PERSONAL_PORT'):
+        if key in os.environ:
+            env[key] = os.environ[key]
+    logpath = stack_logfile(name)
+    plus('npx tsx server/firm/index.ts >> %s' % logpath)
+    log = open(logpath, 'a')
+    proc = subprocess.Popen(['npx', 'tsx', 'server/firm/index.ts'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env)
+    with open(firm_pidfile(name), 'w') as f:
+        f.write(str(proc.pid))
+    for _ in range(60):
+        try:
+            status, _ = record_http('GET', firm_port, '/api/health')
+            if status == 200:
+                print('firm up: firm server healthy (pid %d)' % proc.pid)
+                return 0
+        except Exception:
+            pass
+        time.sleep(2)
+    return fail('firm server did not turn healthy in 120s; see stevensctl stack logs')
+
 def main(argv):
     if not argv or argv[0] in ('--help', '-h', 'help'):
         print('stevensctl: verify Stevens end to end.\n')
@@ -1453,7 +1536,8 @@ def main(argv):
         print('  init      configure Stevens for a real owner')
         print('  crm-db    up|status the Postgres firm CRM sandbox')
         print('  crm       grant|revoke a document principal (dev drill)')
-        print('  record-replay  record the fixture-only demo ledgers\n')
+        print('  record-replay  record the fixture-only demo ledgers')
+        print('  firm      down|up only the firm server (failure drill)\n')
         print('Examples:')
         print('  stevensctl doctor')
         print('  stevensctl stack up && stevensctl seed')
@@ -1490,6 +1574,8 @@ def main(argv):
         return cmd_crm(argv[1:])
     if name == 'record-replay':
         return cmd_record_replay(argv[1:])
+    if name == 'firm':
+        return cmd_firm(argv[1:])
     if name in PENDING:
         return cmd_pending(name, argv[1:])
     print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)

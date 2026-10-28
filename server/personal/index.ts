@@ -132,8 +132,9 @@ export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: numbe
   }
   try {
     counts.readwise = (await ingestRaws(await readwise.poll(), deps)).added;
-  } catch {
-    void 0;
+    setAdapterState('readwise', { lastError: null });
+  } catch (err) {
+    setAdapterState('readwise', { lastError: err instanceof Error ? err.message : String(err) });
   }
   try {
     counts.vault = (await pollVault(deps)).added;
@@ -173,7 +174,10 @@ export function bootPersonal(): () => void {
     },
   );
   const interval = setInterval(() => {
-    void readwise.poll().then((raws) => ingestRaws(raws)).catch(() => {});
+    void readwise.poll().then((raws) => ingestRaws(raws)).then(
+      () => setAdapterState('readwise', { lastError: null }),
+      (err: unknown) => setAdapterState('readwise', { lastError: err instanceof Error ? err.message : String(err) }),
+    );
     void syncCalendar().then((result) => {
       if (result.changed) void runMeetingTrigger().catch(() => {});
     }).catch(() => {});

@@ -76,4 +76,14 @@ describe('solo mode', () => {
   it('refuses to share', async () => {
     await expect(shareClaim('cl-solo', 'helios')).rejects.toThrow('solo');
   });
+
+  it('marks the meeting brief failed after a brief write failure', async () => {
+    insertEvent();
+    const { append } = await import('../common/ledger/store.js');
+    append({ at: '2026-10-27T13:00:00Z', type: 'attempt.failed', stageKey: 'k', stage: 'brief', model: 'm', error: 'writer down', dealId: '' });
+    const { buildPersonalState } = await import('./state.js');
+    const failed = await buildPersonalState();
+    expect(failed.meetings).toHaveLength(1);
+    expect(failed.meetings[0].briefFailed).toBe(true);
+  });
 });

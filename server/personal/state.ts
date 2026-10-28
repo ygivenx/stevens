@@ -19,7 +19,7 @@ export interface PersonalState {
   status: { line: string; busy: boolean };
   adapters: { origin: Origin; label: string; lastSyncAt: string | null; simulated?: string }[];
   items: Item[];
-  meetings: (Meeting & { briefId?: string; team?: Person[] })[];
+  meetings: (Meeting & { briefId?: string; team?: Person[]; briefFailed: boolean })[];
   drafts: Draft[];
   claims: Claim[];
   sources: SourceRef[];
@@ -172,6 +172,13 @@ export async function buildPersonalState(): Promise<PersonalState> {
   const items = listItems();
   const events = readAll();
   const drafts = events.filter((e) => e.type === 'draft.created').map((e) => (e as { draft: Draft }).draft);
+  const failedDeals = new Set<string>();
+  for (const event of events) {
+    if (event.type === 'attempt.failed' && event.stage === 'brief' && event.dealId !== undefined) failedDeals.add(event.dealId);
+  }
+  for (const draft of drafts) {
+    if (draft.kind === 'brief' && draft.dealId) failedDeals.delete(draft.dealId);
+  }
   const personalClaims = (() => {
     try {
       return allPersonalClaims();
@@ -179,7 +186,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
       return [];
     }
   })();
-  let meetings: (Meeting & { briefId?: string; team?: Person[] })[] = [];
+  let meetings: (Meeting & { briefId?: string; team?: Person[]; briefFailed: boolean })[] = [];
   let firmReachable = true;
   let firmClaims: Claim[] = [];
   let firmSources: SourceRef[] = [];
@@ -208,6 +215,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
     meetings = merged.map((meeting) => ({
       ...meeting,
       briefId: briefByDeal.get(meeting.dealId),
+      briefFailed: failedDeals.has(meeting.dealId),
       team: (upcoming.find((firm) => firm.id === meeting.id)?.team ?? []).map((member) => ({ id: member.id, name: member.name, role: member.role as Role })),
     }));
     for (const meeting of upcoming) {
@@ -227,7 +235,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
         for (const draft of drafts) {
           if (draft.kind === 'brief' && draft.dealId !== undefined) briefByDeal.set(draft.dealId, draft.id);
         }
-        meetings = calendarMeetings([]).map((meeting) => ({ ...meeting, briefId: briefByDeal.get(meeting.dealId), team: [] }));
+        meetings = calendarMeetings([]).map((meeting) => ({ ...meeting, briefId: briefByDeal.get(meeting.dealId), briefFailed: failedDeals.has(meeting.dealId), team: [] }));
       } catch {
         meetings = [];
       }
@@ -243,7 +251,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
           });
         }
       }
-      meetings = [...briefByDeal.values()].map((entry) => ({ ...entry.meeting, briefId: entry.briefId, team: [] }));
+      meetings = [...briefByDeal.values()].map((entry) => ({ ...entry.meeting, briefId: entry.briefId, briefFailed: failedDeals.has(entry.meeting.dealId), team: [] }));
     }
   }
   const sources = [...personalSourceRefs(items), ...firmSources];

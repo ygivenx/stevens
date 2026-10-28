@@ -8,7 +8,7 @@ export interface PersonalState {
   solo: boolean;
   sourceStatus: { id: string; label: string; lastSyncAt: string | null; lastError: string | null; simulated?: string }[];
   items: Item[];
-  meetings: (Meeting & { briefId?: string; team?: Person[] })[];
+  meetings: (Meeting & { briefId?: string; team?: Person[]; briefFailed: boolean })[];
   drafts: Draft[];
   claims: Claim[];
   sources: SourceRef[];
