@@ -145,4 +145,15 @@ describe('member gating', () => {
     const beacon = state.deals.find((deal) => deal.id === 'beacon');
     expect(beacon?.documents.map((doc) => doc.id)).toContain('d-beacon-memo');
   });
+
+  it('reads Replaying a recorded run with STEVENS_REPLAY=1', async () => {
+    await runConnectorSync({ reader: testReader() });
+    process.env.STEVENS_REPLAY = '1';
+    try {
+      const state = buildFirmState({ id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' });
+      expect(state.status.line).toBe('Replaying a recorded run');
+    } finally {
+      delete process.env.STEVENS_REPLAY;
+    }
+  });
 });

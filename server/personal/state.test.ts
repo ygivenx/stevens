@@ -25,6 +25,19 @@ afterEach(() => {
   closeDb();
 });
 
+describe('replay status', () => {
+  it('reads Replaying a recorded run with STEVENS_REPLAY=1', async () => {
+    process.env.STEVENS_REPLAY = '1';
+    try {
+      const state = await buildPersonalState();
+      expect(state.status.line).toBe('Replaying a recorded run');
+      expect(state.status.busy).toBe(false);
+    } finally {
+      delete process.env.STEVENS_REPLAY;
+    }
+  });
+});
+
 describe('meeting brief selection', () => {
   it('shows the latest brief for the deal, not the first', async () => {
     append({ at: '2026-10-28T10:00:00-04:00', type: 'draft.created', draft: brief('br-first'), manifest: { purpose: 'brief', promptVersion: 'v2', model: 'm', sources: [], verdict: 'go' }, api: { model: 'm', responseId: 'r', usage: {}, stageKey: 'k1' } });
