@@ -27,7 +27,7 @@ const CLAIMS = [
 describe('assembler', () => {
   it('keeps privy and excluded text out of Associate writer prompts', () => {
     for (const purpose of ['brief', 'answer'] as const) {
-      const { prompt, manifest } = assemble(purpose, 'Associate', 'm', 'k', SOURCES, CLAIMS, { verdict: 'hold', routeTo: 'Partner' });
+      const { prompt, manifest } = assemble(purpose, 'Associate', 'm', 'k', SOURCES, CLAIMS, { verdict: 'hold', routeTo: 'Partner' }, () => true);
       expect(prompt).toContain('TEAM-ALPHA-BRAVO');
       expect(prompt).toContain('MINE-GOLF-HOTEL');
       expect(prompt).not.toContain('MEMO-CHARLIE-DELTA-LUMEN');
@@ -44,7 +44,7 @@ describe('assembler', () => {
   });
 
   it('includes privy text only for the privy purpose', () => {
-    const privy = assemble('privy', 'Associate', 'm', 'k', SOURCES, CLAIMS);
+    const privy = assemble('privy', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, () => true);
     expect(privy.prompt).toContain('MEMO-CHARLIE-DELTA-LUMEN');
     expect(privy.prompt).not.toContain('WALL-ECHO-FOXTROT');
     expect(privy.prompt).not.toContain('THEIRS-INDIA-JULIET');
@@ -52,15 +52,25 @@ describe('assembler', () => {
   });
 
   it('shows the Partner everything except the wall and others personal', () => {
-    const { prompt } = assemble('answer', 'Partner', 'm', 'k', SOURCES, CLAIMS);
+    const { prompt } = assemble('answer', 'Partner', 'm', 'k', SOURCES, CLAIMS, undefined, () => true);
     expect(prompt).toContain('MEMO-CHARLIE-DELTA-LUMEN');
     expect(prompt).toContain('THEIRS-INDIA-JULIET');
     expect(prompt).not.toContain('WALL-ECHO-FOXTROT');
     expect(prompt).not.toContain('MINE-GOLF-HOTEL');
   });
 
+  it('withholds team text from a non-member and weighs it under privy', () => {
+    const brief = assemble('brief', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, (source) => source.vault === 'personal');
+    expect(brief.prompt).not.toContain('TEAM-ALPHA-BRAVO');
+    expect(brief.prompt).toContain('MINE-GOLF-HOTEL');
+    const privy = assemble('privy', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, (source) => source.vault === 'personal');
+    expect(privy.prompt).toContain('TEAM-ALPHA-BRAVO');
+    const withheld = brief.manifest.withheld.find((entry) => entry.sourceId === 'team1');
+    expect(withheld?.ruleId).toBe('r-team-associate-outside');
+  });
+
   it('records raw and assembled token estimates', () => {
-    const { manifest } = assemble('brief', 'Associate', 'm', 'k', SOURCES, CLAIMS);
+    const { manifest } = assemble('brief', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, () => true);
     expect(manifest.tokens.raw).toBeGreaterThan(0);
     expect(manifest.tokens.assembled).toBeGreaterThanOrEqual(manifest.tokens.raw);
   });

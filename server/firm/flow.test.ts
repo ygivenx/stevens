@@ -6,7 +6,7 @@ import { readAll } from '../common/ledger/store.js';
 import { quoteIn } from '../common/resolver/resolve.js';
 import { seedPeople } from './agent-auth.js';
 import { getFirmDb, closeFirmDb } from './store.js';
-import { runConnectorSync } from './sync.js';
+import { runConnectorSync, testReader } from './sync.js';
 import { buildComps, loadFormD } from './connectors/formd.js';
 import { runPrivy } from './privy.js';
 import { draftDecision, draftEscalation } from './decision.js';
@@ -30,7 +30,7 @@ beforeAll(async () => {
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
   seedPeople(getFirmDb(), TOKEN);
-  await runConnectorSync();
+  await runConnectorSync({ reader: testReader() });
   const mod = await import('./index.js');
   app = mod.app;
 });
@@ -147,7 +147,7 @@ describe('escalation and decision', () => {
 
   it('replays the flow with zero new calls', async () => {
     const spent = calls();
-    await runConnectorSync();
+    await runConnectorSync({ reader: testReader() });
     const person = { id: 'p-alex', name: 'Alex Rivera', role: 'Associate' as const };
     await runPrivy(person, 'helios', 'Should we take the second meeting?', { questionId: 'pq-test-' + 'x' * 4 });
     expect(calls()).toBe(spent);
