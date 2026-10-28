@@ -10,6 +10,8 @@ Track: Meta Global AI Developer Hackathon — Build for Your World. Submission *
 - **Two apps instead of a console:** the Associate's **Today** and the Partner's **Inbox**, recorded side by side.
 - **Two leaks found on `main` at `0f84ea3` are fixed first** (Day 9a).
 
+**v3.1 (§ Real build), added Oct 27.** The owner runs Stevens · yours on their own Obsidian vault, Readwise, calendar and glasses captures, with or without a firm (solo mode). The firm's CRM becomes a real Postgres database whose roles and grants are the ACLs Stevens mirrors, and deal-team membership is enforced per person. Firm records stay fictional.
+
 ---
 
 ## Product
@@ -48,12 +50,14 @@ Future knowledge workers won't mostly write; they'll read, listen and absorb. **
 | Deals, meetings, documents, ACLs, portfolio | `data/firm/firm.db` + `data/firm/ledger.jsonl` | Stevens · firm (:8787) | Per policy |
 | Public market data (SEC Form D) | `firm.db` `filings` + a comps document | Stevens · firm | Everyone at the firm (`all-staff`) |
 | Released quotes | `firm.db` `documents` (kind `released-quote`, attributed) | Stevens · firm | The deal team |
+| v3.1: the owner's calendar events (next 7 days) | `personal.db` `events` | Stevens · yours | The owner only |
+| v3.1: the firm's CRM records, roles and grants (system of record) | Postgres `darlington_crm`, schema `crm` | Outside both processes; the `crm` connector reads it as `dh_stevens` | Per Postgres grants and row-level security |
 
 Production narrative (said in the video, not built): Stevens · yours runs on the user's own device, and Glimmer would process the personal database on-device so it never touches an API.
 
 ### Persona and cast (all fictional)
 
-A VC firm, **Darlington Hall Partners**. **Alex Rivera** is an Associate; **Morgan Hale** is a Partner. The deal is **Helios** (mid-market workflow SaaS, raising a $12M Series A). The conflict is portfolio company **Lumen**. The legal wall is **Project Granite**. Simple enough for judges; unrelated to the author's healthcare work. The pitch generalizes: an engineer reading papers before a design review.
+A VC firm, **Darlington Hall Partners**. **Alex Rivera** is an Associate; **Morgan Hale** is a Partner. The deal is **Helios** (mid-market workflow SaaS, raising a $12M Series A). The conflict is portfolio company **Lumen**. The legal wall is **Project Granite**. Simple enough for judges; unrelated to the author's healthcare work. In v3.1 the demo's Obsidian notes come from a vault the author curates from their own notes plus the fictional Helios notes; it lives outside the repo. The pitch generalizes: an engineer reading papers before a design review.
 
 Anti-positioning: not RAG over notes. What is new is the bridge (off-the-clock learning → work decision) and an access rule that is enforced, provable and inspectable.
 
@@ -158,13 +162,15 @@ No rule requires using every Meta model; Stage One is pass/fail on *reasonable* 
 | Media tools | `ffmpeg` (audio conversion, video audio track, keyframes); `sips` on macOS for HEIC | Already a `doctor` dependency |
 | Live updates | SSE per server, payload-free `changed` signal | No content on the wire outside the filtered projection |
 | Tests | vitest; Playwright via `stevensctl browser` | The boundary is proven, not claimed |
+| Firm CRM (v3.1) | Postgres 16 or later at `FIRM_DATABASE_URL`, read through `pg` with plain SQL; dev runs Postgres 18 in the `pw` Docker sandbox; there is no test CI (only Pages), so Postgres tests run locally | Real roles, grants and row-level security are the ACLs Stevens mirrors |
+| Calendar (v3.1) | `ical.js` | Recurrence, exceptions and time zones are easy to get wrong by hand |
 
 Rejected:
 - **Next.js:** server components can serialize restricted props invisibly; an explicit JSON API makes "what reached the browser" one testable body.
 - **Python:** contracts in two languages.
-- **Postgres:** needs a service; a SQLite file shows the same shape.
+- **Postgres for Stevens's own stores:** needs a service; a SQLite file shows the same shape. v3.1 uses Postgres only as the firm's CRM, a source Stevens reads.
 - **An ORM:** two small schemas; plain SQL is clearer.
-- **A vector store:** FTS5 plus entity/metric matching covers dozens of documents.
+- **A vector store:** FTS5 plus entity/metric matching covers dozens of documents, and in v3.1 a real vault of thousands of notes with lazy extraction.
 - **MCP for connectors:** a day of work with no payoff in the demo. The `Connector` interface is the seam where an MCP-backed or real CRM connector would plug in.
 - **Agent and memory frameworks:** this is a fixed pipeline.
 - **pi-durable for the core:** experimental (see Stretch).
@@ -180,6 +186,8 @@ Pipeline: `adapter → RawItem → dedupe → normalize → item + segments → 
 | `inbox` (origin `glasses`) | Ray-Ban Meta → Meta AI app → phone gallery → synced folder (iCloud Drive, AirDrop) | `data/personal/inbox/`; `stevensctl drop <name>` copies a fixture in | `fs.watch`, 1s debounce, a file is taken once its size is unchanged across two checks 500 ms apart | Real glasses captures, pre-recorded, imported not streamed |
 | `readwise` | Readwise API v2 export: `GET https://readwise.io/api/v2/export/?updatedAfter=<cursor>` with `Authorization: Token <READWISE_TOKEN>`, following `pageCursor` | A demo Readwise account with fictional highlights when `READWISE_TOKEN` is set; otherwise `fixtures/personal/readwise-export.json` in the same response shape | On start, then every 15 min; the cursor is kept in `adapter_state` | Without a token: `Simulated — Readwise export file` |
 | `notes` | A Markdown folder (an Obsidian vault works) | `data/personal/notes/`, seeded from `fixtures/personal/notes/` | `fs.watch` | Fictional notes |
+
+v3.1 replaces `notes` with `vault`, adds `calendar`, and points `inbox` and `readwise` at the owner's real sources (§ Real build).
 
 Day 11 records the export shape from the public `api_deets` documentation (`results[]` of books with nested `highlights[]`, `nextPageCursor` paging): no `READWISE_TOKEN` exists in this build, so the adapter's live path is code-reviewed against the doc and the fixture mirrors it field for field. The first run with a real token must confirm the shape and update this paragraph.
 
@@ -321,7 +329,7 @@ create table connector_state (
 ```
 
 **Connectors** (`server/firm/connectors/`), each implementing `Connector`:
-- **`crm`** — "Firm CRM (fictional)". Loads `fixtures/enterprise/crm.json` (people, deals, deal team, meetings, documents with ACLs, portfolio) and the media it references. Media documents (the deck photo) go through Spark vision; text documents go through extraction. Labeled `Simulated — fictional firm CRM`.
+- **`crm`** — "Firm CRM (fictional)". Loads `fixtures/enterprise/crm.json` (people, deals, deal team, meetings, documents with ACLs, portfolio) and the media it references. Media documents (the deck photo) go through Spark vision; text documents go through extraction. Labeled `Simulated — fictional firm CRM`. v3.1 reads the same records from the Postgres CRM instead (§ Real build).
 - **`sec-form-d`** — "SEC Form D (public)". Loads the committed filings subset into `filings`, then writes one `market-comps` document per quarter whose `body` is generated by code from SQL aggregates, e.g. *"SEC Form D, 2026 Q1: 412 technology issuers reported equity offerings between $2M and $50M; the median total offering was $8.5M."* (numbers illustrative). ACL `all-staff`. Its claims are written by code (one per sentence, quote = the sentence), not by a model.
 
 **Form D import** (`scripts/import-formd.ts`, run once by the developer; its output is committed):
@@ -339,7 +347,7 @@ create table connector_state (
 | `partners` (and no team principal) | `partner-only` | Only Partners may read it |
 | anything else, or an empty ACL | `wall` | Fail closed: an ACL Stevens doesn't understand is a wall |
 
-The rules table then maps classification × role × purpose → access, exactly as in v2.1. Per-person deal-team membership is not enforced by policy in this build (narrated as next).
+The rules table then maps classification × role × purpose → access, exactly as in v2.1. In v3, per-person deal-team membership is not enforced by policy; v3.1 adds it from Postgres role membership (§ Real build › Membership in policy).
 
 **Firm-side writes:**
 - **Privy** (`server/firm/privy.ts`): `POST /agent/privy {dealId, question}`. Code matches the deal's documents that are `privy` for the asking person; the assembler builds a `privy` call; the output schema is `Verdict`. The manifest stays in the firm ledger. The question text crosses to the firm, and the Ask box says so.
@@ -637,15 +645,172 @@ Two iframes side by side at 960×1080 each: left `http://localhost:5173/#/today`
 
 - **Personal** (`fixtures/personal/`), all fictional:
   - `inbox/talk.wav` (or `talk.mp4` when the real POV video is used) and `inbox/slide.jpg`: Ray-Ban Meta captures of a staged, fictional ~90 s conference talk with 2 voices (speaker + one audience question), filmed from across a room. **The real glasses shoot is still pending** (v2.1 runs on placeholders); it must land by day 13 so the video uses real captures;
-  - `readwise-export.json`: the 3 v2.1 article highlights (churn benchmarks, reading NDR, second meetings) in the Readwise export shape, as fictional articles;
-  - `notes/`: 1–2 short fictional Markdown notes (e.g. conference notes from Oct 20).
-  - `seed` copies `notes/` and configures Readwise; the inbox starts empty, and `stevensctl drop talk|slide` drops captures live. `seed --with-captures` pre-drops them for tests.
+  - `readwise-export.json`: 5 highlights across 3 books (churn benchmarks, reading NDR, second meetings) in the Readwise export shape, as fictional articles;
+  - `vault/`: 3 fictional Markdown notes (Oct 20 conference notes, Helios prep, an NDR reading note), plus a `stevens: skip` note, an excluded `Archive/` folder and an `.obsidian/` folder to prove the skip rules.
+  - `seed` rebuilds the instance vault from `vault/` and configures Readwise; the inbox starts empty, and `stevensctl drop talk|slide` drops captures live.
 - **Enterprise** (`fixtures/enterprise/`):
   - `crm.json`: Darlington Hall Partners people (`p-alex` Alex Rivera, `p-morgan` Morgan Hale, one more Partner), 3 deals (`helios` with a $12M ask, plus 2 fictional others), deal teams, the Helios second meeting at `2026-10-29T10:00:00-04:00`, documents with ACLs, and the portfolio (including Lumen);
   - documents: the Helios CRM record, the deck photo claiming net churn of 1.8% and the team memo (`deal-team:helios`); the conflicts memo, Helios vs Lumen (`partners`); the Project Granite note (`legal-hold:granite`);
   - `formd/tech-2025q4-2026q1.json`: the public Form D subset from `scripts/import-formd.ts`.
 - **Glasses capture path:** capture → Meta AI app → phone camera roll → laptop. Raise the video limit first (Meta AI app → Devices → Settings → Media → Video settings; the default is 60 s). The inbox normalizers convert formats, so no manual `ffmpeg` step is needed.
 - **Not built:** live streaming from the glasses (Meta Wearables Device Access Toolkit; needs a native app). Narrated as the production capture path.
+
+## Real build (v3.1)
+
+**Goal.** The owner runs Stevens · yours on their own sources every day, with or without a firm, and the firm side reads a real database whose roles and grants *are* the access rules. Days R1–R4 (Wed Oct 28 – Sat Oct 31) use the five days gained on the v3 schedule (Day 14 merged Oct 27); Days 15–16 are unchanged.
+
+**What stays:** the access rule, the two processes, the ledgers, `personal.db` and `firm.db` as Stevens's own stores, the assembler, the resolver, the verdict channel, Ask / Share / Approve, and no Run controls.
+
+**What changes:**
+- Personal sources are the owner's real ones, configured once with `stevensctl init`.
+- Stevens · yours runs alone (**solo mode**) when no firm is configured; meetings then come from the owner's calendar.
+- The firm's system of record is a **Postgres** database. People are database roles, deal teams and legal holds are group roles, and document bodies are protected by grants and row-level security. Stevens reads it as its own role and mirrors what it finds.
+- The records inside the firm database stay fictional (Darlington Hall). Real: the database, the roles, the grants, their enforcement, and the SEC Form D comps.
+- The owner's real personal data never enters the repo: not `fixtures/`, `docs/`, evidence or logs.
+
+### Setup for a real owner
+
+`stevensctl init` takes flags (agent-runnable) and prompts for anything missing when run in a terminal. It:
+- writes these `.env.local` keys: `STEVENS_DATA_DIR` (default `~/Library/Application Support/Stevens` on macOS, so real data never sits in the repo tree), `STEVENS_VAULT_DIR`, `STEVENS_VAULT_EXCLUDE`, `STEVENS_INBOX_DIR`, `READWISE_TOKEN`, `STEVENS_CALENDAR_ICS`, `STEVENS_FIRM_URL` (`off` for solo mode), `STEVENS_OWNER`, `STEVENS_BACKFILL_DAYS` (default 90), `STEVENS_DAILY_TOKENS` (default 3,000,000);
+- checks `MODEL_API_KEY` (which the owner enters in `.env.local` by hand) with `GET /v1/models`, and each source: vault (note count, excluded count), inbox (writable, files waiting), Readwise (`GET https://readwise.io/api/v2/auth/` → 204), calendar (events in the next 7 days), firm (`/agent/me`, or `off`);
+- prints one line per source, never prints a token or the calendar URL, and exits non-zero if a configured source fails.
+
+`.env.example` lists every key with a placeholder. The README gets "Run it on your own notes" (`init`, `npm start`, open :5173) above the demo instructions. In solo mode `STEVENS_OWNER` is a display name; connected, it stays a firm `people` id. Default flows never touch configured real paths: `npm run dev` without `init` uses the repo `data/` tree, and every `stevensctl` verify flow runs sealed under `/tmp/stevens-verify/<instance>/data/` with fixture sources. Only an instance the owner points at real data reads it.
+
+### Personal sources (v3.1)
+
+| Adapter | Source | Trigger | Reads |
+| --- | --- | --- | --- |
+| `vault` (replaces `notes`) | An Obsidian vault at `STEVENS_VAULT_DIR` | Recursive `fs.watch`; a note is taken after a 2-minute quiet period (Obsidian autosaves while typing) | Every `.md` file, recursively. Skips every dot-folder (`.obsidian`, `.trash`, `.git`), the vault-relative folder prefixes in `STEVENS_VAULT_EXCLUDE`, and any note whose frontmatter has `stevens: skip`. Reads frontmatter `tags` and `aliases` (a small parser for `key: value` and `- item` lists; other keys are ignored) and wikilink targets. Identity is the vault-relative path. Never writes into the vault. Citations open the note with `obsidian://open?vault=<vault name>&file=<path>` |
+| `inbox` (glasses, phone) | `STEVENS_INBOX_DIR`, an iCloud Drive folder such as `~/Library/Mobile Documents/com~apple~CloudDocs/Stevens Inbox` | As in v3 | Ray-Ban Meta → Meta AI app → Photos → a **"Send to Stevens"** Shortcut in the iOS share sheet that saves the selected photos, videos or voice memos into that folder (steps in the README). File types and checks as in v3. A file iCloud has not downloaded yet is retried on the next check, not rejected. Files stay in the folder; dedupe makes that free |
+| `readwise` (live) | `READWISE_TOKEN` for the owner's account | As in v3 | As in v3. One connector covers Kindle, Reader, podcast clips (e.g. Snipd) and anything else synced into Readwise. R2 confirms the export shape against the real account and updates the Day 11 paragraph |
+| `calendar` (new) | `STEVENS_CALENDAR_ICS`, the calendar's private iCal address (Google: Settings → Integrate calendar → Secret address in iCal format; iCloud and Outlook publish an equivalent link) | On start, then every 10 min | Parsed with `ical.js` (recurrence, exceptions, time zones). Events from now to +7 days go into `personal.db` `events` (uid, recurrence id, title, description, location, attendee names, starts_at, ends_at). The URL is a secret |
+
+Next connectors, in order of value (the `Adapter` interface is the seam; none is in v3.1): Readwise Reader documents (full text of saved articles, Reader API v3); Zotero (papers, Web API key); Raindrop.io (bookmarks). Voice memos already arrive through the inbox Shortcut. Rejected: Gmail and Google Drive (OAuth and volume), Apple Notes (no API), Pocket (shut down).
+
+Fixtures for tests: `fixtures/personal/vault/` (fictional, with an `.obsidian/` folder and an excluded folder) replaces `fixtures/personal/notes/`; `fixtures/personal/calendar.ics` holds a recurring event with one exception and a non-local time zone.
+
+### Revisions, budget and lazy extraction
+
+- **Revisions.** A changed vault note (new content hash after the quiet period) appends `item.revised`; extraction runs on the new revision; the old revision's claims are retired (kept in the ledger, out of retrieval and briefs). A deleted note appends `item.removed` and its claims retire. Highlights and captures don't revise.
+- **Index everything, extract little.** Every note and highlight is segmented and indexed in FTS on ingest, with no model call. Extraction runs on new items and on items changed within `STEVENS_BACKFILL_DAYS`. An older item is extracted on demand when it ranks in the top 10 for a meeting or a question.
+- **Daily budget.** Input tokens of `extract` calls on the current clock day, summed from ledger usage, are capped at `STEVENS_DAILY_TOKENS`. At the cap, extraction pauses, items stay indexed and searchable, the status line says "Paused: daily reading budget reached", and extraction resumes the next day. Writers (`brief`, `answer`) are not capped. Budget, backfill and calendar windows follow the wall clock unless `STEVENS_NOW` is pinned; the vault quiet period always follows the wall clock.
+- **Scale estimate (inference, confirm in the dashboard):** ~2,000 notes at ~1,500 tokens is ~3M input tokens, a few dollars at Spark's $1.25 per 1M input; contributor is cheaper.
+
+### Solo mode
+
+When `STEVENS_FIRM_URL=off`:
+- The personal process never calls the agent API. Meetings are calendar events starting within 24 h.
+- **Brief for an event:** retrieval terms from the event's title, description and attendee names, plus vault notes that link to an attendee or the event title (wikilink or alias) → FTS top 20 segments → their claims (extracted on demand within budget) → `brief` (Wonder) over personal sources only. There is no bridge block, because a bridge needs a firm claim; the card's section reads "From your notes and reading". Stage key: event uid + recurrence id + sorted claim ids + prompt version + model.
+- **Ask** answers from personal sources only. There is no privy step, so there is no hold. Share and escalation are hidden.
+- The assembler, the citation resolver and replay rules apply unchanged.
+
+**Connected mode** (firm URL set) works as in v3. If `STEVENS_CALENDAR_ICS` is also set, a calendar event that matches a firm meeting (start within 15 min and the deal's company in the title) is that firm meeting; any other event gets a solo-style brief.
+
+**Contracts.** `Meeting` becomes `{ id, origin: 'firm' | 'calendar', title, startsAt, dealId?, company?, attendees? }`; `Draft.dealId` is already optional. Both apps render `company ?? title`.
+
+**Stevens · yours UI.** A Sources section lists each source with its state ("Up to date · 2,104 notes", "Paused: daily reading budget reached", "Calendar unreachable since 9:40"). It is read-only, with no sync controls. The UI says "Obsidian notes", never "vault".
+
+### Firm CRM on Postgres
+
+**Runtime.** Any Postgres 16 or later reachable at `FIRM_DATABASE_URL` (Homebrew, the `postgres:18` image, or a sandbox), database `darlington_crm`. Nothing in the schema depends on a later version.
+
+**Dev setup (done and verified Oct 27).** Postgres 18.6 runs inside the `pw` Docker sandbox; the firm server stays on the Mac. Connections from the Mac arrive from the sandbox bridge (172.17.x), not from localhost. The bootstrap, in order:
+1. `sbx exec pw`: `sudo apt-get install -y postgresql`.
+2. In `/etc/postgresql/18/main/`: `listen_addresses = '*'` in `postgresql.conf`; append `host all all 0.0.0.0/0 scram-sha-256` to `pg_hba.conf` (readable only with sudo). The port is published on the Mac's loopback only, so nothing outside the Mac can reach it.
+3. `sudo pg_ctlcluster 18 main start`.
+4. As `postgres`: create login `stevens_admin` (superuser, a generated password) and database `darlington_crm` owned by it. `FIRM_ADMIN_DATABASE_URL=postgres://stevens_admin:<password>@127.0.0.1:5433/darlington_crm` goes into `.env.local` and is never printed.
+5. On the Mac: `sbx ports pw --publish 5433:5432` binds `127.0.0.1:5433`.
+
+**Keeping it running.** The sandbox has no service manager, so after a sandbox restart run `sbx exec pw sudo pg_ctlcluster 18 main start`. Whether a published port survives a sandbox restart is unverified; `sbx ports pw` shows it, and step 5 restores it. `sbx rm`, `reset` or `prune` deletes everything: rerun steps 1–5, then `firm-crm-setup`. R3 turns steps 1–5 into `stevensctl crm-db up`, which is idempotent, refuses to touch anything but the `pw` sandbox, and needs no Postgres on the Mac.
+
+**Admin privileges outside dev.** The admin login needs superuser, or `CREATEROLE` plus ownership of `darlington_crm` and `SET` membership in each `dh_p_*` role (the cross-check test uses `set role`). `FIRM_DATABASE_URL` (Stevens's login, `dh_stevens`) and `FIRM_ADMIN_DATABASE_URL` (setup and tests only) live in `.env.local`. Driver: `pg`, plain SQL, no ORM. `firm.db` stays Stevens's own projection; Postgres plays the firm's CRM.
+
+**Setup.** `scripts/firm-crm-setup.ts` (idempotent, admin URL) applies `server/firm/crm/schema.sql`, creates the roles and memberships, and loads `fixtures/enterprise/crm.json` as rows and grants. `crm.json` stays the single fictional source; Postgres is the live system built from it.
+- On first run it generates a password for `dh_stevens` and writes `FIRM_DATABASE_URL` (same host, port and database) into `.env.local`, never printing it. Later runs keep that password.
+- It refuses to run unless the admin URL's host is `127.0.0.1` or `localhost`.
+- A rerun replaces the `crm` rows with `crm.json` exactly; changes made with `crm grant|revoke` are lost by design.
+
+**Roles** (prefixed `dh_` because roles are cluster-wide):
+
+| Role | Kind | Members |
+| --- | --- | --- |
+| `dh_p_alex`, `dh_p_morgan`, `dh_p_jordan` | Person, `NOLOGIN` | — |
+| `dh_all_staff` | Group | Every person |
+| `dh_partners` | Group | The Partners |
+| `dh_deal_team_<dealId>` | Group | `crm.json` `dealTeam` |
+| `dh_legal_hold_<matter>` | Group | Nobody in the cast |
+| `dh_stevens` | `LOGIN`, the connector | `dh_all_staff`, `dh_partners` and every `dh_deal_team_*`; never a legal-hold group |
+
+**Schema** (`server/firm/crm/schema.sql`):
+
+```sql
+create schema crm;
+create table crm.people (id text primary key, name text not null, title text not null, db_role name not null unique);
+create table crm.deals (id text primary key, company text not null, sector text not null, stage text not null, ask_usd bigint, updated_at timestamptz not null default now());
+create table crm.meetings (id text primary key, deal_id text not null references crm.deals(id), title text not null, starts_at timestamptz not null, updated_at timestamptz not null default now());
+create table crm.documents (id text primary key, deal_id text references crm.deals(id), kind text not null, title text not null, created_at timestamptz not null, updated_at timestamptz not null default now());
+create table crm.document_bodies (document_id text primary key references crm.documents(id) on delete cascade, body text, media_path text);
+create table crm.document_grants (document_id text not null references crm.documents(id) on delete cascade, grantee name not null, primary key (document_id, grantee));
+create table crm.portfolio (company text primary key, sector text not null);
+
+alter table crm.document_bodies enable row level security;
+create policy read_when_granted on crm.document_bodies for select using (
+  exists (select 1 from crm.document_grants g
+          where g.document_id = document_bodies.document_id and pg_has_role(current_user, g.grantee, 'member'))
+  and not exists (select 1 from crm.document_grants h
+          where h.document_id = document_bodies.document_id and h.grantee like 'dh\_legal\_hold\_%'
+            and not pg_has_role(current_user, h.grantee, 'member'))
+);
+
+grant usage on schema crm to dh_all_staff, dh_stevens;
+grant select on all tables in schema crm to dh_all_staff, dh_stevens;
+```
+
+Titles and grants are readable by all staff, like a file listing; bodies are not. Legal-hold bodies are readable only by members of the hold, and Stevens is never one, so **an excluded body never leaves Postgres**.
+
+**Connector** (`server/firm/connectors/crm.ts`, as `dh_stevens`):
+- **When:** on start, then every 60 s.
+- **Reads:** documents and bodies updated since the cursor, the full document id list (to catch deletions), all grants, all memberships of `dh_` roles (`pg_auth_members` joined to `pg_roles`), people, deals, meetings and portfolio.
+- **Grantee → principal:** `dh_all_staff` → `all-staff`; `dh_partners` → `partners`; `dh_deal_team_<d>` → `deal-team:<d>`; `dh_legal_hold_<m>` → `legal-hold:<m>`; any other role name passes through unchanged, and the ACL map makes it `wall`. **The ACL map and its test do not change.**
+- **Unreadable bodies:** a body `dh_stevens` cannot read arrives as `null`; the document is known by title and ACL only.
+- **Ledger first:** each sync appends `connector.synced` with the changed rows, grants and memberships to the firm ledger before updating `firm.db`, so `firm.db` rebuilds with Postgres stopped and zero calls.
+- **Postgres unreachable:** `firm.db` keeps the last snapshot, `connector_state.last_error` is set, and the Partner Sources page shows "CRM unreachable since <time>". A grant revoked during the outage takes effect at the next successful sync (accepted risk).
+- **Label:** "Fictional firm data" (the system is real, the records are not). Sign-in stays "Simulated sign-in".
+
+**Membership in policy.** This replaces v3's "per-person deal-team membership is not enforced by policy":
+- `firm.db` gains `memberships(person_id, principal)`, filled from Postgres role membership by the connector, and from nowhere else.
+- `policy()` gains the input `member`: the viewer belongs to at least one principal on the source's ACL and to every legal-hold principal on it.
+- The rules table gains a `member` column. A rule that yields `visible` requires `member = yes`; the same source with `member = no` is at most `privy` (Stevens can read it, the viewer cannot). Form D comps (`all-staff`) are `member = yes` for everyone.
+- For the cast: Jordan sees the Helios memo as `privy`; Alex sees the new Beacon memo as `privy` and the Meridian notes as `visible`.
+
+**Seed additions** to `crm.json`: `d-beacon-memo` (`deal-team:beacon`) and `d-meridian-notes` (`deal-team:meridian`), both fictional.
+
+**Dev drills** (`stevensctl`, admin URL, `STEVENS_DEV=1` only): `crm grant|revoke <documentId> <principal>`.
+
+### Verify CLI and tests (v3.1)
+
+`.claude/skills/verify-stevens/references/cli-contract.md` changes on the day that needs each item:
+- **R1:**
+  - `init`, as in Setup for a real owner.
+  - `seed` (yours) builds the vault from `fixtures/personal/vault/` instead of `notes/`.
+  - The contract's state line names `vault/`.
+- **R3:**
+  - `crm-db up|status`, the sandbox bootstrap above.
+  - The stack table gains **Firm CRM (Postgres), :5433**, health: connect as `dh_stevens` and `select 1`. `stack up` does not start it; `stack status` reports it.
+  - `doctor` checks that `FIRM_ADMIN_DATABASE_URL` and `FIRM_DATABASE_URL` are set and connect (never printed). If they fail, it names the fix: `crm-db up`, then `firm-crm-setup`.
+  - `seed` (firm) runs `firm-crm-setup` and then a connector sync, instead of loading `crm.json` into `firm.db` directly.
+
+**Tests without Postgres.**
+- Connector unit tests read rows through an injected reader shaped like the `crm` queries, so `npm test` stays green with Postgres down.
+- Tests that need Postgres (the cross-check, holds, revocation, rebuild with Postgres stopped) run when `FIRM_ADMIN_DATABASE_URL` is set and reachable. Otherwise vitest marks them skipped with the reason "no Postgres".
+- R3's exit check requires them to run, not skip.
+
+`.env.example` lists `FIRM_DATABASE_URL` and `FIRM_ADMIN_DATABASE_URL` with the other keys. `init` leaves them alone: the owner's side never needs them.
+
+### Judge path
+
+`npm run demo` rebuilds both databases from committed, fixture-only ledgers in `fixtures/replay/` (recorded by `stevensctl record-replay` against a fresh `STEVENS_DATA_DIR` with fixtures only), pins `STEVENS_NOW`, serves both apps and opens `demo.html`. It needs no `MODEL_API_KEY` and no Postgres. Both status lines read "Replaying a recorded run". Real owner data can never reach `fixtures/replay/` because recording refuses to run when `STEVENS_VAULT_DIR`, `READWISE_TOKEN` or `STEVENS_CALENDAR_ICS` is set.
 
 ## Build order
 
@@ -660,11 +825,18 @@ Days 1–8 (v2.1) are done. Each day below ends with its exit check, a feature-m
 | 12 | Fri Oct 30 | **Flow end to end, no UI.** Form D spike (first hour), import script, `sec-form-d` connector and comps; meeting trigger; bridge and brief in yours; privy at the firm; answer and escalation; share → release; decision draft and approval | Through `stevensctl` only: drop talk → a brief citing the talk, the deck and the comps appears for the Helios meeting → ask → `hold` and an escalation in Morgan's `FirmState` → share → the quote in the Helios record → the decision approved. The comps quote resolves verbatim; replay makes zero calls |
 | 13 | Sat Oct 31 | **Associate app.** Today, the meeting card with the bridge block and ▶, Ask and Answer, the Share sheet, Captures, Shared, Receipts; delete the v2.1 tabs | Browser flows `associate-today`, `associate-ask`, `associate-share`, `associate-receipts`, `associate-captures` pass; no product page shows an id, a stage name or a Run control |
 | 14 | Sun Nov 1 | **Partner app and harness.** Sign-in, Inbox, deal page, Sources; `demo.html`; live updates in both apps | Browser flow `demo-two-screens` passes in `demo.html` with no manual refresh; a share appears on the right in under 2 s |
+| R1 | Wed Oct 28 | **Real personal sources.** `stevensctl init`, `.env.example`, `STEVENS_DATA_DIR` outside the repo; `vault` adapter (replaces `notes`) with revisions and the quiet period; FTS on ingest, lazy extraction and the daily budget; inbox on iCloud Drive and the "Send to Stevens" Shortcut (README steps) | `init` reports every source OK on the owner's curated vault; every note is indexed, only recent ones are extracted, and extraction stays under the cap; editing a note yields one revision after the quiet period and retires the old claims; a photo and a voice memo sent from the phone reach `ready` with no laptop action; nothing under `.obsidian/` is read and the vault is byte-identical after the run; fixture suites, the import boundary and the firm-without-personal test stay green |
+| R2 | Thu Oct 29 | **Solo mode and calendar.** `calendar` adapter (`ical.js`), `events` table, `Meeting.origin`, solo briefs and Ask, the Sources section in yours; live Readwise against the owner's account | With the firm stopped and `STEVENS_FIRM_URL=off`, a real event within 24 h gets a brief citing ≥2 of the owner's sources with no browser request and no `/agent/*` call; each occurrence of a weekly event appears once; a live Readwise sync confirms the export shape (Day 11 paragraph updated) and a second sync adds 0; the v3 demo flow still passes in connected mode |
+| R3 | Fri Oct 30 | **Firm CRM on Postgres.** `stevensctl crm-db up\|status`; schema, roles, grants and RLS; `firm-crm-setup`; `crm` connector over `pg`; `connector.synced`; memberships; `member` in `policy()` and the rules table; `doctor`, `stack` and `seed` updated | `crm-db up` on a fresh `pw` sandbox, then `firm-crm-setup`, yield a CRM that `doctor` reports healthy; the Postgres tests run (not skipped); ACL-map test unchanged and green; exhaustive policy test green with `member`; Postgres cross-check test green; no legal-hold body in `firm.db` or the firm ledger; revoking a grant in Postgres downgrades the document within 60 s; `firm.db` rebuilds with Postgres stopped and zero calls |
+| R4 | Sat Oct 31 | **Seed, judge path, docs.** Beacon and Meridian documents; `stevensctl crm grant\|revoke`; `stevensctl record-replay` and `npm run demo`; README "Run it on your own notes" and "Run the firm"; feature map, `render-map`, docs status | `demo-two-screens` passes with the firm on Postgres; `npm run demo` serves the full recorded flow with no key and no Postgres; a fresh clone plus the README takes the owner from zero to a solo brief |
+| – | Sun Nov 1 | Buffer | — |
 | 15 | Mon Nov 2 | **Hardening.** Failure states (firm down, Meta `fail/garbage/slow/empty` via the fake, Readwise down), honesty labels, README, Pages site, feature map, rough cut | Every failure drill shows its label and fails closed; rough cut under 3:00. **Stretch go/no-go** |
 | 16 | Tue Nov 3 | Final video; buffer | Submit-ready |
 | – | Wed Nov 4 | Submit by midday; 9 PM ET hard deadline | — |
 
 Cut if behind, in this order: the stretch; the `video` normalizer (use the WAV); the `notes` adapter; live Readwise (keep the export file); the Partner Sources page (keep the ACL chips); `demo.html` (two windows); Form D (keep the CRM). Never cut: the 9a leak fixes, the process split, ACL mirroring + rules + their tests, Receipts, the bridge block, automatic triggers (no Run buttons), the two gates.
+
+v3.1 cut order, if behind: the judge path (`npm run demo`); R3–R4 as a block (the firm stays on `crm.json`, labeled as in v3); calendar recurrence (single events only); on-demand extraction (recent items only). Never cut: `init`, the `vault` adapter with revisions, the daily budget, solo mode, and, if R3 ships, the Postgres cross-check test.
 
 ## Stretch (gated)
 
@@ -704,14 +876,22 @@ Cut if behind, in this order: the stretch; the `video` normalizer (use the WAV);
 - **No work → personal write:** no firm code path writes to the personal process or `data/personal/`.
 - **Docs:** `render-map` exits 0; every feature-map grade carries evidence; `docs/` shows the current status; no comments in code.
 - **Honesty:** every simulated surface is labeled (fictional firm CRM, staged talk, simulated sign-in, Readwise export file when no token, PAP-style scopes); glasses captures are real but pre-recorded and imported, not streamed; README matches this spec.
+- **v3.1, real data stays out:** with `STEVENS_DATA_DIR` outside the repo, a full run leaves `git status` clean; `fixtures/`, `docs/` and evidence contain no vault path, token or calendar URL; `record-replay` refuses to run with any real source configured.
+- **v3.1, vault:** dot-folders, excluded folders and `stevens: skip` notes are never read; the vault is byte-identical after a run; an edit yields one revision and retires the old claims; a deleted note retires its claims.
+- **v3.1, budget:** an injected cap pauses extraction with the label and resumes on the next clock day; on-demand extraction of an older note stays within the cap.
+- **v3.1, calendar:** the fixture ICS expands its recurring event, applies the exception and converts the time zone.
+- **v3.1, solo mode:** no request reaches the firm URL; the brief and Ask cite only personal sources; Share is absent.
+- **v3.1, Postgres cross-check:** for every person × document, if `policy()` returns `visible` for that person, `set role dh_p_<person>` can select that document's body. Stevens never shows a person more than Postgres lets that person read.
+- **v3.1, holds and revocation:** no legal-hold body appears in `firm.db` or the firm ledger; `crm revoke` downgrades a document within 60 s; `firm.db` rebuilds with Postgres stopped.
+- **v3.1, secrets:** `STEVENS_CALENDAR_ICS`, `FIRM_DATABASE_URL` and `FIRM_ADMIN_DATABASE_URL` never appear in `web/`, `shared/`, a bundle, `docs/`, logs or evidence.
 
 ## Non-goals and risks
 
 - **Non-goals:**
   - real auth/SSO; PAP integration (narrated);
   - a real CRM (Affinity, DealCloud) or Google Drive connector; the `Connector` interface is the seam (narrated);
-  - per-person ACL enforcement beyond role (deal-team membership is checked for releases only);
-  - MCP, ORMs, Postgres, vector stores, agent or memory frameworks;
+  - MCP, ORMs, Postgres for Stevens's own stores, vector stores, agent or memory frameworks;
+  - hosting Stevens · yours for anyone but its owner (it is single-owner and binds to localhost);
   - live glasses streaming; streaming ASR; on-device models (Glimmer narrated);
   - syncing `personal.db` across devices; unsharing a quote;
   - Modal; a learning ranker; protected time; pi-durable outside the stretch chat.
@@ -726,6 +906,11 @@ Cut if behind, in this order: the stretch; the `video` normalizer (use the WAV);
   - `privy` leaks existence and direction by design (accepted; walls are `excluded`).
   - The weak-model risk is contained because the boundary, the verdict channel and citations are enforced in code, and failures fail closed.
   - "RAG" framing: lead with the bridge and the access rule.
+  - **v3.1, the owner's real notes go to Meta's API.** Mitigation: `STEVENS_VAULT_EXCLUDE`, `stevens: skip`, and nothing from the owner's employer in the vault, calendar or inbox.
+  - **v3.1, scope:** four new days on top of a finished v3. Mitigation: the v3.1 cut order; R3–R4 drop as a block without touching the personal side.
+  - **v3.1, iCloud files that are not downloaded yet** may look complete before their bytes arrive. Mitigation: retry on the next check; verified on R1 with a real phone.
+  - **v3.1, Postgres down during the live demo.** Mitigation: `firm.db` serves the last snapshot, labeled; `npm run demo` needs no Postgres.
+  - **v3.1, `ical.js` and `pg`** are the only new dependencies.
 
 ## Sources
 

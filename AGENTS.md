@@ -20,8 +20,8 @@ It is a solo entry for the Meta Global AI Developer Hackathon (Build for Your Wo
 ## Status
 
 - **v2.1, days 1–8: done** on `main` (one server, one ledger, tabbed UI). Phase 0 (docs first, verification scaffold, Pages site) is recorded in git history.
-- **Two known leaks on `main` at `0f84ea3`:** `/api/events` streams raw ledger events (privy and excluded text) to any viewer, and `bridge.judged` reaches non-owners with its `reason`, which PR #8's bridges card renders. Day 9a fixes both before anything else.
-- **v3, days 9a–16: planned** (SPEC.md § Build order). **Stop and ask the user to review SPEC.md v3 before writing v3 app code.** Day 9a may start as soon as the user approves it.
+- **v3, days 9a–14: done** on `main` (PRs #10–#17). Day 9a fixed the two leaks found at `0f84ea3`.
+- **v3.1, days R1–R4 (Oct 28–31): planned** (SPEC.md § Real build). **Stop and ask the user to review SPEC.md § Real build before writing R1 code.** Days 15–16 follow as planned.
 
 Each day is its own branch and PR. A day is done when its exit check passes. At the end of each day:
 - update the feature-map grades, with evidence;
@@ -43,11 +43,12 @@ Each day is its own branch and PR. A day is done when its exit check passes. At 
   - `server/common/` imports neither.
   - The import-boundary test and the "firm suite passes with `data/personal/` absent" test must stay green.
 - **The servers own the boundary.**
-  - `MODEL_API_KEY`, `STEVENS_AGENT_TOKEN`, `READWISE_TOKEN` and `SEC_USER_AGENT` exist only in `.env.local` and the server processes. They never appear in `web/`, `shared/`, a browser bundle, `docs/`, logs or evidence.
+  - `MODEL_API_KEY`, `STEVENS_AGENT_TOKEN`, `READWISE_TOKEN`, `SEC_USER_AGENT`, `STEVENS_CALENDAR_ICS`, `FIRM_DATABASE_URL` and `FIRM_ADMIN_DATABASE_URL` exist only in `.env.local` and the server processes (the admin URL also in setup scripts and tests). They never appear in `web/`, `shared/`, a browser bundle, `docs/`, logs or evidence.
   - Each browser app calls only its own server's `/api/*`, never Meta and never the other server.
 - **Policy is data.**
   - Access decisions come only from the rules table in `server/common/boundary/rules.ts` via `policy()`.
   - Classifications come only from the ACL map in `server/firm/connectors/acl-map.ts`. An unknown or empty ACL maps to `wall`.
+  - Membership comes only from the firm CRM's Postgres roles, through the `crm` connector.
   - Never write `if (role === …)` access logic anywhere else.
   - Every rule or ACL-map change updates its exhaustive test.
 - **Every model call goes through `server/common/boundary/assemble.ts`.** Never build a prompt anywhere else, in either process.
@@ -74,14 +75,16 @@ Each day is its own branch and PR. A day is done when its exit check passes. At 
 - Log `model`, `responseId`, `usage` and `stageKey` for every real call, inside its ledger event.
 - Model IDs come from `GET /v1/models`. Never invent one; Glimmer is not on the API.
 - Simulated surfaces show `Simulated — <reason>`. The real call is always the primary path.
-- **Data.** Fixtures live in the server-only `fixtures/` directory, never `public/`, and are never served statically; media goes through each server's media route. All personal and firm-internal data is fictional. The only real data is public SEC Form D filings, which never appear in a fictional deal record or memo.
+- **Data.** Fixtures live in the server-only `fixtures/` directory, never `public/`, and are never served statically; media goes through each server's media route. All committed personal and firm-internal data is fictional; the only real committed data is public SEC Form D filings, which never appear in a fictional deal record or memo. The owner's real personal data (vault, Readwise, captures, calendar) lives only under `STEVENS_DATA_DIR` outside the repo and is never committed or copied into fixtures, docs, logs or evidence.
 
 ## Scope guard
 
 Allowed in v3 (new): SQLite through the built-in `node:sqlite` (exactly two files, `personal.db` and `firm.db`, plain SQL); a second Hono process; the Readwise API; a one-time SEC Form D download script; `lucide-react`.
 
+Allowed in v3.1 (new): Postgres 16+ as the firm's CRM only (dev: Postgres 18 in the `pw` sandbox, published on `127.0.0.1:5433`) (Stevens's own stores stay SQLite); the `pg` driver with plain SQL; `ical.js`; the owner's calendar ICS feed.
+
 Not in this build:
-- Postgres, ORMs, vector stores, MCP servers or clients;
+- Postgres for Stevens's own stores, ORMs, vector stores, MCP servers or clients;
 - real CRM, Google Drive or other SaaS connectors;
 - SAM 3.1, unless the SPEC condition triggers;
 - a learning ranker or protected time;
@@ -107,12 +110,13 @@ If a task seems to need one of these, stop and ask. The stretch chat starts only
 
 - `shared/data.ts`: SPEC contracts, imported by both servers and both apps.
 - `server/common/`: `meta/client.ts`, `ledger/store.ts`, `db.ts` (`node:sqlite` helper), `clock.ts`, `boundary/{rules,policy,assemble}.ts`, `resolver/`.
-- `server/firm/`: `index.ts` (Hono :8787), `db/schema.sql`, `connectors/{connector,crm,formd,acl-map}.ts`, `agent-auth.ts`, `context.ts`, `privy.ts`, `escalation.ts`, `release.ts`, `decision.ts`, `filter.ts`.
-- `server/personal/`: `index.ts` (Hono :8788), `db/schema.sql`, `adapters/{adapter,inbox,readwise,notes}.ts`, `normalize/{audio,photo,video,highlight,note}.ts`, `ingest.ts`, `extract.ts`, `triggers.ts`, `bridge.ts`, `brief.ts`, `answer.ts`, `share.ts`, `firm-client.ts`.
+- `server/firm/`: `index.ts` (Hono :8787), `db/schema.sql`, `crm/schema.sql` (the Postgres CRM), `connectors/{connector,crm,formd,acl-map}.ts`, `agent-auth.ts`, `context.ts`, `privy.ts`, `escalation.ts`, `release.ts`, `decision.ts`, `filter.ts`.
+- `server/personal/`: `index.ts` (Hono :8788), `db/schema.sql`, `adapters/{adapter,inbox,readwise,vault,calendar}.ts`, `normalize/{audio,photo,video,highlight,note}.ts`, `ingest.ts`, `extract.ts`, `triggers.ts`, `bridge.ts`, `brief.ts`, `answer.ts`, `share.ts`, `firm-client.ts`.
 - `web/ui/`: shared components and tokens. `web/personal/`: Stevens · yours (:5173 → :8788). `web/firm/`: Stevens · firm (:5174 → :8787). `web/demo.html`: the two-screen harness (dev only).
-- `fixtures/personal/{inbox/,readwise-export.json,notes/}`, `fixtures/enterprise/{crm.json,formd/,…media}`: server-only fixtures.
-- `scripts/import-formd.ts`: the one-time Form D import.
-- `data/personal/{personal.db,ledger.jsonl,inbox/,notes/}`, `data/firm/{firm.db,ledger.jsonl}`: runtime state (gitignored).
+- `fixtures/replay/`: fixture-only recorded ledgers for `npm run demo`.
+- `fixtures/personal/{inbox/,readwise-export.json,vault/,calendar.ics}`, `fixtures/enterprise/{crm.json,formd/,…media}`: server-only fixtures.
+- `scripts/import-formd.ts`: the one-time Form D import. `scripts/firm-crm-setup.ts`: creates the Postgres CRM, its roles and grants from `crm.json`.
+- `data/personal/{personal.db,ledger.jsonl,inbox/,notes/}`, `data/firm/{firm.db,ledger.jsonl}`: runtime state (gitignored). A real owner's personal state lives under `STEVENS_DATA_DIR`, outside the repo.
 - `docs/`: the Pages site.
 - `.claude/skills/{verify-stevens,stevens-feature-map}`: the verification skills, symlinked into `.agents/skills/`.
 
@@ -121,6 +125,7 @@ If a task seems to need one of these, stop and ask. The stretch chat starts only
 - `npm run dev`: both servers and both UIs (:8787, :8788, :5173, :5174); `npm start`: each server serves its built UI.
 - `npx tsc --noEmit`, `npm run build`, `npm test` (vitest: policy, ACL map, assembler, release gates, resolver, resume, import boundary, ingestion, triggers).
 - `muse voice transcribe <file.wav|m4a>`: a quick check of glasses audio outside the app.
+- v3.1: `stevensctl init` configures a real owner's sources; `npm run demo` replays the recorded demo with no key and no Postgres.
 - The verify CLI: see Verification.
 
 ## Verification
