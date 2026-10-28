@@ -25,6 +25,7 @@ export interface FirmMarket {
 export interface FirmState {
   viewer: Person;
   now: string;
+  status: { line: string; busy: boolean };
   deals: FirmDeal[];
   inbox: FirmInboxEntry[];
   drafts: Draft[];

@@ -155,6 +155,7 @@ export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: numbe
 export function bootPersonal(): () => void {
   seedVault();
   ensureDb(readAll());
+  if (process.env.STEVENS_REPLAY === '1') return () => {};
   void pollSources().catch(() => {});
   const stopInbox = inbox.watch((raws) => {
     void ingestRaws(raws).then((result) => {
