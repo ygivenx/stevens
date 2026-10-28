@@ -164,7 +164,8 @@ def cmd_doctor(argv):
     if '--help' in argv:
         print('stevensctl doctor: check tools and credentials.\n')
         print('Checks node 20+, uv, ffmpeg; MODEL_API_KEY in .env.local (never printed);')
-        print('GET /v1/models lists the SPEC models; ports 5173, 5174, 8787 and 8788 state.\n')
+        print('GET /v1/models lists the SPEC models; FIRM_ADMIN/DATABASE_URL connect (never')
+        print('printed); ports 5173, 5174, 8787 and 8788 state.\n')
         print('Examples:')
         print('  stevensctl doctor')
         return 0
@@ -192,6 +193,14 @@ def cmd_doctor(argv):
                 print('ok: GET /v1/models lists %s' % ', '.join(EXPECTED_MODELS))
         except Exception as e:
             rc |= fail('GET /v1/models failed (%s); check network and key' % e)
+    for key in ('FIRM_ADMIN_DATABASE_URL', 'FIRM_DATABASE_URL'):
+        url = read_env_value(key)
+        if not url:
+            rc |= fail('%s is not set in .env.local; run stevensctl crm-db up, then npx tsx scripts/firm-crm-setup.ts' % key)
+        elif not pg_ok(url):
+            rc |= fail('%s does not connect; run stevensctl crm-db up, then npx tsx scripts/firm-crm-setup.ts' % key)
+        else:
+            print('ok: %s connects (not shown)' % key)
     for port in (5173, 5174, 8787, 8788):
         if port_free(port):
             print('ok: port %d free' % port)
@@ -320,6 +329,11 @@ def cmd_stack(argv):
         print('port 8788 (yours): %s' % ('free' if port_free(8788) else 'in use'))
         print('health firm :8787: %s' % ('ok' if server_healthy(8787) else 'down'))
         print('health yours :8788: %s' % ('ok' if server_healthy(8788) else 'down'))
+        crm_url = read_env_value('FIRM_DATABASE_URL')
+        if not crm_url:
+            print('health firm crm :5433: not configured (run stevensctl crm-db up)')
+        else:
+            print('health firm crm :5433: %s' % ('ok' if pg_ok(crm_url) else 'down'))
         print('data dir: %s' % instance_data_dir(name))
         return 0
     print('unknown stack verb: %s (see stevensctl stack --help)' % verb, file=sys.stderr)
@@ -332,7 +346,8 @@ def cmd_seed(argv):
         print('stevensctl seed: stage fixtures + fresh ledger for this instance.\n')
         print('Verifies fixtures/manifest.json, rebuilds this instance vault from')
         print('fixtures/personal/vault/, empties its inbox, truncates both process')
-        print('ledgers, resets the Meta call counter and sets the fake to normal.\n')
+        print('ledgers, resets the Meta call counter and sets the fake to normal.')
+        print('Runs firm-crm-setup so the firm syncs from Postgres, then restarts.\n')
         print('Examples:')
         print('  stevensctl stack up && stevensctl seed')
         return 0
@@ -385,6 +400,11 @@ def cmd_seed(argv):
     if os.path.exists(derived):
         shutil.rmtree(derived)
     print('seed: %d fixtures verified, state fresh, fake normal, counter 0' % len(entries))
+    plus('npx tsx scripts/firm-crm-setup.ts')
+    setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
+    print(setup.stdout, end='')
+    if setup.returncode != 0:
+        return fail('firm-crm-setup failed; run stevensctl crm-db up first (%s)' % setup.stderr.strip()[-200:])
     print('seed: restarting the stack so both processes rebuild from fixtures')
     restart_argv = ['restart', '--instance', name]
     if '--now' in argv:
@@ -1002,6 +1022,223 @@ def cmd_pending(name, argv):
     return 2
 
 
+
+CRM_SANDBOX = 'pw'
+CRM_PORT = 5433
+CRM_ADMIN_ROLE = 'stevens_admin'
+CRM_DATABASE = 'darlington_crm'
+
+PG_NODE = (
+    "const { Client } = require('pg');"
+    "(async () => {"
+    " const client = new Client({ connectionString: process.env.PGURL, connectionTimeoutMillis: 8000 });"
+    " await client.connect();"
+    " const res = await client.query(process.argv[1]);"
+    " console.log(JSON.stringify({ rows: res.rows, rowCount: res.rowCount }));"
+    " await client.end();"
+    "})().catch((e) => { console.error(e.message); process.exit(1); });"
+)
+
+
+def read_env_value(key):
+    env_path = os.path.join(ROOT, '.env.local')
+    if not os.path.exists(env_path):
+        return None
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith(key + '='):
+                return line.strip().split('=', 1)[1]
+    return None
+
+
+def write_env_value(key, value):
+    env_path = os.path.join(ROOT, '.env.local')
+    lines = []
+    if os.path.exists(env_path):
+        with open(env_path) as f:
+            lines = [line for line in f.read().split('\n') if not line.startswith(key + '=')]
+    while lines and lines[-1] == '':
+        lines.pop()
+    lines.append(key + '=' + value)
+    with open(env_path, 'w') as f:
+        f.write('\n'.join(lines) + '\n')
+
+
+def pg_run(url, sql):
+    env = dict(os.environ)
+    env['PGURL'] = url
+    return subprocess.run(['node', '-e', PG_NODE, sql], cwd=ROOT, capture_output=True, text=True, env=env, timeout=30)
+
+
+def pg_ok(url):
+    try:
+        result = pg_run(url, 'select 1 as one')
+    except Exception:
+        return False
+    if result.returncode != 0:
+        return False
+    try:
+        return json.loads(result.stdout)['rows'] == [{'one': 1}]
+    except Exception:
+        return False
+
+
+def sbx(argv):
+    return subprocess.run(['sbx'] + argv, capture_output=True, text=True, timeout=300)
+
+
+def cmd_crm_db(argv):
+    if not argv or argv[0] not in ('up', 'status') or '--help' in argv:
+        print('stevensctl crm-db: bootstrap the Postgres firm CRM in the pw sandbox.\n')
+        print('Usage: stevensctl crm-db up|status\n')
+        print('up is idempotent and touches only the pw sandbox: installs Postgres 18,')
+        print('listens on all interfaces with scram-sha-256 host auth, starts the cluster,')
+        print('creates the stevens_admin login and darlington_crm database, and publishes')
+        print('127.0.0.1:5433. Then run npx tsx scripts/firm-crm-setup.ts.\n')
+        print('Examples:')
+        print('  stevensctl crm-db up')
+        print('  stevensctl crm-db status')
+        return 0 if '--help' in argv else 2
+    if not shutil.which('sbx'):
+        return fail('sbx is missing; install it to run the Postgres sandbox')
+    if argv[0] == 'status':
+        clusters = sbx(['exec', CRM_SANDBOX, 'pg_lsclusters'])
+        print(clusters.stdout.strip() or 'no clusters listed')
+        ports = sbx(['ports', CRM_SANDBOX])
+        print(ports.stdout.strip() or 'no published ports')
+        admin = read_env_value('FIRM_ADMIN_DATABASE_URL')
+        if not admin:
+            print('FIRM_ADMIN_DATABASE_URL is not set in .env.local')
+            return 0
+        print('admin login connects: %s' % ('yes' if pg_ok(admin) else 'no'))
+        return 0
+    has_psql = sbx(['exec', CRM_SANDBOX, 'sh', '-c', 'command -v psql']).returncode == 0
+    if not has_psql:
+        plus('sbx exec pw sudo apt-get install -y postgresql')
+        install = sbx(['exec', CRM_SANDBOX, 'sudo', 'apt-get', 'install', '-y', 'postgresql'])
+        if install.returncode != 0:
+            return fail('postgres install failed: %s' % install.stderr.strip()[-300:])
+    else:
+        print('ok: postgres is installed in pw')
+    conf = '/etc/postgresql/18/main/postgresql.conf'
+    hba = '/etc/postgresql/18/main/pg_hba.conf'
+    conf_has = sbx(['exec', CRM_SANDBOX, 'sudo', 'grep', '-q', r"^listen_addresses = '\*'", conf]).returncode == 0
+    hba_has = sbx(['exec', CRM_SANDBOX, 'sudo', 'grep', '-q', '0.0.0.0/0', hba]).returncode == 0
+    changed = False
+    if not conf_has:
+        plus('listen_addresses in postgresql.conf')
+        sbx(['exec', CRM_SANDBOX, 'sudo', 'sh', '-c', "echo \"listen_addresses = '*'\" >> " + conf])
+        changed = True
+    if not hba_has:
+        plus('scram-sha-256 host auth in pg_hba.conf')
+        sbx(['exec', CRM_SANDBOX, 'sudo', 'sh', '-c', "echo 'host all all 0.0.0.0/0 scram-sha-256' >> " + hba])
+        changed = True
+    if not changed:
+        print('ok: postgres listens with scram host auth')
+    online = 'online' in sbx(['exec', CRM_SANDBOX, 'pg_lsclusters']).stdout
+    if online and changed:
+        plus('sbx exec pw sudo pg_ctlcluster 18 main restart')
+        sbx(['exec', CRM_SANDBOX, 'sudo', 'pg_ctlcluster', '18', 'main', 'restart'])
+    elif not online:
+        plus('sbx exec pw sudo pg_ctlcluster 18 main start')
+        started = sbx(['exec', CRM_SANDBOX, 'sudo', 'pg_ctlcluster', '18', 'main', 'start'])
+        if started.returncode != 0:
+            return fail('cluster start failed: %s' % started.stderr.strip()[-300:])
+    else:
+        print('ok: cluster 18 main is online')
+    admin_url = read_env_value('FIRM_ADMIN_DATABASE_URL')
+    if admin_url:
+        try:
+            password = urllib.parse.urlparse(admin_url).password or ''
+        except Exception:
+            password = ''
+    else:
+        password = ''
+    if not password:
+        password = __import__('secrets').token_hex(24)
+        write_env_value('FIRM_ADMIN_DATABASE_URL', 'postgres://%s:%s@127.0.0.1:%d/%s' % (CRM_ADMIN_ROLE, password, CRM_PORT, CRM_DATABASE))
+        plus('FIRM_ADMIN_DATABASE_URL written to .env.local (not shown)')
+        admin_url = read_env_value('FIRM_ADMIN_DATABASE_URL')
+    escaped = password.replace("'", "''")
+    role_missing = sbx(['exec', CRM_SANDBOX, 'sudo', '-u', 'postgres', 'psql', '-tAc',
+                        "select 1 from pg_roles where rolname='%s'" % CRM_ADMIN_ROLE]).stdout.strip() != '1'
+    if role_missing:
+        plus('create login %s' % CRM_ADMIN_ROLE)
+        created = sbx(['exec', CRM_SANDBOX, 'sudo', '-u', 'postgres', 'psql', '-c',
+                       "create role \"%s\" login superuser password '%s'" % (CRM_ADMIN_ROLE, escaped)])
+        if created.returncode != 0:
+            return fail('could not create %s: %s' % (CRM_ADMIN_ROLE, created.stderr.strip()[-300:]))
+    else:
+        print('ok: login %s exists' % CRM_ADMIN_ROLE)
+    db_missing = sbx(['exec', CRM_SANDBOX, 'sudo', '-u', 'postgres', 'psql', '-tAc',
+                      "select 1 from pg_database where datname='%s'" % CRM_DATABASE]).stdout.strip() != '1'
+    if db_missing:
+        plus('create database %s' % CRM_DATABASE)
+        created = sbx(['exec', CRM_SANDBOX, 'sudo', '-u', 'postgres', 'psql', '-c',
+                       'create database "%s" owner "%s"' % (CRM_DATABASE, CRM_ADMIN_ROLE)])
+        if created.returncode != 0:
+            return fail('could not create %s: %s' % (CRM_DATABASE, created.stderr.strip()[-300:]))
+    else:
+        print('ok: database %s exists' % CRM_DATABASE)
+    published = '5433' in sbx(['ports', CRM_SANDBOX]).stdout
+    if not published:
+        plus('sbx ports pw --publish 5433:5432')
+        pub = sbx(['ports', CRM_SANDBOX, '--publish', '5433:5432'])
+        if pub.returncode != 0:
+            return fail('port publish failed: %s' % pub.stderr.strip()[-300:])
+    else:
+        print('ok: 127.0.0.1:5433 is published')
+    if not pg_ok(admin_url):
+        return fail('cannot connect as %s; check the sandbox and .env.local' % CRM_ADMIN_ROLE)
+    print('crm-db up: %s healthy at 127.0.0.1:%d (next: npx tsx scripts/firm-crm-setup.ts)' % (CRM_DATABASE, CRM_PORT))
+    return 0
+
+
+def crm_grantee(principal):
+    if principal == 'all-staff':
+        return 'dh_all_staff'
+    if principal == 'partners':
+        return 'dh_partners'
+    team = re.match(r'^deal-team:(.+)$', principal)
+    if team:
+        return 'dh_deal_team_' + re.sub(r'[^a-z0-9_]', '_', team.group(1))
+    hold = re.match(r'^legal-hold:(.+)$', principal)
+    if hold:
+        return 'dh_legal_hold_' + re.sub(r'[^a-z0-9_]', '_', hold.group(1))
+    return None
+
+
+def cmd_crm(argv):
+    if len(argv) != 3 or argv[0] not in ('grant', 'revoke') or '--help' in argv:
+        print('stevensctl crm: dev drills on CRM document grants (STEVENS_DEV=1 only).\n')
+        print('Usage: stevensctl crm grant|revoke <documentId> <principal>\n')
+        print('The grant takes effect at the next connector sync, within 60 seconds.\n')
+        print('Examples:')
+        print('  STEVENS_DEV=1 stevensctl crm revoke d-beacon-memo deal-team:beacon')
+        print('  STEVENS_DEV=1 stevensctl crm grant d-beacon-memo deal-team:beacon')
+        return 0 if '--help' in argv else 2
+    if os.environ.get('STEVENS_DEV') != '1':
+        print('crm refuses: dev drills need STEVENS_DEV=1.', file=sys.stderr)
+        return 2
+    admin = read_env_value('FIRM_ADMIN_DATABASE_URL')
+    if not admin:
+        return fail('FIRM_ADMIN_DATABASE_URL is not set; run stevensctl crm-db up first')
+    verb, document_id, principal = argv
+    grantee = crm_grantee(principal)
+    if not grantee:
+        return fail('unknown principal %s' % principal)
+    doc_id = document_id.replace("'", "''")
+    if verb == 'grant':
+        sql = "insert into crm.document_grants (document_id, grantee) values ('%s', '%s') on conflict do nothing" % (doc_id, grantee)
+    else:
+        sql = "delete from crm.document_grants where document_id = '%s' and grantee = '%s'" % (doc_id, grantee)
+    plus(sql)
+    result = pg_run(admin, sql)
+    if result.returncode != 0:
+        return fail('crm %s failed: %s' % (verb, result.stderr.strip()[-300:]))
+    print('crm %s: %s %s (applies at the next connector sync)' % (verb, document_id, principal))
+    return 0
+
 def main(argv):
     if not argv or argv[0] in ('--help', '-h', 'help'):
         print('stevensctl: verify Stevens end to end.\n')
@@ -1018,7 +1255,9 @@ def main(argv):
         print('  report    print the report shape')
         print('  meta      fake --mode ... | calls')
         print('  drop      land talk|slide in the glasses inbox')
-        print('  init      configure Stevens for a real owner\n')
+        print('  init      configure Stevens for a real owner')
+        print('  crm-db    up|status the Postgres firm CRM sandbox')
+        print('  crm       grant|revoke a document principal (dev drill)\n')
         print('Examples:')
         print('  stevensctl doctor')
         print('  stevensctl stack up && stevensctl seed')
@@ -1049,6 +1288,10 @@ def main(argv):
         return cmd_report(argv[1:])
     if name == 'init':
         return cmd_init(argv[1:])
+    if name == 'crm-db':
+        return cmd_crm_db(argv[1:])
+    if name == 'crm':
+        return cmd_crm(argv[1:])
     if name in PENDING:
         return cmd_pending(name, argv[1:])
     print('unknown command: %s (see stevensctl --help)' % name, file=sys.stderr)
