@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { closeFirmDb, getFirmDb } from './store.js';
@@ -11,7 +11,8 @@ let app: typeof import('./index.js')['app'];
 
 beforeEach(async () => {
   closeFirmDb();
-  const dir = mkdtempSync(join(tmpdir(), 'stevens-routes-'));
+  const dir = join(mkdtempSync(join(tmpdir(), 'stevens-routes-')), 'firm');
+  mkdirSync(dir, { recursive: true });
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = 'test-agent-token-9b';
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));

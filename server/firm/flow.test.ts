@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readAll } from '../common/ledger/store.js';
@@ -23,6 +23,8 @@ function calls(): number {
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'stevens-firmflow-'));
+  dir = join(dir, 'firm');
+  mkdirSync(dir, { recursive: true });
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = TOKEN;
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));

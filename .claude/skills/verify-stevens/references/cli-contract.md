@@ -13,7 +13,7 @@ Status: every v2.1 command is implemented (day 7). The v3 changes below are **pl
 | Associate app (Vite, `web/personal/`) | 5173 | `GET /` → 200 |
 | Partner app (Vite, `web/firm/`) | 5174 | `GET /` → 200 |
 
-State: `data/firm/{firm.db,ledger.jsonl}` and `data/personal/{personal.db,ledger.jsonl,inbox/,notes/}`.
+State: `data/firm/{firm.db,ledger.jsonl}` and `data/personal/{personal.db,ledger.jsonl,inbox/,vault/}`. Verify flows never use this tree: `stack up` seals the instance to `/tmp/stevens-verify/<instance>/data/` with fixture sources and real tokens unset, so default flows never touch owner data (v3.1: day R1).
 
 ## Instances and evidence
 
@@ -34,19 +34,23 @@ Exit 1 names the missing piece and the fix.
 
 ### stack up|down|logs|restart|status
 
-Local copy of the deployment: `npm run dev`. `up` starts all four pieces and waits for each health check in the table above. `status` prints the instance, pids, ports and health per piece. `logs [firm|yours|web]` tails one piece or all. `down` stops only this instance's processes. `--now <iso>` sets `STEVENS_NOW` for the instance (the demo uses `2026-10-28T14:00:00-04:00`). (v3: day 9b.)
+Local copy of the deployment: `npm run dev`. `up` starts all four pieces and waits for each health check in the table above. `status` prints the instance, pids, ports and health per piece. `logs [firm|yours|web]` tails one piece or all. `down` stops only this instance's processes. `--now <iso>` sets `STEVENS_NOW` for the instance (the demo uses `2026-10-28T14:00:00-04:00`). (v3: day 9b.) `up` seals the instance: `STEVENS_DATA_DIR` points under `/tmp/stevens-verify/<instance>/data/`, vault and inbox point inside it, and real source credentials are unset, so the stack only ever sees fixtures (v3.1: day R1).
+
+### init
+
+Configures Stevens for a real owner: writes the v3.1 keys to `.env.local` (merged, other keys kept), checks `MODEL_API_KEY` plus each source, and prints one line per source without ever printing a token or URL. Flags are agent-runnable; missing values prompt in a terminal and error elsewhere. `--firm-url off` (the default) means solo mode. (v3.1: day R1.)
 
 ### seed
 
 Rebuilds this instance's state from fixtures, with fresh ledgers:
 - **firm:** `firm.db` from `fixtures/enterprise/crm.json` and `fixtures/enterprise/formd/*.json`, then a connector sync;
-- **yours:** `data/personal/notes/` from `fixtures/personal/notes/`; Readwise from the live account if `READWISE_TOKEN` is set, else `fixtures/personal/readwise-export.json`; an **empty** inbox.
+- **yours:** the instance `vault/` from `fixtures/personal/vault/`; Readwise from `fixtures/personal/readwise-export.json` (the sealed stack unsets `READWISE_TOKEN`); an **empty** inbox.
 
 `--with-captures` also drops the talk and the slide, and waits until both items are `ready`. Synthetic and fictional only (plus public Form D rows); refuses to run against anything but the local stack. (v3: day 9b for the databases, day 10–11 for the adapters.)
 
 ### drop <talk|slide|path> [--wait]
 
-Copies a fixture (or any file) into `data/personal/inbox/`, which is exactly what the glasses import does. `--wait` polls the personal `/api/state` until the item is `ready`, `failed` or rejected, and prints its status, segment count and claim count. (v3: day 10.)
+Copies a fixture (or any file) into this instance's `inbox/`, which is exactly what the glasses import does. Needs this instance's stack up. `--wait` polls the personal `/api/state` until the item is `ready`, `failed` or rejected, and prints its status, segment count and claim count. (v3: day 10.)
 
 ### sync [firm|yours]
 

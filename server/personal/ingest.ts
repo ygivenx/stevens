@@ -9,9 +9,19 @@ import { normalizePhoto, type PhotoDeps } from './normalize/photo.js';
 import { normalizeVideo, type VideoDeps } from './normalize/video.js';
 import { highlightPieces, splitNote } from './normalize/text.js';
 import { extractItem, type ExtractDeps } from './extract.js';
-import { hasContentHash, writeIngested } from './store.js';
+import { nowMs } from '../common/clock.js';
+import { activeItemForOrigin, hasContentHash, markRemoved, writeIngested, writeRevised, writeVaultMeta } from './store.js';
 
 export interface IngestDeps extends AudioDeps, PhotoDeps, VideoDeps, ExtractDeps {}
+
+export function backfillDays(): number {
+  const parsed = Number(process.env.STEVENS_BACKFILL_DAYS ?? '90');
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 90;
+}
+
+export function withinBackfill(capturedAt: string): boolean {
+  return Date.parse(capturedAt) >= nowMs() - backfillDays() * 24 * 3600 * 1000;
+}
 
 export function itemIdFor(raw: RawItem): string {
   return 'it-' + createHash('sha256').update(raw.origin + '|' + raw.originId + '|' + raw.contentHash).digest('hex').slice(0, 12);
@@ -42,6 +52,8 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
   const itemId = itemIdFor(raw);
   if (ingestedItemIds().has(itemId) || hasContentHash(raw.contentHash)) return { itemId, added: false };
   const at = new Date().toISOString();
+  const prior = raw.origin === 'vault' ? activeItemForOrigin(raw.origin, raw.originId) : null;
+  const revising = prior && prior.contentHash !== raw.contentHash ? prior.id : null;
   let pieces: Piece[] = [];
   let api: Api | null = null;
   let stageKeyValue = 'normalize:' + raw.contentHash;
@@ -67,8 +79,13 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
       id: itemId, origin: raw.origin, originId: raw.originId, kind: raw.kind, title: raw.title,
       capturedAt: raw.capturedAt, status: 'failed', error: message, hasMedia: raw.mediaPath !== undefined,
     };
-    append({ at, type: 'item.ingested', item: failed, segments: [], contentHash: raw.contentHash, mediaPath: raw.mediaPath });
-    writeIngested(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
+    if (revising) {
+      append({ at, type: 'item.revised', item: failed, segments: [], contentHash: raw.contentHash, mediaPath: raw.mediaPath, supersedes: revising });
+      writeRevised(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at }, revising);
+    } else {
+      append({ at, type: 'item.ingested', item: failed, segments: [], contentHash: raw.contentHash, mediaPath: raw.mediaPath });
+      writeIngested(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
+    }
     throw err;
   }
   const segments: Segment[] = pieces.map((piece, seq) => ({
@@ -85,9 +102,14 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
     id: itemId, origin: raw.origin, originId: raw.originId, kind: raw.kind, title: raw.title,
     capturedAt: raw.capturedAt, status: 'ready', hasMedia: raw.mediaPath !== undefined,
   };
-  append({ at, type: 'item.ingested', item, segments, contentHash: raw.contentHash, mediaPath: raw.mediaPath, api: api as Api });
-  writeIngested(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
-  await extractItem(itemId, deps);
+  if (revising) {
+    append({ at, type: 'item.revised', item, segments, contentHash: raw.contentHash, mediaPath: raw.mediaPath, supersedes: revising, api: api as Api });
+    writeRevised(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at }, revising);
+  } else {
+    append({ at, type: 'item.ingested', item, segments, contentHash: raw.contentHash, mediaPath: raw.mediaPath, api: api as Api });
+    writeIngested(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
+  }
+  if (withinBackfill(raw.capturedAt)) await extractItem(itemId, deps);
   return { itemId, added: true };
 }
 
@@ -119,6 +141,33 @@ export async function runInboxPoll(deps: IngestDeps = {}): Promise<{ added: numb
   } finally {
     running = false;
   }
+}
+
+export async function ingestVaultScan(scan: { raws: RawItem[]; meta: Map<string, { tags: string[]; aliases: string[]; links: string[] }> }, deps: IngestDeps = {}): Promise<{ added: number }> {
+  let added = 0;
+  for (const raw of scan.raws) {
+    try {
+      const result = await ingestRaw(raw, deps);
+      if (result.added) added += 1;
+      const meta = scan.meta.get(raw.originId);
+      if (meta) writeVaultMeta(raw.origin, raw.originId, meta);
+    } catch {
+      continue;
+    }
+  }
+  return { added };
+}
+
+export function retireVaultRemoved(originIds: string[]): number {
+  let retired = 0;
+  for (const originId of originIds) {
+    const active = activeItemForOrigin('vault', originId);
+    if (!active) continue;
+    append({ at: new Date().toISOString(), type: 'item.removed', origin: 'vault', originId, itemId: active.id });
+    markRemoved(active.id);
+    retired += 1;
+  }
+  return retired;
 }
 
 export async function ingestRaws(raws: RawItem[], deps: IngestDeps = {}): Promise<{ added: number }> {

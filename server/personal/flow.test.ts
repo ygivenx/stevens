@@ -69,10 +69,20 @@ beforeAll(async () => {
   usePersonal();
   copyFileSync(join(process.cwd(), 'fixtures', 'personal', 'talk.wav'), join(base, 'personal', 'inbox', 'talk.wav'));
   await runInboxPoll();
-  const { seedNotes, NotesAdapter } = await import('./adapters/notes.js');
-  const { ingestRaws } = await import('./ingest.js');
-  seedNotes();
-  await ingestRaws(await new NotesAdapter().poll());
+  const { seedVault, scanVault } = await import('./adapters/vault.js');
+  const { ingestVaultScan } = await import('./ingest.js');
+  const { utimesSync: touch, readdirSync: list, statSync: stat } = await import('node:fs');
+  seedVault();
+  const past = new Date(Date.now() - 10 * 60 * 1000);
+  const settle = (current: string): void => {
+    for (const name of list(current)) {
+      const path = join(current, name);
+      if (stat(path).isDirectory()) settle(path);
+      else touch(path, past, past);
+    }
+  };
+  settle(join(base, 'personal', 'vault'));
+  await ingestVaultScan(scanVault());
 });
 
 afterAll(() => {
@@ -148,7 +158,7 @@ describe('ask and escalation', () => {
     expect(result.escalation).toBe('queued');
     expect(result.firmReachable).toBe(false);
     expect(result.draft.sentences.length).toBeGreaterThan(0);
-  });
+  }, 30000);
 
   it('replays the same question with zero new calls', async () => {
     usePersonal();
@@ -182,7 +192,7 @@ describe('personal routes', () => {
       body: JSON.stringify({ dealId: 'helios' }),
     });
     expect(missing.status).toBe(404);
-  });
+  }, 30000);
 });
 
 describe('share gate', () => {

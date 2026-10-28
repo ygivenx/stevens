@@ -37,6 +37,19 @@ The rules are a data table, checked by a test against every role × source × pu
 - **Real:** the Meta model calls; the Ray-Ban Meta captures (pre-recorded and imported, not streamed); public SEC Form D filings; the Readwise API when a token is set.
 - **Simulated and labeled:** the VC firm, its CRM and its people (fictional); the staged talk; sign-in; Readwise highlights from an export file when no token is set; permission scopes modeled on Meta's Personal Agent Protocol.
 
+## Send to Stevens (iPhone Shortcut)
+
+Ray-Ban Meta captures reach Stevens through the Meta AI app and the Photos share sheet. Build the Shortcut once:
+
+1. On the iPhone, open Shortcuts and tap + to make a new shortcut. Name it **Send to Stevens**.
+2. Tap the (i) and turn on **Show in Share Sheet**. Under supported input types, keep Images, Media and Files selected.
+3. Add a **Save File** action. Set it to save **Shortcut Input** into iCloud Drive, in the folder configured as `STEVENS_INBOX_DIR` (for example `Stevens Inbox`). Turn off **Ask Where to Save**.
+4. In the Meta AI app, import the glasses capture, then share it to Photos.
+5. In Photos, select the photos, videos or voice memos, tap Share, and run **Send to Stevens**.
+6. Stevens ingests new files on its own within a minute. Files stay in the folder; sending the same file twice adds nothing.
+7. A file iCloud has not downloaded yet is picked up on a later check, not rejected.
+8. Supported types: `.wav`, `.m4a`, `.mp3`, `.jpg`, `.jpeg`, `.png`, `.heic`, `.mp4`, `.mov`. Anything else is skipped with a reason.
+
 ## Run (v2.1, until the v3 split lands)
 
 Requires Node 24+ and a Meta Model API key.

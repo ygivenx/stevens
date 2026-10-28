@@ -4,12 +4,15 @@ import type { Claim, Draft, Item, Meeting, Origin, Person, Role, SourceRef } fro
 import { readAll } from '../common/ledger/store.js';
 import { nowIso } from '../common/clock.js';
 import { getAdapterState, getDb, allPersonalClaims } from './store.js';
+import { extractionPaused } from './extract.js';
 import { firmContext, firmMeetings, type FirmMeeting } from './firm-client.js';
 import { inboxDir } from './adapters/inbox.js';
+import { vaultName } from './adapters/vault.js';
 
 export interface PersonalState {
   owner: Person;
   now: string;
+  vaultName: string;
   status: { line: string; busy: boolean };
   adapters: { origin: Origin; label: string; lastSyncAt: string | null; simulated?: string }[];
   items: Item[];
@@ -33,7 +36,7 @@ function listItems(): Item[] {
     const db = getDb();
     const rows = db.prepare(
       `select id, origin, origin_id as originId, kind, title, captured_at as capturedAt, status, error, media_path as mediaPath
-       from items order by captured_at desc`,
+       from items where status not in ('superseded', 'removed') order by captured_at desc`,
     ).all() as unknown as (Omit<Item, 'hasMedia'> & { mediaPath: string | null })[];
     return rows.map((row) => {
       const { mediaPath, ...rest } = row;
@@ -47,7 +50,7 @@ function listItems(): Item[] {
 function adapterEntries(): PersonalState['adapters'] {
   const inbox = getAdapterState('glasses');
   const readwise = getAdapterState('readwise');
-  const notesSync = lastSyncFor('notes');
+  const vault = getAdapterState('vault');
   const inboxSync = lastSyncFor('glasses');
   return [
     { origin: 'glasses' as Origin, label: 'Glasses inbox', lastSyncAt: inbox?.lastSyncAt ?? inboxSync },
@@ -57,7 +60,7 @@ function adapterEntries(): PersonalState['adapters'] {
       lastSyncAt: readwise?.lastSyncAt ?? lastSyncFor('readwise'),
       simulated: process.env.READWISE_TOKEN ? undefined : 'Simulated — Readwise export file',
     },
-    { origin: 'notes' as Origin, label: 'Notes folder', lastSyncAt: notesSync },
+    { origin: 'vault' as Origin, label: 'Obsidian notes', lastSyncAt: vault?.lastSyncAt ?? lastSyncFor('vault') },
   ];
 }
 
@@ -72,6 +75,11 @@ function lastSyncFor(adapter: Origin): string | null {
 function statusLine(items: Item[], firmReachable: boolean, lastBriefAt: string | null): { line: string; busy: boolean } {
   const pending = pendingInboxTitle(items);
   if (pending) return { line: 'Reading the ' + pending + '…', busy: true };
+  try {
+    if (extractionPaused()) return { line: 'Paused: daily reading budget reached', busy: false };
+  } catch {
+    void 0;
+  }
   if (!firmReachable) return { line: "Couldn't reach the firm · showing the brief from " + (lastBriefAt ? timeShort(lastBriefAt) : 'earlier'), busy: false };
   const latest = latestCaptureAt(items);
   if (!latest) return { line: 'No captures yet', busy: false };
@@ -147,7 +155,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
     const upcoming: FirmMeeting[] = await firmMeetings(24);
     const briefByDeal = new Map<string, string>();
     for (const draft of drafts) {
-      if (draft.kind === 'brief' && draft.dealId && !briefByDeal.has(draft.dealId)) briefByDeal.set(draft.dealId, draft.id);
+      if (draft.kind === 'brief' && draft.dealId) briefByDeal.set(draft.dealId, draft.id);
     }
     meetings = upcoming.map((meeting) => ({
       id: meeting.id,
@@ -174,12 +182,10 @@ export async function buildPersonalState(): Promise<PersonalState> {
       if (draft.kind === 'brief' && draft.dealId) {
         const fetched = events.find((e) => e.type === 'context.fetched' && (e as { dealId?: string }).dealId === draft.dealId);
         void fetched;
-        if (!briefByDeal.has(draft.dealId)) {
-          briefByDeal.set(draft.dealId, {
-            meeting: { id: 'm-' + draft.dealId, dealId: draft.dealId, company: draft.dealId === 'helios' ? 'Helios' : draft.dealId, title: 'Meeting', startsAt: now },
-            briefId: draft.id,
-          });
-        }
+        briefByDeal.set(draft.dealId, {
+          meeting: { id: 'm-' + draft.dealId, dealId: draft.dealId, company: draft.dealId === 'helios' ? 'Helios' : draft.dealId, title: 'Meeting', startsAt: now },
+          briefId: draft.id,
+        });
       }
     }
     meetings = [...briefByDeal.values()].map((entry) => ({ ...entry.meeting, briefId: entry.briefId, team: [] }));
@@ -208,6 +214,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
   return {
     owner,
     now,
+    vaultName: vaultName(),
     status,
     adapters,
     items,

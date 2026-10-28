@@ -49,7 +49,7 @@ export function firmEscalate(dealId: string, questionId: string): Promise<{ esca
 
 export interface ReleaseProvenance {
   title: string;
-  origin: 'glasses' | 'readwise' | 'notes';
+  origin: 'glasses' | 'readwise' | 'vault';
   capturedAt: string;
   speaker?: string;
   at?: string;

@@ -6,9 +6,17 @@ import { join } from 'node:path';
 import { readAll } from '../common/ledger/store.js';
 import { quoteIn } from '../common/resolver/resolve.js';
 import { chunkPlan, normalizeAudio, atLabel } from './normalize/audio.js';
-import { ingestRaw, itemIdFor, runInboxPoll } from './ingest.js';
-import { closeDb, ensureDb, getDb, getItemBundle, searchSegments } from './store.js';
+import { ingestRaw, itemIdFor, retireVaultRemoved, runInboxPoll } from './ingest.js';
+import { allPersonalClaims, closeDb, ensureDb, getDb, getItemBundle, searchSegments } from './store.js';
 import type { RawItem } from '../../shared/data.js';
+
+function vaultRaw(originId: string, text: string): RawItem {
+  return {
+    origin: 'vault', originId, kind: 'note', title: originId,
+    capturedAt: new Date().toISOString(), text,
+    contentHash: createHash('sha256').update(text.replace(/\s+/g, ' ').trim()).digest('hex'),
+  };
+}
 
 function freshDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'stevens-ingest-'));
@@ -117,6 +125,18 @@ describe('inbox ingest', () => {
     expect(readAll().length).toBe(before + 1);
   });
 
+  it('leaves a missing configured inbox alone instead of throwing', async () => {
+    const { InboxAdapter } = await import('./adapters/inbox.js');
+    process.env.STEVENS_INBOX_DIR = join(process.env.STEVENS_DATA_DIR as string, 'no-such-inbox');
+    try {
+      const stop = new InboxAdapter().watch(() => {});
+      expect(typeof stop).toBe('function');
+      stop();
+    } finally {
+      delete process.env.STEVENS_INBOX_DIR;
+    }
+  });
+
   it('rejects unsupported files with a reason', async () => {
     const dir = process.env.STEVENS_DATA_DIR as string;
     const inbox = join(dir, 'inbox');
@@ -136,6 +156,55 @@ describe('inbox ingest', () => {
     const hits = searchSegments('churn');
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0].text.toLowerCase()).toContain('churn');
+  });
+});
+
+describe('vault revisions', () => {
+  it('supersedes the old revision and retires its claims', async () => {
+    const first = await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs high this year.'));
+    expect(first.added).toBe(true);
+    const oldClaims = allPersonalClaims().map((claim) => claim.id);
+    expect(oldClaims.length).toBeGreaterThan(0);
+    const second = await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs low this year, revised.'));
+    expect(second.added).toBe(true);
+    expect(second.itemId).not.toBe(first.itemId);
+    const revised = readAll().find((e) => e.type === 'item.revised');
+    expect(revised?.type).toBe('item.revised');
+    if (revised?.type === 'item.revised') expect(revised.supersedes).toBe(first.itemId);
+    expect(getItemBundle(first.itemId)?.item.status).toBe('superseded');
+    const live = allPersonalClaims().map((claim) => claim.id);
+    expect(live.length).toBeGreaterThan(0);
+    for (const id of oldClaims) expect(live).not.toContain(id);
+    expect(searchSegments('revised').every((hit) => hit.itemId === second.itemId)).toBe(true);
+  });
+
+  it('retires a deleted note from retrieval while keeping its ledger history', async () => {
+    const added = await ingestRaw(vaultRaw('gone.md', '# Gone\n\nChurn notes to delete.'));
+    expect(allPersonalClaims().length).toBeGreaterThan(0);
+    expect(retireVaultRemoved(['gone.md', 'never-there.md'])).toBe(1);
+    const removed = readAll().find((e) => e.type === 'item.removed');
+    expect(removed?.type).toBe('item.removed');
+    if (removed?.type === 'item.removed') expect(removed.itemId).toBe(added.itemId);
+    expect(getItemBundle(added.itemId)?.item.status).toBe('removed');
+    expect(allPersonalClaims()).toHaveLength(0);
+    expect(searchSegments('delete')).toHaveLength(0);
+    expect(readAll().some((e) => e.type === 'item.ingested')).toBe(true);
+  });
+
+  it('rebuilds superseded and removed states from the ledger', async () => {
+    await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs high this year.'));
+    await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs low this year, revised.'));
+    await ingestRaw(vaultRaw('gone.md', '# Gone\n\nChurn notes to delete.'));
+    retireVaultRemoved(['gone.md']);
+    closeDb();
+    rmSync(join(process.env.STEVENS_DATA_DIR as string, 'personal.db'), { force: true });
+    const rebuilt = ensureDb(readAll());
+    expect(rebuilt.rebuilt).toBe(true);
+    const db = getDb();
+    const statuses = (db.prepare(`select status from items`).all() as { status: string }[]).map((row) => row.status);
+    expect(statuses).toContain('superseded');
+    expect(statuses).toContain('removed');
+    expect(allPersonalClaims().every((claim) => !claim.quote.includes('delete'))).toBe(true);
   });
 });
 

@@ -43,3 +43,11 @@ create table adapter_state (
   last_sync_at text,
   last_error text
 );
+create table vault_meta (
+  origin text not null,
+  origin_id text not null,
+  tags text not null,
+  aliases text not null,
+  links text not null,
+  primary key (origin, origin_id)
+);

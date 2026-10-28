@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -26,6 +26,8 @@ let app: typeof import('./index.js')['app'];
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'stevens-agent-'));
+  dir = join(dir, 'firm');
+  mkdirSync(dir, { recursive: true });
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = TOKEN;
   process.env.STEVENS_NOW = '2026-10-28T14:00:00-04:00';

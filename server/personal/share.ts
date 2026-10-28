@@ -6,7 +6,7 @@ import { firmRelease } from './firm-client.js';
 
 export interface ShareProvenance {
   title: string;
-  origin: 'glasses' | 'readwise' | 'notes';
+  origin: 'glasses' | 'readwise' | 'vault';
   capturedAt: string;
   speaker?: string;
   at?: string;

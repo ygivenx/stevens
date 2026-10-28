@@ -10,9 +10,15 @@ export const PHOTO_EXTS = new Set(['.jpg', '.jpeg', '.png', '.heic']);
 export const VIDEO_EXTS = new Set(['.mp4', '.mov']);
 
 export function inboxDir(): string {
+  const configured = process.env.STEVENS_INBOX_DIR;
+  if (configured) return configured;
   const dir = join(dataDir(), 'inbox');
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+export function downloaded(stat: { size: number; blocks: number }): boolean {
+  return stat.size === 0 || stat.blocks > 0;
 }
 
 export function kindFor(filename: string): ItemKind | null {
@@ -32,18 +38,22 @@ export function scanInbox(): RawItem[] {
   const found: RawItem[] = [];
   for (const filename of readdirSync(dir)) {
     const path = join(dir, filename);
-    let size = 0;
+    let stat;
     try {
-      const stat = statSync(path);
+      stat = statSync(path);
       if (!stat.isFile()) continue;
-      size = stat.size;
     } catch {
       continue;
     }
-    if (size === 0) continue;
+    if (stat.size === 0 || !downloaded(stat)) continue;
     const kind = kindFor(filename);
     if (!kind) continue;
-    const bytes = readFileSync(path);
+    let bytes: Buffer;
+    try {
+      bytes = readFileSync(path);
+    } catch {
+      continue;
+    }
     found.push({
       origin: 'glasses',
       originId: filename,
@@ -82,7 +92,12 @@ export class InboxAdapter implements Adapter {
 
   watch(onItems: (items: RawItem[]) => void): () => void {
     const dir = inboxDir();
-    const seen = new Set(scanInbox().map((item) => item.contentHash));
+    let seen: Set<string>;
+    try {
+      seen = new Set(scanInbox().map((item) => item.contentHash));
+    } catch {
+      return () => {};
+    }
     let timer: ReturnType<typeof setTimeout> | null = null;
     let watcher: FSWatcher | null = null;
     const sizeOf = (path: string): number => {

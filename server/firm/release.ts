@@ -6,7 +6,7 @@ import type { AgentPerson } from './agent-auth.js';
 
 const Provenance = z.strictObject({
   title: z.string().min(1),
-  origin: z.enum(['glasses', 'readwise', 'notes']),
+  origin: z.enum(['glasses', 'readwise', 'vault']),
   capturedAt: z.string().min(1),
   speaker: z.string().optional(),
   at: z.string().optional(),

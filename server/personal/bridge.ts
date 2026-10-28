@@ -4,6 +4,7 @@ import { assemble } from '../common/boundary/assemble.js';
 import { judgeBridge, WONDER_MODEL, type Judged } from '../common/meta/client.js';
 import { candidates } from '../common/pipeline/bridge.js';
 import { allPersonalClaims, personalSources, searchSegments } from './store.js';
+import { ensureExtractedForTerms, queryTerms } from './extract.js';
 
 export interface FirmSlice {
   sources: SourceRef[];
@@ -50,15 +51,18 @@ function judgedPairs(): Set<string> {
   return done;
 }
 
-export function widenedPersonalClaims(firmClaims: Claim[], limit: number = 50): Claim[] {
-  const mine = allPersonalClaims();
+export function firmTerms(firmClaims: Claim[]): string[] {
   const terms = new Set<string>();
   for (const claim of firmClaims) {
     terms.add(claim.entity);
-    if (claim.metric) for (const token of claim.metric.toLowerCase().split(/[^a-z0-9]+/)) {
-      if (token.length > 2) terms.add(token);
-    }
+    if (claim.metric) for (const token of queryTerms(claim.metric)) terms.add(token);
   }
+  return [...terms];
+}
+
+export function widenedPersonalClaims(firmClaims: Claim[], limit: number = 50): Claim[] {
+  const mine = allPersonalClaims();
+  const terms = firmTerms(firmClaims);
   const widened = new Map<string, Claim>();
   for (const claim of mine) widened.set(claim.id, claim);
   for (const term of terms) {
@@ -87,6 +91,7 @@ export async function judgeBridges(slice: FirmSlice, deps: BridgeDeps = {}): Pro
   const viewer = ownerRole();
   const shells = firmShells(slice);
   const shellById = new Map(shells.map((shell) => [shell.id, shell]));
+  await ensureExtractedForTerms(firmTerms(slice.claims)).catch(() => {});
   const mine = widenedPersonalClaims(slice.claims);
   const judged: Bridge[] = [];
   const done = judgedPairs();

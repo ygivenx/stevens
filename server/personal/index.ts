@@ -1,21 +1,25 @@
 import { serve } from '@hono/node-server';
 import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { join, extname, sep } from 'node:path';
 import { createApp } from '../common/app.js';
 import { openProcessDb } from '../common/db.js';
 import { readAll } from '../common/ledger/store.js';
 import { InboxAdapter } from './adapters/inbox.js';
-import { NotesAdapter, seedNotes } from './adapters/notes.js';
+import { VaultAdapter, scanVault, seedVault, vaultPaths } from './adapters/vault.js';
 import { ReadwiseAdapter } from './adapters/readwise.js';
 import { askQuestion } from './answer.js';
 import { buildPersonalState } from './state.js';
-import { ingestRaws, runInboxPoll, type IngestDeps } from './ingest.js';
+import { ingestRaws, ingestVaultScan, retireVaultRemoved, runInboxPoll, type IngestDeps } from './ingest.js';
 import { startEscalationRetry, startTriggerLoop, runMeetingTrigger } from './triggers.js';
 import { receiptsFor } from './receipts.js';
 import { shareClaim } from './share.js';
-import { ensureDb, getItemBundle, mediaPathForItem } from './store.js';
+import { activeOriginIds, ensureDb, getItemBundle, mediaPathForItem, setAdapterState } from './store.js';
 
-if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'personal');
+if (!process.env.STEVENS_DATA_DIR || process.env.STEVENS_DATA_DIR === join(process.cwd(), 'data')) {
+  process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'personal');
+} else if (!process.env.STEVENS_DATA_DIR.endsWith(sep + 'personal')) {
+  process.env.STEVENS_DATA_DIR = join(process.env.STEVENS_DATA_DIR, 'personal');
+}
 
 const schemaFile = join(process.cwd(), 'server', 'personal', 'db', 'schema.sql');
 
@@ -97,11 +101,28 @@ export const app = createApp({
 });
 
 const inbox = new InboxAdapter();
-const notes = new NotesAdapter();
+const vault = new VaultAdapter();
 const readwise = new ReadwiseAdapter();
 
-export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: number; readwise: number; notes: number }> {
-  const counts = { inbox: 0, readwise: 0, notes: 0 };
+export async function pollVault(deps: IngestDeps = {}): Promise<{ added: number; retired: number }> {
+  try {
+    if (process.env.STEVENS_VAULT_DIR && !existsSync(process.env.STEVENS_VAULT_DIR)) {
+      throw new Error('vault dir is missing: ' + process.env.STEVENS_VAULT_DIR);
+    }
+    const scan = scanVault();
+    const { added } = await ingestVaultScan(scan, deps);
+    const onDisk = new Set(vaultPaths());
+    const retired = retireVaultRemoved(activeOriginIds('vault').filter((originId) => !onDisk.has(originId)));
+    setAdapterState('vault', { lastSyncAt: new Date().toISOString(), lastError: null });
+    return { added, retired };
+  } catch (err) {
+    setAdapterState('vault', { lastError: err instanceof Error ? err.message : String(err) });
+    return { added: 0, retired: 0 };
+  }
+}
+
+export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: number; readwise: number; vault: number }> {
+  const counts = { inbox: 0, readwise: 0, vault: 0 };
   try {
     counts.inbox = (await runInboxPoll(deps)).added;
   } catch {
@@ -113,18 +134,18 @@ export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: numbe
     void 0;
   }
   try {
-    counts.notes = (await ingestRaws(await notes.poll(), deps)).added;
+    counts.vault = (await pollVault(deps)).added;
   } catch {
     void 0;
   }
-  if (counts.inbox + counts.readwise + counts.notes > 0) {
+  if (counts.inbox + counts.readwise + counts.vault > 0) {
     void runMeetingTrigger().catch(() => {});
   }
   return counts;
 }
 
 export function bootPersonal(): () => void {
-  seedNotes();
+  seedVault();
   ensureDb(readAll());
   void pollSources().catch(() => {});
   const stopInbox = inbox.watch((raws) => {
@@ -132,11 +153,16 @@ export function bootPersonal(): () => void {
       if (result.added > 0) void runMeetingTrigger().catch(() => {});
     }).catch(() => {});
   });
-  const stopNotes = notes.watch((raws) => {
-    void ingestRaws(raws).then((result) => {
-      if (result.added > 0) void runMeetingTrigger().catch(() => {});
-    }).catch(() => {});
-  });
+  const stopVault = vault.watchChanges(
+    (scan) => {
+      void ingestVaultScan(scan).then((result) => {
+        if (result.added > 0) void runMeetingTrigger().catch(() => {});
+      }).catch(() => {});
+    },
+    (originIds) => {
+      if (retireVaultRemoved(originIds) > 0) void runMeetingTrigger().catch(() => {});
+    },
+  );
   const interval = setInterval(() => {
     void readwise.poll().then((raws) => ingestRaws(raws)).catch(() => {});
   }, 15 * 60 * 1000);
@@ -144,7 +170,7 @@ export function bootPersonal(): () => void {
   const stopRetries = startEscalationRetry();
   return () => {
     stopInbox();
-    stopNotes();
+    stopVault();
     clearInterval(interval);
     stopTriggers();
     stopRetries();
