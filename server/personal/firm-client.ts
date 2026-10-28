@@ -1,6 +1,10 @@
 const firmUrl = () => process.env.STEVENS_FIRM_URL ?? 'http://localhost:8787';
 const agentToken = () => process.env.STEVENS_AGENT_TOKEN ?? '';
 
+export function soloMode(): boolean {
+  return process.env.STEVENS_FIRM_URL === 'off';
+}
+
 export interface FirmMeeting {
   id: string;
   dealId: string;
@@ -19,6 +23,7 @@ export interface FirmPerson {
 }
 
 async function agent<T>(path: string, init?: RequestInit): Promise<T> {
+  if (soloMode()) throw new Error('solo mode: no firm configured');
   const res = await fetch(firmUrl() + path, {
     ...init,
     headers: { 'X-Stevens-Agent': agentToken(), 'Content-Type': 'application/json', ...(init?.headers ?? {}) },

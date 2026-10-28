@@ -1,10 +1,11 @@
-import type { Draft, Purpose, Role, Verdict } from '../../shared/data.js';
+import type { Draft, Meeting, Purpose, Role, Verdict } from '../../shared/data.js';
 import { questionIdFor } from '../common/ids.js';
 import { append, readAll } from '../common/ledger/store.js';
 import { nowMs } from '../common/clock.js';
-import { firmContext, firmEscalate, firmMeetings, type FirmMeeting } from './firm-client.js';
+import { firmContext, firmEscalate, firmMeetings, soloMode, type FirmMeeting } from './firm-client.js';
 import { judgeBridges, recordedBridges, type FirmSlice } from './bridge.js';
 import { writeMeetingBrief, briefKey } from './brief.js';
+import { calendarMeetings } from './adapters/calendar.js';
 
 export interface TriggerDeps {
   meetingsFn?: () => Promise<FirmMeeting[]>;
@@ -34,18 +35,25 @@ async function defaultContext(dealId: string, purpose: 'bridge' | 'brief' | 'ans
 export async function runMeetingTrigger(deps: TriggerDeps = {}): Promise<{ briefs: Draft[] }> {
   const meetingsFn = deps.meetingsFn ?? (() => firmMeetings(24));
   const contextFn = deps.contextFn ?? defaultContext;
-  let meetings: FirmMeeting[];
+  let firmUpcoming: FirmMeeting[];
   try {
-    meetings = upcomingMeetings(await meetingsFn());
+    firmUpcoming = upcomingMeetings(await meetingsFn());
   } catch {
-    return { briefs: [] };
+    firmUpcoming = [];
+  }
+  let meetings: (FirmMeeting & { origin: 'firm' | 'calendar' })[] = firmUpcoming.map((meeting) => ({ ...meeting, origin: 'firm' as const }));
+  try {
+    const pairs = firmUpcoming.map((meeting) => ({ id: meeting.dealId, company: meeting.company }));
+    meetings = [...meetings, ...calendarMeetings(pairs)];
+  } catch {
+    void 0;
   }
   const briefs: Draft[] = [];
   for (const meeting of meetings) {
     if (activeDeals.has(meeting.dealId)) continue;
     activeDeals.add(meeting.dealId);
     try {
-      const slice = await contextFn(meeting.dealId, 'brief');
+      const slice = soloMode() ? { sources: [], claims: [] } : await contextFn(meeting.dealId, 'brief');
       const judged = await judgeBridges(slice);
       const key = briefKey(meeting.dealId, slice.claims, slice.sources.map((source) => source.id));
       const found = readAll().find((event) => event.type === 'draft.created' && event.draft.kind === 'brief' && event.api?.stageKey === key);

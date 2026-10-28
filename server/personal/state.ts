@@ -5,14 +5,17 @@ import { readAll } from '../common/ledger/store.js';
 import { nowIso } from '../common/clock.js';
 import { getAdapterState, getDb, allPersonalClaims } from './store.js';
 import { extractionPaused } from './extract.js';
-import { firmContext, firmMeetings, type FirmMeeting } from './firm-client.js';
+import { firmContext, firmMeetings, soloMode, type FirmMeeting } from './firm-client.js';
 import { inboxDir } from './adapters/inbox.js';
 import { vaultName } from './adapters/vault.js';
+import { calendarMeetings, calendarMode } from './adapters/calendar.js';
 
 export interface PersonalState {
   owner: Person;
   now: string;
   vaultName: string;
+  solo: boolean;
+  sourceStatus: { id: string; label: string; lastSyncAt: string | null; lastError: string | null; simulated?: string }[];
   status: { line: string; busy: boolean };
   adapters: { origin: Origin; label: string; lastSyncAt: string | null; simulated?: string }[];
   items: Item[];
@@ -72,6 +75,29 @@ function lastSyncFor(adapter: Origin): string | null {
   return last;
 }
 
+function sourceEntries(firmReachable: boolean, checkedAt: string): PersonalState['sourceStatus'] {
+  const glasses = getAdapterState('glasses');
+  const readwise = getAdapterState('readwise');
+  const vault = getAdapterState('vault');
+  const calendar = getAdapterState('calendar');
+  return [
+    { id: 'glasses', label: 'Glasses inbox', lastSyncAt: glasses?.lastSyncAt ?? lastSyncFor('glasses'), lastError: glasses?.lastError ?? null },
+    {
+      id: 'readwise', label: 'Readwise', lastSyncAt: readwise?.lastSyncAt ?? lastSyncFor('readwise'), lastError: readwise?.lastError ?? null,
+      simulated: process.env.READWISE_TOKEN ? undefined : 'Simulated — Readwise export file',
+    },
+    { id: 'vault', label: 'Obsidian notes', lastSyncAt: vault?.lastSyncAt ?? lastSyncFor('vault'), lastError: vault?.lastError ?? null },
+    {
+      id: 'calendar', label: 'Calendar', lastSyncAt: calendar?.lastSyncAt ?? null, lastError: calendar?.lastError ?? null,
+      simulated: calendarMode() === 'fixture' ? 'Simulated — fixture calendar' : undefined,
+    },
+    {
+      id: 'firm', label: 'Firm', lastSyncAt: firmReachable ? checkedAt : null,
+      lastError: soloMode() ? 'Solo mode: no firm configured' : firmReachable ? null : 'Unreachable',
+    },
+  ];
+}
+
 function statusLine(items: Item[], firmReachable: boolean, lastBriefAt: string | null): { line: string; busy: boolean } {
   const pending = pendingInboxTitle(items);
   if (pending) return { line: 'Reading the ' + pending + '…', busy: true };
@@ -80,13 +106,18 @@ function statusLine(items: Item[], firmReachable: boolean, lastBriefAt: string |
   } catch {
     void 0;
   }
+  if (!firmReachable && soloMode()) return { line: 'Solo mode · ' + upToDateLine(items), busy: false };
   if (!firmReachable) return { line: "Couldn't reach the firm · showing the brief from " + (lastBriefAt ? timeShort(lastBriefAt) : 'earlier'), busy: false };
+  return { line: upToDateLine(items), busy: false };
+}
+
+function upToDateLine(items: Item[]): string {
   const latest = latestCaptureAt(items);
-  if (!latest) return { line: 'No captures yet', busy: false };
+  if (!latest) return 'No captures yet';
   const mins = Math.max(0, Math.round((Date.parse(nowIso()) - Date.parse(latest)) / 60000));
-  if (mins < 1) return { line: 'Up to date · last capture just now', busy: false };
-  if (mins < 60) return { line: 'Up to date · last capture ' + mins + ' min ago', busy: false };
-  return { line: 'Up to date · last capture ' + Math.round(mins / 60) + ' hr ago', busy: false };
+  if (mins < 1) return 'Up to date · last capture just now';
+  if (mins < 60) return 'Up to date · last capture ' + mins + ' min ago';
+  return 'Up to date · last capture ' + Math.round(mins / 60) + ' hr ago';
 }
 
 function pendingInboxTitle(items: Item[]): string | null {
@@ -155,16 +186,28 @@ export async function buildPersonalState(): Promise<PersonalState> {
     const upcoming: FirmMeeting[] = await firmMeetings(24);
     const briefByDeal = new Map<string, string>();
     for (const draft of drafts) {
-      if (draft.kind === 'brief' && draft.dealId) briefByDeal.set(draft.dealId, draft.id);
+      if (draft.kind === 'brief' && draft.dealId !== undefined) briefByDeal.set(draft.dealId, draft.id);
     }
-    meetings = upcoming.map((meeting) => ({
+    const pairs = upcoming.map((meeting) => ({ id: meeting.dealId, company: meeting.company }));
+    const firmUpcoming: Meeting[] = upcoming.map((meeting) => ({
       id: meeting.id,
       dealId: meeting.dealId,
       company: meeting.company,
       title: meeting.title,
       startsAt: meeting.startsAt,
+      origin: 'firm',
+    }));
+    let calendarUpcoming: Meeting[] = [];
+    try {
+      calendarUpcoming = calendarMeetings(pairs);
+    } catch {
+      void 0;
+    }
+    const merged = [...firmUpcoming, ...calendarUpcoming].sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1));
+    meetings = merged.map((meeting) => ({
+      ...meeting,
       briefId: briefByDeal.get(meeting.dealId),
-      team: (meeting.team ?? []).map((member) => ({ id: member.id, name: member.name, role: member.role as Role })),
+      team: (upcoming.find((firm) => firm.id === meeting.id)?.team ?? []).map((member) => ({ id: member.id, name: member.name, role: member.role as Role })),
     }));
     for (const meeting of upcoming) {
       try {
@@ -177,18 +220,30 @@ export async function buildPersonalState(): Promise<PersonalState> {
     }
   } catch {
     firmReachable = false;
-    const briefByDeal = new Map<string, { meeting: Meeting; briefId: string }>();
-    for (const draft of drafts) {
-      if (draft.kind === 'brief' && draft.dealId) {
-        const fetched = events.find((e) => e.type === 'context.fetched' && (e as { dealId?: string }).dealId === draft.dealId);
-        void fetched;
-        briefByDeal.set(draft.dealId, {
-          meeting: { id: 'm-' + draft.dealId, dealId: draft.dealId, company: draft.dealId === 'helios' ? 'Helios' : draft.dealId, title: 'Meeting', startsAt: now },
-          briefId: draft.id,
-        });
+    if (soloMode()) {
+      try {
+        const briefByDeal = new Map<string, string>();
+        for (const draft of drafts) {
+          if (draft.kind === 'brief' && draft.dealId !== undefined) briefByDeal.set(draft.dealId, draft.id);
+        }
+        meetings = calendarMeetings([]).map((meeting) => ({ ...meeting, briefId: briefByDeal.get(meeting.dealId), team: [] }));
+      } catch {
+        meetings = [];
       }
+    } else {
+      const briefByDeal = new Map<string, { meeting: Meeting; briefId: string }>();
+      for (const draft of drafts) {
+        if (draft.kind === 'brief' && draft.dealId !== undefined) {
+          const fetched = events.find((e) => e.type === 'context.fetched' && (e as { dealId?: string }).dealId === draft.dealId);
+          void fetched;
+          briefByDeal.set(draft.dealId, {
+            meeting: { id: 'm-' + draft.dealId, dealId: draft.dealId, company: draft.dealId === 'helios' ? 'Helios' : draft.dealId, title: 'Meeting', startsAt: now, origin: 'firm' },
+            briefId: draft.id,
+          });
+        }
+      }
+      meetings = [...briefByDeal.values()].map((entry) => ({ ...entry.meeting, briefId: entry.briefId, team: [] }));
     }
-    meetings = [...briefByDeal.values()].map((entry) => ({ ...entry.meeting, briefId: entry.briefId, team: [] }));
   }
   const sources = [...personalSourceRefs(items), ...firmSources];
   const claims = [...personalClaims, ...firmClaims];
@@ -215,6 +270,8 @@ export async function buildPersonalState(): Promise<PersonalState> {
     owner,
     now,
     vaultName: vaultName(),
+    solo: soloMode(),
+    sourceStatus: sourceEntries(firmReachable, nowIso()),
     status,
     adapters,
     items,
