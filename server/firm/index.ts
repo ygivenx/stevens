@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { createApp } from '../common/app.js';
 import { personForToken, seedPeople } from './agent-auth.js';
 import { agentContext, agentFromHeader, agentMedia, agentMeetings, isAgentPurpose } from './agent.js';
@@ -17,7 +17,11 @@ import { policy } from '../common/boundary/policy.js';
 import { join as joinPath, extname as extName } from 'node:path';
 import { existsSync as existsSyncFs, readFileSync as readFileSyncFs } from 'node:fs';
 
-if (!process.env.STEVENS_DATA_DIR) process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'firm');
+if (!process.env.STEVENS_DATA_DIR || process.env.STEVENS_DATA_DIR === join(process.cwd(), 'data')) {
+  process.env.STEVENS_DATA_DIR = join(process.cwd(), 'data', 'firm');
+} else if (!process.env.STEVENS_DATA_DIR.endsWith(sep + 'firm')) {
+  process.env.STEVENS_DATA_DIR = join(process.env.STEVENS_DATA_DIR, 'firm');
+}
 
 export const db = getFirmDb();
 seedPeople(db, process.env.STEVENS_AGENT_TOKEN);

@@ -1,12 +1,48 @@
 import type { Claim, Segment } from '../../shared/data.js';
 import { append, readAll, findCompleted, stageKey, PROMPT_VERSION } from '../common/ledger/store.js';
+import { nowIso } from '../common/clock.js';
 import { extractClaims, extractModel, type TranscriptTurn } from '../common/meta/client.js';
 import { quoteIn } from '../common/resolver/resolve.js';
 import { atLabel } from './normalize/audio.js';
-import { getItemBundle, writeClaims } from './store.js';
+import { getDb, getItemBundle, searchSegments, writeClaims } from './store.js';
 
 export interface ExtractDeps {
   extractFn?: typeof extractClaims;
+}
+
+export function dailyTokenCap(): number {
+  const parsed = Number(process.env.STEVENS_DAILY_TOKENS ?? '3000000');
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 3000000;
+}
+
+export function extractInputTokensToday(): number {
+  const today = nowIso().slice(0, 10);
+  let total = 0;
+  for (const event of readAll()) {
+    if (event.at.slice(0, 10) !== today) continue;
+    if (event.type === 'claims.extracted') total += event.api.usage.inputTokens ?? 0;
+    else if (event.type === 'attempt.failed' && event.model === extractModel) total += event.usage?.inputTokens ?? 0;
+  }
+  return total;
+}
+
+export function pendingExtractionIds(): string[] {
+  const extracted = extractedItemIds();
+  const failed = failedStageKeys();
+  const db = getDb();
+  const rows = db.prepare(
+    `select i.id as id from items i where i.status not in ('superseded', 'removed', 'failed')
+     and exists (select 1 from segments s where s.item_id = i.id)`,
+  ).all() as unknown as { id: string }[];
+  return rows.map((row) => row.id).filter((id) => {
+    if (extracted.has(id)) return false;
+    return !failed.has(stageKey('extract', [id], PROMPT_VERSION, extractModel));
+  });
+}
+
+export function extractionPaused(): boolean {
+  if (extractInputTokensToday() < dailyTokenCap()) return false;
+  return pendingExtractionIds().length > 0;
 }
 
 export function extractedItemIds(): Set<string> {
@@ -39,10 +75,11 @@ function segmentForQuote(segments: Segment[], quote: string): Segment | undefine
   return segments.find((segment) => quoteIn(quote, segment.text));
 }
 
-export async function extractItem(itemId: string, deps: ExtractDeps = {}): Promise<{ claims: number; reused: boolean }> {
+export async function extractItem(itemId: string, deps: ExtractDeps = {}): Promise<{ claims: number; reused: boolean; paused?: boolean }> {
   if (extractedItemIds().has(itemId)) return { claims: 0, reused: true };
   const key = stageKey('extract', [itemId], PROMPT_VERSION, extractModel);
   if (findCompleted(key) || failedStageKeys().has(key)) return { claims: 0, reused: true };
+  if (extractInputTokensToday() >= dailyTokenCap()) return { claims: 0, reused: true, paused: true };
   const bundle = getItemBundle(itemId);
   if (!bundle || bundle.segments.length === 0) return { claims: 0, reused: true };
   const extractFn = deps.extractFn ?? extractClaims;
@@ -82,4 +119,37 @@ export async function extractItem(itemId: string, deps: ExtractDeps = {}): Promi
   });
   writeClaims(itemId, claims);
   return { claims: claims.length, reused: false };
+}
+
+export function queryTerms(text: string): string[] {
+  const terms = new Set<string>();
+  for (const token of text.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (token.length > 2) terms.add(token);
+  }
+  return [...terms];
+}
+
+export async function ensureExtractedForTerms(terms: string[], limit: number = 10, deps: ExtractDeps = {}): Promise<{ extracted: number }> {
+  const done = extractedItemIds();
+  let extracted = 0;
+  for (const term of terms) {
+    let hits: Segment[];
+    try {
+      hits = searchSegments(term, limit);
+    } catch {
+      continue;
+    }
+    for (const hit of hits) {
+      if (done.has(hit.itemId)) continue;
+      done.add(hit.itemId);
+      try {
+        const result = await extractItem(hit.itemId, deps);
+        if (!result.reused) extracted += 1;
+        if (result.paused) return { extracted };
+      } catch {
+        continue;
+      }
+    }
+  }
+  return { extracted };
 }

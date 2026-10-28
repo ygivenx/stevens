@@ -59,7 +59,7 @@ export interface Draft {
   sentences: { text: string; citations: Citation[] }[]; droppedSentences: number;
   bridges?: Bridge[]; verdict?: Verdict; status: 'draft' | 'approved' | 'rejected' }
 
-export type Origin = 'glasses' | 'readwise' | 'notes';
+export type Origin = 'glasses' | 'readwise' | 'vault';
 export type ItemKind = 'audio' | 'photo' | 'video' | 'highlight' | 'note';
 
 export interface Person { id: string; name: string; role: Role }
@@ -73,7 +73,7 @@ export interface RawItem {
 
 export interface Item {
   id: string; origin: Origin; originId: string; kind: ItemKind; title: string; capturedAt: string;
-  status: 'normalizing' | 'extracting' | 'ready' | 'failed'; error?: string; hasMedia: boolean;
+  status: 'normalizing' | 'extracting' | 'ready' | 'failed' | 'superseded' | 'removed'; error?: string; hasMedia: boolean;
 }
 
 export interface Segment {
@@ -93,6 +93,8 @@ export type LedgerEvent = { at: string } & (
   | { type: 'escalation.sent' | 'escalation.queued'; questionId: string; dealId: string; to: Role | null }
   | { type: 'share.sent'; claimId: string; dealId: string; documentId: string }
   | { type: 'item.ingested'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; api?: Api }
+  | { type: 'item.revised'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; supersedes: string; api?: Api }
+  | { type: 'item.removed'; origin: Origin; originId: string; itemId: string }
   | { type: 'item.rejected'; origin: Origin; originId: string; reason: string }
   | { type: 'sync.completed'; adapter: Origin; added: number; cursor?: string }
   | { type: 'context.fetched'; dealId: string; purpose: Purpose; sourceIds: string[]; titles?: { id: string; title: string }[] }

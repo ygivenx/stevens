@@ -5,6 +5,7 @@ import { assemble } from '../common/boundary/assemble.js';
 import { writeDraft, WONDER_MODEL, type Written } from '../common/meta/client.js';
 import { resolveSentences } from '../common/resolver/resolve.js';
 import { allPersonalClaims, personalSources } from './store.js';
+import { ensureExtractedForTerms, queryTerms } from './extract.js';
 import { firmShells, ownerRole, type FirmSlice } from './bridge.js';
 
 export interface WriterDeps {
@@ -52,6 +53,7 @@ export async function writeMeetingBrief(dealId: string, company: string, slice: 
 
 export async function writeAnswer(questionId: string, dealId: string, question: string, slice: FirmSlice, verdict: Verdict, deps: WriterDeps = {}): Promise<Draft> {
   const writeFn = deps.writeFn ?? writeDraft;
+  await ensureExtractedForTerms(queryTerms(question)).catch(() => {});
   const viewer = ownerRole();
   const shells = firmShells(slice);
   const mine = personalSources(viewer);

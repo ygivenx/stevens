@@ -16,7 +16,7 @@ import { releaseClaim } from './boundary/release.js';
 
 for (const line of existsSync('.env.local') ? readFileSync('.env.local', 'utf8').split('\n') : []) {
   const cut = line.indexOf('=');
-  if (cut > 0 && !process.env[line.slice(0, cut)]) process.env[line.slice(0, cut)] = line.slice(cut + 1).trim();
+  if (cut > 0 && process.env[line.slice(0, cut)] === undefined) process.env[line.slice(0, cut)] = line.slice(cut + 1).trim();
 }
 
 export interface AppOptions {
