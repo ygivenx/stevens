@@ -9,3 +9,5 @@ web/.vite-firm/
 .env
 .env.local
 data/
+__pycache__/
+*.pyc
