@@ -1,23 +1,45 @@
 import { join } from 'node:path';
-import type { Claim, Source } from '../../shared/data.js';
+import type { Claim, LedgerEvent, Source } from '../../shared/data.js';
 import { append, findCompleted, readAll, stageKey, PROMPT_VERSION } from '../common/ledger/store.js';
 import { extractClaims, extractModel, readImage, visionModel } from '../common/meta/client.js';
 import { quoteIn } from '../common/resolver/resolve.js';
 import { nowIso } from '../common/clock.js';
-import { CrmConnector, loadCrm } from './connectors/crm.js';
+import { PgCrmReader, fixtureCrmReader, granteePrincipal, loadCrm, type CrmReader } from './connectors/crm.js';
 import { SecFormDConnector, loadFormD } from './connectors/formd.js';
 import type { ConnectorDocument } from './connectors/connector.js';
-import { documentBody, setConnectorState, syncCrmSnapshot, syncFilings, upsertDocument } from './store.js';
+import {
+  crmDocumentIds, deleteDocument, documentAcl, documentBody, ensureMemberships, firmDocuments, getFirmDb,
+  saveReleaseProvenance, setConnectorError, setConnectorState, syncCrmSnapshot, syncDealTeam, syncFilings, syncMemberships, upsertDocument,
+} from './store.js';
 
 export const FIRM_VERBATIM_PROMPT = 'Transcribe every word visible in this photo verbatim, in reading order. Return only the transcribed text.';
 
 export interface SyncDeps {
   readImageFn?: typeof readImage;
   extractFn?: typeof extractClaims;
+  reader?: CrmReader;
 }
 
 function fixturesDir(): string {
   return process.env.STEVENS_FIXTURES_DIR ?? join(process.cwd(), 'fixtures');
+}
+
+export function defaultReader(): CrmReader {
+  const url = process.env.FIRM_DATABASE_URL;
+  if (!url) throw new Error('FIRM_DATABASE_URL is not set');
+  return new PgCrmReader(url);
+}
+
+export function testReader(): CrmReader {
+  return fixtureCrmReader(loadCrm());
+}
+
+function lastCursor(): string | null {
+  let cursor: string | null = null;
+  for (const event of readAll()) {
+    if (event.type === 'connector.synced' && (cursor === null || event.cursor > cursor)) cursor = event.cursor;
+  }
+  return cursor;
 }
 
 function extractedDocIds(): Set<string> {
@@ -36,15 +58,123 @@ async function visionBody(doc: ConnectorDocument, deps: SyncDeps): Promise<{ bod
   return { body: result.text, model: visionModel, responseId: result.responseId, usage: result.usage };
 }
 
-export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents: number; extracted: number }> {
-  const snap = loadCrm();
-  syncCrmSnapshot(snap);
-  const connector = new CrmConnector();
-  const docs = await connector.documents();
+function aclFor(documentId: string, grants: { documentId: string; grantee: string }[]): string[] {
+  return grants.filter((grant) => grant.documentId === documentId).map((grant) => granteePrincipal(grant.grantee)).sort();
+}
+
+function stable(row: unknown): string {
+  if (Array.isArray(row)) return '[' + row.map(stable).join(',') + ']';
+  if (row !== null && typeof row === 'object') {
+    return '{' + Object.keys(row as Record<string, unknown>).sort().map((key) => JSON.stringify(key) + ':' + stable((row as Record<string, unknown>)[key])).join(',') + '}';
+  }
+  return JSON.stringify(row) ?? 'null';
+}
+
+function changedById<T extends { id: string }>(fresh: T[], current: T[]): T[] {
+  const seen = new Map(current.map((row) => [row.id, stable(row)]));
+  return fresh.filter((row) => seen.get(row.id) !== stable(row));
+}
+
+export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents: number; extracted: number; crmError?: string }> {
+  const reader = deps.reader ?? (() => { try { return defaultReader(); } catch (err) { return null; } })();
+  let crmError: string | undefined;
+  let docs: ConnectorDocument[] = [];
+  if (!reader) {
+    crmError = 'FIRM_DATABASE_URL is not set';
+    setConnectorError('crm', crmError, nowIso());
+  } else {
+    try {
+      const cursor = lastCursor();
+      const [people, deals, meetings, portfolio, changed, ids, grants, memberships] = await Promise.all([
+        reader.people(), reader.deals(), reader.meetings(), reader.portfolio(),
+        reader.documents(cursor), reader.documentIds(), reader.grants(), reader.memberships(),
+      ]);
+      const db = getFirmDb();
+      const currentPeople = db.prepare(`select id, name, role as title from people`).all() as unknown as { id: string; name: string; title: string }[];
+      const currentDeals = db.prepare(`select id, company, sector, stage, ask_usd as askUsd from deals`).all() as unknown as { id: string; company: string; sector: string; stage: string; askUsd: number }[];
+      const currentMeetings = db.prepare(`select id, deal_id as dealId, title, starts_at as startsAt from meetings`).all() as unknown as { id: string; dealId: string; title: string; startsAt: string }[];
+      const changedIds = new Set(changed.map((doc) => doc.id));
+      for (const id of ids) {
+        const now = aclFor(id, grants);
+        const before = documentAcl(id);
+        if (JSON.stringify(now) !== JSON.stringify([...before].sort())) changedIds.add(id);
+      }
+      const known = new Set(changed.map((doc) => doc.id));
+      const refetch = [...changedIds].filter((id) => !known.has(id));
+      const refetched = await reader.bodiesFor(refetch);
+      const refetchById = new Map(refetched.map((row) => [row.id, row]));
+      const changedDocs = changed.map((doc) => ({ ...doc, acl: aclFor(doc.id, grants) }));
+      for (const id of refetch) {
+        const body = refetchById.get(id);
+        const row = db.prepare(`select id, deal_id as dealId, kind, title, created_at as createdAt from documents where id = ?`).get(id) as unknown as { id: string; dealId: string | null; kind: string; title: string; createdAt: string } | undefined;
+        if (body && row) changedDocs.push({ ...row, updatedAt: cursor ?? '', body: body.body, mediaPath: body.mediaPath, acl: aclFor(id, grants) });
+      }
+      const deleted = crmDocumentIds().filter((id) => !ids.includes(id));
+      const nextCursor = changed.reduce((max, doc) => (doc.updatedAt > max ? doc.updatedAt : max), cursor ?? '');
+      const peopleChanged = changedById(people, currentPeople);
+      const dealsChanged = changedById(deals, currentDeals);
+      const meetingsChanged = changedById(meetings, currentMeetings);
+      const currentGrants = firmDocuments().filter((doc) => doc.connector === 'crm').flatMap((doc) => documentAcl(doc.id).map((principal) => doc.id + '|' + principal)).sort();
+      const freshGrants = grants.map((grant) => grant.documentId + '|' + granteePrincipal(grant.grantee)).sort();
+      ensureMemberships();
+      const currentMemberships = getFirmDb().prepare(`select person_id as personId, principal from memberships`).all() as unknown as { personId: string; principal: string }[];
+      const membershipsChanged = JSON.stringify([...currentMemberships].sort((a, b) => (a.personId + a.principal < b.personId + b.principal ? -1 : 1)))
+        !== JSON.stringify([...memberships].sort((a, b) => (a.personId + a.principal < b.personId + b.principal ? -1 : 1)));
+      const anythingChanged = peopleChanged.length + dealsChanged.length + meetingsChanged.length + changedDocs.length + deleted.length > 0
+        || JSON.stringify(currentGrants) !== JSON.stringify(freshGrants) || membershipsChanged;
+      if (anythingChanged) {
+        append({
+          at: new Date().toISOString(), type: 'connector.synced', connector: 'crm', cursor: nextCursor,
+          upserted: {
+            people,
+            deals,
+            meetings,
+            documents: changedDocs.map((doc) => ({
+              id: doc.id, dealId: doc.dealId, kind: doc.kind, title: doc.title, createdAt: doc.createdAt,
+              body: doc.body, mediaPath: doc.mediaPath, acl: doc.acl,
+            })),
+          },
+          deletedDocumentIds: deleted,
+          grants: grants.map((grant) => ({ ...grant })),
+          memberships: memberships.map((row) => ({ ...row })),
+          portfolio,
+        });
+      }
+      syncCrmSnapshot({
+        people: people.map((person) => ({ id: person.id, name: person.name, role: person.title })),
+        deals,
+        dealTeam: [],
+        meetings,
+        documents: [],
+        portfolio,
+      });
+      syncDealTeam(memberships.filter((row) => row.principal.startsWith('deal-team:')).map((row) => ({ dealId: row.principal.slice('deal-team:'.length), personId: row.personId })));
+      syncMemberships(memberships);
+      for (const doc of changedDocs) {
+        upsertDocument('crm', { id: doc.id, dealId: doc.dealId ?? undefined, kind: doc.kind, title: doc.title, createdAt: doc.createdAt, body: doc.body ?? undefined, mediaPath: doc.mediaPath ?? undefined }, doc.acl);
+      }
+      for (const id of deleted) deleteDocument(id);
+      const total = db.prepare(`select count(*) as n from documents where connector = 'crm'`).get() as unknown as { n: number };
+      setConnectorState('crm', total.n, nowIso());
+      docs = changedDocs.map((doc) => ({
+        id: doc.id, dealId: doc.dealId ?? undefined, kind: doc.kind as ConnectorDocument['kind'], title: doc.title,
+        createdAt: doc.createdAt, body: doc.body ?? undefined, mediaPath: doc.mediaPath ?? undefined, acl: doc.acl,
+      }));
+      const missing = firmDocuments().filter((doc) => doc.connector === 'crm' && !docs.some((changedDoc) => changedDoc.id === doc.id));
+      for (const doc of missing) {
+        docs.push({
+          id: doc.id, dealId: doc.dealId ?? undefined, kind: doc.kind as ConnectorDocument['kind'], title: doc.title,
+          createdAt: doc.createdAt, body: doc.body ?? undefined, mediaPath: doc.mediaPath ?? undefined, acl: documentAcl(doc.id),
+        });
+      }
+    } catch (err) {
+      crmError = err instanceof Error ? err.message : String(err);
+      setConnectorError('crm', crmError, nowIso());
+    }
+  }
   const done = extractedDocIds();
   let extracted = 0;
   for (const doc of docs) {
-    upsertDocument(connector.id, doc, doc.acl);
     let body = doc.body;
     if (!body && doc.mediaPath) {
       const key = stageKey('connector-doc', [doc.id], PROMPT_VERSION, visionModel);
@@ -91,7 +221,6 @@ export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents
     });
     extracted += claims.length;
   }
-  setConnectorState(connector.id, docs.length, nowIso());
   const formd = new SecFormDConnector();
   const fixture = loadFormD();
   syncFilings(fixture.filings);
@@ -110,7 +239,50 @@ export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents
     extracted += claims.length;
   }
   setConnectorState(formd.id, compsDocs.length, nowIso());
-  return { documents: docs.length + compsDocs.length, extracted };
+  return { documents: docs.length + compsDocs.length, extracted, ...(crmError ? { crmError } : {}) };
+}
+
+export async function ensureFirmDb(events: LedgerEvent[]): Promise<{ rebuilt: boolean }> {
+  const db = getFirmDb();
+  const count = db.prepare(`select count(*) as n from documents`).get() as unknown as { n: number };
+  if (count.n > 0) return { rebuilt: false };
+  let synced = false;
+  for (const event of events) {
+    if (event.type === 'connector.synced') {
+      synced = true;
+      syncCrmSnapshot({
+        people: event.upserted.people.map((person) => ({ id: person.id, name: person.name, role: person.title })),
+        deals: event.upserted.deals,
+        dealTeam: [],
+        meetings: event.upserted.meetings,
+        documents: [],
+        portfolio: event.portfolio,
+      });
+      syncDealTeam(event.memberships.filter((row) => row.principal.startsWith('deal-team:')).map((row) => ({ dealId: row.principal.slice('deal-team:'.length), personId: row.personId })));
+      syncMemberships(event.memberships);
+      for (const doc of event.upserted.documents) {
+        upsertDocument('crm', { id: doc.id, dealId: doc.dealId ?? undefined, kind: doc.kind, title: doc.title, createdAt: doc.createdAt, body: doc.body ?? undefined, mediaPath: doc.mediaPath ?? undefined }, doc.acl);
+      }
+      for (const id of event.deletedDocumentIds) deleteDocument(id);
+      const total = db.prepare(`select count(*) as n from documents where connector = 'crm'`).get() as unknown as { n: number };
+      setConnectorState('crm', total.n, event.at);
+    } else if (event.type === 'source.ingested' && event.source.vault === 'enterprise' && event.source.text) {
+      documentBody(event.source.id, event.source.text);
+    } else if (event.type === 'personal.released' && event.document) {
+      const doc = event.document;
+      upsertDocument('release', { id: doc.id, dealId: doc.dealId, kind: doc.kind, title: doc.title, createdAt: doc.createdAt, body: doc.body }, doc.acl);
+      if (event.sharedBy) db.prepare(`update documents set shared_by = ? where id = ?`).run(event.sharedBy, doc.id);
+      if (event.provenance) saveReleaseProvenance(doc.id, { title: event.provenance.title, origin: event.provenance.origin, capturedAt: event.provenance.capturedAt, speaker: event.provenance.speaker, at: event.provenance.at });
+    }
+  }
+  if (!synced) return { rebuilt: false };
+  const fixture = loadFormD();
+  syncFilings(fixture.filings);
+  const formd = new SecFormDConnector();
+  const comps = await formd.documents();
+  for (const doc of comps) upsertDocument(formd.id, doc, doc.acl);
+  setConnectorState(formd.id, comps.length, nowIso());
+  return { rebuilt: true };
 }
 
 export function firmSourceFor(doc: { id: string; kind: Source['kind']; title: string; createdAt: string; body?: string | null; mediaPath?: string | null }, classification: Source['classification']): Source {

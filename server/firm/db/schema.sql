@@ -65,5 +65,11 @@ create table connector_state (
   connector text primary key,
   last_sync_at text,
   documents integer,
-  last_error text
+  last_error text,
+  last_error_at text
+);
+create table memberships (
+  person_id text not null references people(id),
+  principal text not null,
+  primary key (person_id, principal)
 );

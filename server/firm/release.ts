@@ -33,22 +33,32 @@ export function inboundRelease(agent: AgentPerson, payload: unknown): { document
     throw new Error('sender is not on the deal team');
   }
   const documentId = 'rel-' + createHash('sha256').update(parsed.dealId + '|' + parsed.claimId).digest('hex').slice(0, 12);
-  upsertDocument('release', {
-    id: documentId,
-    dealId: parsed.dealId,
-    kind: 'released-quote',
-    title: 'Shared by ' + agent.name,
-    createdAt: new Date().toISOString(),
-    body: parsed.quote,
-  }, ['deal-team:' + parsed.dealId]);
-  db.prepare(`update documents set shared_by = ? where id = ?`).run(agent.id, documentId);
-  saveReleaseProvenance(documentId, {
+  const createdAt = new Date().toISOString();
+  const provenance = {
     title: parsed.provenance.title,
     origin: parsed.provenance.origin,
     capturedAt: parsed.provenance.capturedAt,
     speaker: parsed.provenance.speaker,
     at: parsed.provenance.at,
+  };
+  append({
+    at: createdAt, type: 'personal.released', documentId, dealId: parsed.dealId, claimId: parsed.claimId, by: agent.role,
+    sharedBy: agent.id,
+    document: {
+      id: documentId, dealId: parsed.dealId, kind: 'released-quote', title: 'Shared by ' + agent.name,
+      createdAt, body: parsed.quote, acl: ['deal-team:' + parsed.dealId],
+    },
+    provenance: { title: provenance.title, origin: provenance.origin, capturedAt: provenance.capturedAt, speaker: provenance.speaker, at: provenance.at },
   });
-  append({ at: new Date().toISOString(), type: 'personal.released', documentId, dealId: parsed.dealId, claimId: parsed.claimId, by: agent.role });
+  upsertDocument('release', {
+    id: documentId,
+    dealId: parsed.dealId,
+    kind: 'released-quote',
+    title: 'Shared by ' + agent.name,
+    createdAt,
+    body: parsed.quote,
+  }, ['deal-team:' + parsed.dealId]);
+  db.prepare(`update documents set shared_by = ? where id = ?`).run(agent.id, documentId);
+  saveReleaseProvenance(documentId, provenance);
   return { documentId };
 }
