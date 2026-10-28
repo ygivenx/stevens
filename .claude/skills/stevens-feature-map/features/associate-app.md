@@ -1,6 +1,6 @@
 # Associate app
 
-Last verified: uncommitted on 2026-10-28 (live)
+Last verified: uncommitted on 2026-10-28 (source)
 
 Stevens · yours (:5173 → :8788) is the Associate's product: Today with a self-written meeting card, the bridge as a two-column contrast with replay, Ask and the answer, the Share sheet, Captures, Shared, and the Receipts drawer. No ids, no pipeline vocabulary and no Run control outside Receipts. Owner only. Day 13 landed Today, bridge block with replay, Ask/Answer, Share sheet, Captures, Shared and Receipts; v2.1 tabs removed. Overall maturity: beta.
 
@@ -15,6 +15,8 @@ Stevens · yours (:5173 → :8788) is the Associate's product: Today with a self
 | associate-captures | Feed of captures by day with transcripts, photos, highlights, notes and status | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, browser `associate-captures` PASS |
 | associate-shared | Every quote shared with the firm | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, `associate-share` lists under Shared |
 | associate-receipts | Per-draft drawer: calls, what went in, what was held back, rule ids, tokens | beta | UI+API | - | 2026-10-28 | `web/personal/App.tsx`, `server/personal/receipts.ts`, browser `associate-receipts` PASS |
+| associate-sources | Sources section lists glasses, Readwise, vault, calendar, and the firm with sync time, errors, and a solo banner | beta | UI+API | - | not driven | `web/personal/App.tsx`, `server/personal/routes.test.ts` |
+| associate-solo | Solo: ask disclosure says the notebook answers, briefs head From your notes and reading, share and escalation rows never appear, calendar meetings read From your calendar | beta | UI+API | - | not driven | `web/personal/App.tsx`, `server/personal/routes.test.ts` |
 
 ## How to get to it (user POV)
 

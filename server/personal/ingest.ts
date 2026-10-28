@@ -10,7 +10,7 @@ import { normalizeVideo, type VideoDeps } from './normalize/video.js';
 import { highlightPieces, splitNote } from './normalize/text.js';
 import { extractItem, type ExtractDeps } from './extract.js';
 import { nowMs } from '../common/clock.js';
-import { activeItemForOrigin, hasContentHash, markRemoved, writeIngested, writeRevised, writeVaultMeta } from './store.js';
+import { activeItemForOrigin, hasContentHash, markRemoved, setAdapterState, writeIngested, writeRevised, writeVaultMeta } from './store.js';
 
 export interface IngestDeps extends AudioDeps, PhotoDeps, VideoDeps, ExtractDeps {}
 
@@ -137,7 +137,11 @@ export async function runInboxPoll(deps: IngestDeps = {}): Promise<{ added: numb
       }
     }
     append({ at: new Date().toISOString(), type: 'sync.completed', adapter: 'glasses', added });
+    setAdapterState('glasses', { lastSyncAt: new Date().toISOString(), lastError: null });
     return { added, rejected };
+  } catch (err) {
+    setAdapterState('glasses', { lastError: err instanceof Error ? err.message : String(err) });
+    throw err;
   } finally {
     running = false;
   }

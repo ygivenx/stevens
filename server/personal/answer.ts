@@ -1,6 +1,6 @@
 import type { Draft, Verdict } from '../../shared/data.js';
 import { append, readAll } from '../common/ledger/store.js';
-import { firmContext, firmPrivy } from './firm-client.js';
+import { firmContext, firmPrivy, soloMode } from './firm-client.js';
 import { writeAnswer } from './brief.js';
 import type { FirmSlice } from './bridge.js';
 import { escalateWithRetry, verdictForQuestion } from './triggers.js';
@@ -32,6 +32,11 @@ export async function askQuestion(dealId: string, question: string, deps: AskDep
   const prior = existingAnswer(questionId);
   if (prior && prior.verdict) {
     return { questionId, draft: prior, verdict: prior.verdict, failedClosed: false, escalation: 'none', firmReachable: true };
+  }
+  if (soloMode()) {
+    const verdict: Verdict = { verdict: 'proceed', routeTo: null };
+    const draft = await writeAnswer(questionId, dealId, question, { sources: [], claims: [] }, verdict);
+    return { questionId, draft, verdict, failedClosed: false, escalation: 'none', firmReachable: false };
   }
   const privyFn = deps.privyFn ?? firmPrivy;
   const contextFn = deps.contextFn ?? firmContext;

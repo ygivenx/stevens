@@ -2,7 +2,7 @@ import type { Claim } from '../../shared/data.js';
 import { append } from '../common/ledger/store.js';
 import { allPersonalClaims, getItemBundle } from './store.js';
 import { atLabel } from './normalize/audio.js';
-import { firmRelease } from './firm-client.js';
+import { firmRelease, soloMode } from './firm-client.js';
 
 export interface ShareProvenance {
   title: string;
@@ -43,6 +43,7 @@ export function sharePayload(claim: Claim, dealId: string): SharePayload {
 }
 
 export async function shareClaim(claimId: string, dealId: string, deps: ShareDeps = {}): Promise<{ documentId: string }> {
+  if (soloMode()) throw new Error('solo mode: sharing needs a firm');
   const releaseFn = deps.releaseFn ?? firmRelease;
   const claim = allPersonalClaims().find((entry) => entry.id === claimId);
   if (!claim) throw new Error('unknown claim ' + claimId);

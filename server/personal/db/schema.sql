@@ -51,3 +51,13 @@ create table vault_meta (
   links text not null,
   primary key (origin, origin_id)
 );
+create table events (
+  uid text not null,
+  starts_at text not null,
+  ends_at text,
+  title text not null,
+  attendees text not null,
+  location text,
+  description text,
+  primary key (uid, starts_at)
+);

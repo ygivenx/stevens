@@ -1,6 +1,6 @@
 # Ingestion
 
-Last verified: uncommitted on 2026-10-28 (live)
+Last verified: uncommitted on 2026-10-28 (source)
 
 Stevens · yours (:8788) takes every personal source through one pipeline (adapter → normalize → extract → index) into `personal.db`, the owner's personal database, which the firm process never reads. Adapters: the glasses inbox, Readwise and an Obsidian vault. Owner only (the Associate in the demo). Day 10 landed the inbox adapter, the three media normalizers, dedupe, anchored extraction, FTS and rebuild; Readwise and notes landed day 11; R1 replaced notes with the vault adapter, added revisions, lazy extraction and the daily budget. Overall maturity: beta.
 
@@ -21,6 +21,7 @@ Stevens · yours (:8788) takes every personal source through one pipeline (adapt
 | ingestion-extract | Per-item claims anchored to segments; speaker and time set by code | beta | infra | - | 2026-10-27 | `server/personal/extract.ts`, live `resp_6ae04381ce2b436` + `resp_6ae04390d411f65` |
 | ingestion-fts | FTS5 index over segments, used to widen bridge candidates | beta | infra | - | not driven | `server/personal/store.ts`, `server/personal/ingest.test.ts` |
 | ingestion-rebuild | personal.db rebuilds from the personal ledger with zero API calls | beta | infra | - | not driven | `server/personal/store.ts`, `server/personal/ingest.test.ts` |
+| ingestion-calendar | ICS feed, file, or the labeled fixture syncs into the events table: 7-day window, recurrence expansion, cancelled and all-day skipped, cursor hash skips unchanged syncs | beta | infra | - | not driven | `server/personal/adapters/calendar.ts`, `server/personal/adapters/calendar.test.ts`, `fixtures/personal/calendar.ics` |
 
 ## How to get to it (user POV)
 

@@ -30,7 +30,11 @@ export async function writeMeetingBrief(dealId: string, company: string, slice: 
   const found = findCompleted(key);
   if (found && found.type === 'draft.created') return found.draft;
   const { prompt, manifest } = assemble('brief', viewer, WONDER_MODEL, key, sources, claims);
-  const task = `${prompt}\n\nTask: write the pre-meeting brief for ${company} (deal ${dealId}). Every sentence needs at least one citation. Cite personal claims and firm claims by id. End with one suggested question phrased as an Inference from the cited claims.`;
+  const solo = slice.claims.length === 0 && slice.sources.length === 0;
+  const scope = solo
+    ? `Write under the section heading 'From your notes and reading'. There is no firm context and no bridge section.`
+    : `Cite personal claims and firm claims by id.`;
+  const task = `${prompt}\n\nTask: write the pre-meeting brief for ${company} (deal ${dealId}). Every sentence needs at least one citation. ${scope} End with one suggested question phrased as an Inference from the cited claims.`;
   let written;
   try {
     written = await writeFn(task, claims, sources);

@@ -138,6 +138,59 @@ export function ensureVaultMeta(): void {
   );
 }
 
+export interface StoredEvent {
+  uid: string; startsAt: string; endsAt: string | null; title: string;
+  attendees: string[]; location: string | null; description: string | null;
+}
+
+export function ensureEvents(): void {
+  const db = getDb();
+  db.exec(
+    `create table if not exists events (
+       uid text not null,
+       starts_at text not null,
+       ends_at text,
+       title text not null,
+       attendees text not null,
+       location text,
+       description text,
+       primary key (uid, starts_at)
+     )`,
+  );
+}
+
+export function replaceEvents(events: StoredEvent[]): void {
+  ensureEvents();
+  const db = getDb();
+  const remove = db.prepare(`delete from events`);
+  const insert = db.prepare(
+    `insert into events (uid, starts_at, ends_at, title, attendees, location, description) values (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  db.exec('BEGIN');
+  try {
+    remove.run();
+    for (const row of events) {
+      insert.run(row.uid, row.startsAt, row.endsAt, row.title, JSON.stringify(row.attendees), row.location, row.description);
+    }
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function upcomingEvents(fromMs: number, toMs: number): StoredEvent[] {
+  ensureEvents();
+  const db = getDb();
+  const rows = db.prepare(
+    `select uid, starts_at as startsAt, ends_at as endsAt, title, attendees, location, description
+     from events where starts_at >= ? and starts_at <= ? order by starts_at`,
+  ).all(new Date(fromMs).toISOString(), new Date(toMs).toISOString()) as unknown as {
+    uid: string; startsAt: string; endsAt: string | null; title: string; attendees: string; location: string | null; description: string | null;
+  }[];
+  return rows.map((row) => ({ ...row, attendees: JSON.parse(row.attendees) as string[] }));
+}
+
 export function writeVaultMeta(origin: string, originId: string, meta: { tags: string[]; aliases: string[]; links: string[] }): void {
   ensureVaultMeta();
   const db = getDb();
