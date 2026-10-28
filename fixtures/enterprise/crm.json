@@ -1,20 +1,58 @@
 {
   "dealTeam": [
-    {"dealId": "beacon", "personId": "p-jordan"},
-    {"dealId": "beacon", "personId": "p-morgan"},
-    {"dealId": "helios", "personId": "p-alex"},
-    {"dealId": "helios", "personId": "p-morgan"},
-    {"dealId": "meridian", "personId": "p-alex"},
-    {"dealId": "meridian", "personId": "p-jordan"}
+    {
+      "dealId": "beacon",
+      "personId": "p-jordan"
+    },
+    {
+      "dealId": "beacon",
+      "personId": "p-morgan"
+    },
+    {
+      "dealId": "helios",
+      "personId": "p-alex"
+    },
+    {
+      "dealId": "helios",
+      "personId": "p-morgan"
+    },
+    {
+      "dealId": "meridian",
+      "personId": "p-alex"
+    },
+    {
+      "dealId": "meridian",
+      "personId": "p-jordan"
+    }
   ],
   "deals": [
-    {"askUsd": 12000000, "company": "Helios", "id": "helios", "sector": "workflow SaaS", "stage": "Series A"},
-    {"askUsd": 3000000, "company": "Meridian", "id": "meridian", "sector": "developer tools", "stage": "Seed"},
-    {"askUsd": 25000000, "company": "Beacon", "id": "beacon", "sector": "fintech infrastructure", "stage": "Series B"}
+    {
+      "askUsd": 12000000,
+      "company": "Helios",
+      "id": "helios",
+      "sector": "workflow SaaS",
+      "stage": "Series A"
+    },
+    {
+      "askUsd": 3000000,
+      "company": "Meridian",
+      "id": "meridian",
+      "sector": "developer tools",
+      "stage": "Seed"
+    },
+    {
+      "askUsd": 25000000,
+      "company": "Beacon",
+      "id": "beacon",
+      "sector": "fintech infrastructure",
+      "stage": "Series B"
+    }
   ],
   "documents": [
     {
-      "acl": ["deal-team:helios"],
+      "acl": [
+        "deal-team:helios"
+      ],
       "body": "Account: Helios (fictional mid-market workflow SaaS, founded 2023, 45 people, $6.2M ARR across roughly 310 customers). Stage: first meeting held Oct 21, 2026 with CEO Dana Reyes and CFO Priya Nair; product and go-to-market covered, numbers deferred. Second meeting proposed Oct 29, numbers deep-dive. Owner: Associate team. Deck figures: net churn 1.8% trailing twelve months, NDR 118%, no logo churn figure disclosed, one year of cohort history. Team position: the 1.8% can only be net of expansion against a 6-8% category benchmark, so the churn definition must be pinned down with the CFO before the second meeting, with the logo number and gross retention on the table.",
       "createdAt": "2026-10-21T16:00:00Z",
       "dealId": "helios",
@@ -23,7 +61,9 @@
       "title": "Helios CRM record"
     },
     {
-      "acl": ["deal-team:helios"],
+      "acl": [
+        "deal-team:helios"
+      ],
       "createdAt": "2026-10-21T16:05:00Z",
       "dealId": "helios",
       "id": "d-helios-deck",
@@ -32,7 +72,9 @@
       "title": "Helios deck photo"
     },
     {
-      "acl": ["deal-team:helios"],
+      "acl": [
+        "deal-team:helios"
+      ],
       "body": "Team memo, Oct 22, 2026 (fictional). Helios second meeting prep. Objective: leave with exact retention numbers, not adjectives. Questions, in order: (1) logo churn trailing twelve months with downgrades counted as churn, owner Alex; (2) how much of the 118% NDR is seat expansion versus price increases, owner Morgan; (3) annual versus monthly mix and churn by segment, owner Alex. Also pull public Form D comps for pricing context and confirm no portfolio overlap before engaging further. If the CFO reframes the definition question instead of answering it, treat that as signal.",
       "createdAt": "2026-10-22T10:00:00Z",
       "dealId": "helios",
@@ -41,7 +83,9 @@
       "title": "Helios prep memo"
     },
     {
-      "acl": ["partners"],
+      "acl": [
+        "partners"
+      ],
       "body": "Conflicts memo, partners only (fictional). Helios competes directly with portfolio company Lumen in mid-market workflow software; both sell approvals and intake automation to operations teams, and Lumen's Series B deck from 2024 names the same buyer. Any second meeting needs Partner conflict review first, and the overlap stays inside the partnership until review clears it.",
       "createdAt": "2026-10-23T10:00:00Z",
       "dealId": "helios",
@@ -50,24 +94,71 @@
       "title": "Conflicts memo: Helios vs Lumen"
     },
     {
-      "acl": ["legal-hold:granite"],
+      "acl": [
+        "legal-hold:granite"
+      ],
       "body": "Restricted matter note (fictional). Project Granite is under legal hold. Do not discuss, cite, or reason over this note for any deal work.",
       "createdAt": "2026-10-24T10:00:00Z",
       "id": "d-granite",
       "kind": "memo",
       "title": "Restricted: Project Granite"
+    },
+    {
+      "id": "d-beacon-memo",
+      "dealId": "beacon",
+      "kind": "memo",
+      "title": "Beacon diligence memo",
+      "createdAt": "2026-10-24T00:00:00Z",
+      "body": "Team memo, Oct 24, 2026 (fictional). Beacon diligence. Beacon is a fictional Series A developer-tools company, $3.1M ARR, 22 people. What we verified: two design partners converted to paid in Q3; burn multiple 1.4. Open questions, in order: (1) whether the Q3 conversions renew at list price in Q1, owner Jordan; (2) founder vesting reset terms, owner Morgan; (3) whether the single-sign-on gap blocks the two enterprise pilots, owner Jordan. Do not share the pricing worksheet outside the deal team until Morgan clears it.",
+      "acl": [
+        "deal-team:beacon"
+      ]
+    },
+    {
+      "id": "d-meridian-notes",
+      "dealId": "meridian",
+      "kind": "memo",
+      "title": "Meridian call notes",
+      "createdAt": "2026-10-25T00:00:00Z",
+      "body": "Call notes, Oct 25, 2026 (fictional). Meridian first call with COO Sam Okafor. Meridian is a fictional bootstrapped logistics SaaS, $8.4M ARR, profitable. Takeaways: net revenue retention 104% on annual contracts; churn concentrated in sub-50-seat accounts; the COO named $14M as the raise that would let them hire two enterprise sellers. Next step: Alex sends the data-room checklist and confirms the November onsite dates.",
+      "acl": [
+        "deal-team:meridian"
+      ]
     }
   ],
   "meetings": [
-    {"dealId": "helios", "id": "m-helios-2", "startsAt": "2026-10-29T10:00:00-04:00", "title": "Helios second meeting"}
+    {
+      "dealId": "helios",
+      "id": "m-helios-2",
+      "startsAt": "2026-10-29T10:00:00-04:00",
+      "title": "Helios second meeting"
+    }
   ],
   "people": [
-    {"id": "p-alex", "name": "Alex Rivera", "role": "Associate"},
-    {"id": "p-morgan", "name": "Morgan Hale", "role": "Partner"},
-    {"id": "p-jordan", "name": "Jordan Blake", "role": "Partner"}
+    {
+      "id": "p-alex",
+      "name": "Alex Rivera",
+      "role": "Associate"
+    },
+    {
+      "id": "p-morgan",
+      "name": "Morgan Hale",
+      "role": "Partner"
+    },
+    {
+      "id": "p-jordan",
+      "name": "Jordan Blake",
+      "role": "Partner"
+    }
   ],
   "portfolio": [
-    {"company": "Lumen", "sector": "workflow software"},
-    {"company": "Northwind", "sector": "developer tools"}
+    {
+      "company": "Lumen",
+      "sector": "workflow software"
+    },
+    {
+      "company": "Northwind",
+      "sector": "developer tools"
+    }
   ]
 }
