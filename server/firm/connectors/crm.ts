@@ -49,21 +49,27 @@ export interface CrmReader {
   memberships(): Promise<CrmMembership[]>;
 }
 
+const ROLE_PREFIXES = ['dh', 'fg', 'mc'];
+
 export function granteePrincipal(grantee: string): string {
-  if (grantee === 'dh_all_staff') return 'all-staff';
-  if (grantee === 'dh_partners') return 'partners';
-  const team = /^dh_deal_team_(.+)$/.exec(grantee);
-  if (team) return 'deal-team:' + team[1];
-  const hold = /^dh_legal_hold_(.+)$/.exec(grantee);
-  if (hold) return 'legal-hold:' + hold[1];
+  for (const prefix of ROLE_PREFIXES) {
+    if (grantee === prefix + '_all_staff') return 'all-staff';
+    if (grantee === prefix + '_partners') return 'partners';
+    const team = new RegExp('^' + prefix + '_deal_team_(.+)$').exec(grantee);
+    if (team) return 'deal-team:' + team[1];
+    const hold = new RegExp('^' + prefix + '_legal_hold_(.+)$').exec(grantee);
+    if (hold) return 'legal-hold:' + hold[1];
+  }
   return grantee;
 }
 
 export class PgCrmReader implements CrmReader {
   private url: string;
+  private prefix: string;
 
-  constructor(url: string) {
+  constructor(url: string, prefix: string = 'dh') {
     this.url = url;
+    this.prefix = prefix;
   }
 
   private async query<T>(text: string, params: unknown[] = []): Promise<T[]> {
@@ -139,7 +145,7 @@ export class PgCrmReader implements CrmReader {
        join pg_roles r on r.oid = m.roleid
        join pg_roles member on member.oid = m.member
        join crm.people p on p.db_role = member.rolname
-       where r.rolname like 'dh\\_%' order by person_id, grantee`);
+       where r.rolname like '${this.prefix}\\_%' order by person_id, grantee`);
     return rows.map((row) => ({ personId: row.person_id, principal: granteePrincipal(row.grantee) }));
   }
 }

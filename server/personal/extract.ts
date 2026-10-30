@@ -26,23 +26,23 @@ export function extractInputTokensToday(): number {
   return total;
 }
 
-export function pendingExtractionIds(): string[] {
+export async function pendingExtractionIds(): Promise<string[]> {
   const extracted = extractedItemIds();
   const failed = failedStageKeys();
-  const db = getDb();
-  const rows = db.prepare(
+  const db = await getDb();
+  const rows = await db.all<{ id: string }>(
     `select i.id as id from items i where i.status not in ('superseded', 'removed', 'failed')
      and exists (select 1 from segments s where s.item_id = i.id)`,
-  ).all() as unknown as { id: string }[];
+  );
   return rows.map((row) => row.id).filter((id) => {
     if (extracted.has(id)) return false;
     return !failed.has(stageKey('extract', [id], PROMPT_VERSION, extractModel));
   });
 }
 
-export function extractionPaused(): boolean {
+export async function extractionPaused(): Promise<boolean> {
   if (extractInputTokensToday() < dailyTokenCap()) return false;
-  return pendingExtractionIds().length > 0;
+  return (await pendingExtractionIds()).length > 0;
 }
 
 export function extractedItemIds(): Set<string> {
@@ -80,7 +80,7 @@ export async function extractItem(itemId: string, deps: ExtractDeps = {}): Promi
   const key = stageKey('extract', [itemId], PROMPT_VERSION, extractModel);
   if (findCompleted(key) || failedStageKeys().has(key)) return { claims: 0, reused: true };
   if (extractInputTokensToday() >= dailyTokenCap()) return { claims: 0, reused: true, paused: true };
-  const bundle = getItemBundle(itemId);
+  const bundle = await getItemBundle(itemId);
   if (!bundle || bundle.segments.length === 0) return { claims: 0, reused: true };
   const extractFn = deps.extractFn ?? extractClaims;
   const text = bundle.segments.map((segment) => segment.text).join('\n\n');
@@ -117,7 +117,7 @@ export async function extractItem(itemId: string, deps: ExtractDeps = {}): Promi
     at: new Date().toISOString(), type: 'claims.extracted', sourceId: itemId, itemId, claims,
     api: { model: extractModel, responseId: attempt.responseId, usage: attempt.usage, stageKey: key },
   });
-  writeClaims(itemId, claims);
+  await writeClaims(itemId, claims);
   return { claims: claims.length, reused: false };
 }
 
@@ -135,7 +135,7 @@ export async function ensureExtractedForTerms(terms: string[], limit: number = 1
   for (const term of terms) {
     let hits: Segment[];
     try {
-      hits = searchSegments(term, limit);
+      hits = await searchSegments(term, limit);
     } catch {
       continue;
     }

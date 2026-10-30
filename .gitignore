@@ -8,6 +8,8 @@ web/.vite-personal/
 web/.vite-firm/
 .env
 .env.local
+.env.forge
+.env.mercy
 data/
 data-*/
 __pycache__/

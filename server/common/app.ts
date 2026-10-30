@@ -9,14 +9,21 @@ import { runExtract } from './pipeline/extract.js';
 import { runBridge } from './pipeline/bridge.js';
 import { runBrief } from './pipeline/draft.js';
 import { runAsk } from './pipeline/ask.js';
+import { scenarioEnvFiles } from './scenarios.js';
 import { policy } from './boundary/policy.js';
 import { filterState, indexEvents } from './boundary/filter.js';
 import { fakeMode } from './meta/client.js';
 import { releaseClaim } from './boundary/release.js';
 
-for (const line of existsSync('.env.local') ? readFileSync('.env.local', 'utf8').split('\n') : []) {
-  const cut = line.indexOf('=');
-  if (cut > 0 && process.env[line.slice(0, cut)] === undefined) process.env[line.slice(0, cut)] = line.slice(cut + 1).trim();
+const inheritedEnv = new Set(Object.keys(process.env));
+for (const file of scenarioEnvFiles()) {
+  for (const line of existsSync(file) ? readFileSync(file, 'utf8').split('\n') : []) {
+    const cut = line.indexOf('=');
+    if (cut <= 0) continue;
+    const key = line.slice(0, cut);
+    if (inheritedEnv.has(key)) continue;
+    process.env[key] = line.slice(cut + 1).trim();
+  }
 }
 
 export interface AppOptions {

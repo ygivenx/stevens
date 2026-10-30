@@ -2,9 +2,10 @@ import type { Receipt } from '../../shared/data.js';
 import { readAll } from '../common/ledger/store.js';
 import { getDb } from './store.js';
 
-function personalTitle(sourceId: string): string | null {
+async function personalTitle(sourceId: string): Promise<string | null> {
   try {
-    const row = getDb().prepare(`select title from items where id = ?`).get(sourceId) as unknown as { title: string } | undefined;
+    const db = await getDb();
+    const row = await db.get<{ title: string }>(`select title from items where id = $1`, sourceId);
     return row?.title ?? null;
   } catch {
     return null;
@@ -21,28 +22,36 @@ function firmTitles(): Map<string, string> {
   return titles;
 }
 
-export function receiptsFor(draftId: string): Receipt[] {
+export async function receiptsFor(draftId: string): Promise<Receipt[]> {
   const events = readAll();
   const created = events.find((event) => event.type === 'draft.created' && event.draft.id === draftId);
   if (!created || created.type !== 'draft.created') return [];
   const titles = firmTitles();
-  const labelFor = (sourceId: string): string => personalTitle(sourceId) ?? titles.get(sourceId) ?? sourceId;
+  const labelFor = async (sourceId: string): Promise<string> => (await personalTitle(sourceId)) ?? titles.get(sourceId) ?? sourceId;
   const receipts: Receipt[] = [];
   if (created.draft.kind === 'brief' && created.draft.bridges) {
     for (const bridge of created.draft.bridges) {
       const judged = events.find((event) => event.type === 'bridge.judged' && event.bridge?.id === bridge.id);
       if (!judged || judged.type !== 'bridge.judged') continue;
+      const included = [];
+      for (const entry of judged.manifest.included) {
+        included.push({ label: await labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId });
+      }
       receipts.push({
         callId: judged.manifest.callId, purpose: 'bridge', model: judged.api.model, at: judged.at, costUsd: judged.api.usage.costUsd,
-        included: judged.manifest.included.map((entry) => ({ label: labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId })),
+        included,
         withheld: judged.manifest.withheld.map((entry) => ({ label: null, access: entry.access, ruleId: entry.ruleId })),
         privyHidden: false, webSearch: judged.manifest.webSearch, tokens: judged.manifest.tokens,
       });
     }
   }
+  const createdIncluded = [];
+  for (const entry of created.manifest.included) {
+    createdIncluded.push({ label: await labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId });
+  }
   receipts.push({
     callId: created.manifest.callId, purpose: created.draft.kind, model: created.api.model, at: created.at, costUsd: created.api.usage.costUsd,
-    included: created.manifest.included.map((entry) => ({ label: labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId })),
+    included: createdIncluded,
     withheld: created.manifest.withheld.map((entry) => ({ label: null, access: entry.access, ruleId: entry.ruleId })),
     privyHidden: false, webSearch: created.manifest.webSearch, tokens: created.manifest.tokens,
   });

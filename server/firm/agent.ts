@@ -15,8 +15,8 @@ import { firmSourceFor } from './sync.js';
 
 const AGENT_PURPOSES: Purpose[] = ['bridge', 'brief', 'answer'];
 
-export function agentFromHeader(header: string | undefined): AgentPerson | null {
-  return personForToken(getFirmDb(), header);
+export function agentFromHeader(header: string | undefined): Promise<AgentPerson | null> {
+  return personForToken(header);
 }
 
 export interface AgentMeeting {
@@ -33,22 +33,23 @@ export function agentMeta(): { display: ScenarioDisplay } {
   return { display: scenarioDisplay() };
 }
 
-export function agentMeetings(person: AgentPerson, withinHours: number): AgentMeeting[] {
-  const db = getFirmDb();
-  ensureMeetingAskHint();
+export async function agentMeetings(person: AgentPerson, withinHours: number): Promise<AgentMeeting[]> {
+  const db = await getFirmDb();
+  await ensureMeetingAskHint();
   const cutoff = nowMs() + withinHours * 3600 * 1000;
-  const rows = db.prepare(
-    `select m.id as id, m.deal_id as dealId, d.company as company, m.title as title, m.starts_at as startsAt,
-      m.ask_hint as askHint
+  const rows = await db.all<Omit<AgentMeeting, 'team'>>(
+    `select m.id as id, m.deal_id as "dealId", d.company as company, m.title as title, m.starts_at as "startsAt",
+      m.ask_hint as "askHint"
      from meetings m join deals d on d.id = m.deal_id
      join deal_team t on t.deal_id = m.deal_id
-     where t.person_id = ? order by m.starts_at`,
-  ).all(person.id) as unknown as Omit<AgentMeeting, 'team'>[];
+     where t.person_id = $1 order by m.starts_at`,
+    person.id,
+  );
   const teamByDeal = new Map<string, { id: string; name: string; role: string }[]>();
-  const teamRows = db.prepare(
-    `select t.deal_id as dealId, p.id as id, p.name as name, p.role as role
+  const teamRows = await db.all<{ dealId: string; id: string; name: string; role: string }>(
+    `select t.deal_id as "dealId", p.id as id, p.name as name, p.role as role
      from deal_team t join people p on p.id = t.person_id`,
-  ).all() as unknown as { dealId: string; id: string; name: string; role: string }[];
+  );
   for (const row of teamRows) {
     const list = teamByDeal.get(row.dealId) ?? [];
     list.push({ id: row.id, name: row.name, role: row.role });
@@ -64,14 +65,14 @@ export interface AgentContext {
   claims: Claim[];
 }
 
-export function agentContext(person: AgentPerson, dealId: string, purpose: Purpose): AgentContext {
-  const docs = firmDocuments(dealId);
+export async function agentContext(person: AgentPerson, dealId: string, purpose: Purpose): Promise<AgentContext> {
+  const docs = await firmDocuments(dealId);
   const sources: SourceRef[] = [];
   const visibleIds = new Set<string>();
   for (const doc of docs) {
-    const acl = documentAcl(doc.id);
+    const acl = await documentAcl(doc.id);
     const source = firmSourceFor({ id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath }, classifyAcl(acl).classification);
-    const decision = policy(source, person.role, purpose, isMember(person.id, acl));
+    const decision = policy(source, person.role, purpose, await isMember(person.id, acl));
     if (decision.access !== 'visible') continue;
     visibleIds.add(doc.id);
     sources.push({
@@ -95,13 +96,13 @@ function fixturesDir(): string {
   return process.env.STEVENS_FIXTURES_DIR ?? join(process.cwd(), 'fixtures');
 }
 
-export function agentMedia(person: AgentPerson, sourceId: string): { bytes: Buffer; contentType: string } | null {
-  const docs = firmDocuments().filter((doc) => doc.id === sourceId);
+export async function agentMedia(person: AgentPerson, sourceId: string): Promise<{ bytes: Buffer; contentType: string } | null> {
+  const docs = (await firmDocuments()).filter((doc) => doc.id === sourceId);
   if (docs.length === 0 || !docs[0].mediaPath) return null;
   const doc = docs[0];
-  const acl = documentAcl(doc.id);
+  const acl = await documentAcl(doc.id);
   const source = firmSourceFor({ id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath }, classifyAcl(acl).classification);
-  if (policy(source, person.role, 'brief', isMember(person.id, acl)).access !== 'visible') return null;
+  if (policy(source, person.role, 'brief', await isMember(person.id, acl)).access !== 'visible') return null;
   const path = join(fixturesDir(), doc.mediaPath as string);
   if (!existsSync(path)) return null;
   const ext = '.' + (doc.mediaPath as string).split('.').pop()?.toLowerCase();

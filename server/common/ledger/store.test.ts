@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { append, readAll, findCompleted, completedKeys, stageKey } from './store.js';
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env.STEVENS_DATA_DIR = mkdtempSync(join(tmpdir(), 'stevens-ledger-'));
 });
 
 describe('ledger store', () => {
-  it('round-trips appended events in order', () => {
+  it('round-trips appended events in order', async () => {
     append({ at: '2026-10-28T00:00:00Z', type: 'role.switched', role: 'Associate' });
     append({ at: '2026-10-28T00:00:01Z', type: 'role.switched', role: 'Partner' });
     const events = readAll();
@@ -18,7 +18,7 @@ describe('ledger store', () => {
     expect(events[1]).toMatchObject({ role: 'Partner' });
   });
 
-  it('finds a completed stage by its key', () => {
+  it('finds a completed stage by its key', async () => {
     const key = stageKey('ingest', ['talk-oct20'], 'v1', 'muse-voice-transcribe-1.0');
     append({
       at: '2026-10-28T00:00:00Z', type: 'source.ingested',
@@ -32,7 +32,7 @@ describe('ledger store', () => {
     expect(completedKeys().has(key)).toBe(true);
   });
 
-  it('makes deterministic, distinct stage keys', () => {
+  it('makes deterministic, distinct stage keys', async () => {
     const a = stageKey('ingest', ['x'], 'v1', 'm');
     expect(stageKey('ingest', ['x'], 'v1', 'm')).toBe(a);
     expect(stageKey('ingest', ['y'], 'v1', 'm')).not.toBe(a);
@@ -40,7 +40,7 @@ describe('ledger store', () => {
     expect(a).toHaveLength(16);
   });
 
-  it('reads an empty ledger as no events', () => {
+  it('reads an empty ledger as no events', async () => {
     expect(readAll()).toEqual([]);
   });
 });

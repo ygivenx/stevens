@@ -36,7 +36,7 @@ function serialized(viewer: 'Associate' | 'Partner', events: LedgerEvent[] = EVE
 }
 
 describe('state filter', () => {
-  it('hides privy, wall, and others-personal content from the Associate', () => {
+  it('hides privy, wall, and others-personal content from the Associate', async () => {
     const body = serialized('Associate');
     expect(body).toContain('TEAM-ALPHA-BRAVO');
     expect(body).toContain('MINE-GOLF-HOTEL');
@@ -45,7 +45,7 @@ describe('state filter', () => {
     }
   });
 
-  it('shows the Partner the memo but not the wall or the Associate personal quotes', () => {
+  it('shows the Partner the memo but not the wall or the Associate personal quotes', async () => {
     const body = serialized('Partner');
     expect(body).toContain('MEMO-CHARLIE-LUMEN');
     expect(body).toContain('THEIRS-INDIA-JULIET');
@@ -54,12 +54,12 @@ describe('state filter', () => {
     }
   });
 
-  it('reveals a released personal quote to the other viewer', () => {
+  it('reveals a released personal quote to the other viewer', async () => {
     const withRelease: LedgerEvent[] = [...EVENTS, { at: '2026-10-27T00:00:01Z', type: 'personal.released', claimId: 'c-theirs', by: 'Partner' }];
     expect(serialized('Associate', withRelease)).toContain('THEIRS-INDIA-JULIET');
   });
 
-  it('withholds non-visible source ids from manifests but keeps rule ids', () => {
+  it('withholds non-visible source ids from manifests but keeps rule ids', async () => {
     const manifest = {
       callId: 'c', purpose: 'brief' as const, viewerRole: 'Associate' as const, model: 'm', stageKey: 'k',
       included: [{ sourceId: 'team1', access: 'visible' as const, ruleId: 'r-team-associate' }],
@@ -91,7 +91,7 @@ describe('state filter', () => {
     expect(shown).toContain('memo1');
   });
 
-  it('renders unreleased personal Facts as owner-only inside drafts', () => {
+  it('renders unreleased personal Facts as owner-only inside drafts', async () => {
     const draft: LedgerEvent = {
       at: '2026-10-27T00:00:02Z', type: 'draft.created',
       draft: {
@@ -111,7 +111,7 @@ describe('state filter', () => {
     expect(filtered.draft.sentences[1].citations[0]).toMatchObject({ quote: OWNER_ONLY });
   });
 
-  it('keeps the bridge reason for the owner and drops it for anyone else', () => {
+  it('keeps the bridge reason for the owner and drops it for anyone else', async () => {
     const manifest = {
       callId: 'c', purpose: 'bridge' as const, viewerRole: 'Associate' as const, model: 'm', stageKey: 'k',
       included: [
@@ -139,7 +139,7 @@ describe('state filter', () => {
     expect(other.bridge).toBeNull();
   });
 
-  it('withholds non-visible candidate ids on bridges', () => {
+  it('withholds non-visible candidate ids on bridges', async () => {
     const manifest = {
       callId: 'c', purpose: 'bridge' as const, viewerRole: 'Associate' as const, model: 'm', stageKey: 'k',
       included: [], withheld: [], webSearch: false, tokens: { raw: 0, assembled: 0 },

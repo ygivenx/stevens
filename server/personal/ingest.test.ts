@@ -49,17 +49,17 @@ function rawFor(dir: string, name: string): RawItem {
   };
 }
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   freshDir();
 });
 
-afterEach(() => {
-  closeDb();
+afterEach(async () => {
+  await closeDb();
 });
 
 describe('chunking', () => {
-  it('keeps short recordings in one chunk and splits long ones under nine minutes', () => {
+  it('keeps short recordings in one chunk and splits long ones under nine minutes', async () => {
     expect(chunkPlan(22_518)).toEqual([{ offsetMs: 0, lengthMs: 22_518 }]);
     const plan = chunkPlan(20 * 60 * 1000);
     expect(plan).toHaveLength(3);
@@ -68,7 +68,7 @@ describe('chunking', () => {
     for (const chunk of plan) expect(chunk.lengthMs).toBeLessThanOrEqual(9 * 60 * 1000);
   });
 
-  it('labels times as minutes and seconds', () => {
+  it('labels times as minutes and seconds', async () => {
     expect(atLabel(0)).toBe('0:00');
     expect(atLabel(74_000)).toBe('1:14');
   });
@@ -81,7 +81,7 @@ describe('inbox ingest', () => {
     const result = await runInboxPoll();
     expect(result.added).toBe(1);
     const raw = rawFor(dir, 'talk.wav');
-    const bundle = getItemBundle(itemIdFor(raw));
+    const bundle = await getItemBundle(itemIdFor(raw));
     expect(bundle?.item.status).toBe('ready');
     expect(bundle?.segments.length).toBeGreaterThan(0);
     const speakers = new Set((bundle?.segments ?? []).map((s) => s.speaker));
@@ -108,7 +108,7 @@ describe('inbox ingest', () => {
     const dir = process.env.STEVENS_DATA_DIR as string;
     dropFixture(dir, 'slide.jpg');
     await runInboxPoll();
-    const bundle = getItemBundle(itemIdFor(rawFor(dir, 'slide.jpg')));
+    const bundle = await getItemBundle(itemIdFor(rawFor(dir, 'slide.jpg')));
     expect(bundle?.item.status).toBe('ready');
     expect(bundle?.segments).toHaveLength(1);
     expect(bundle?.segments[0].locator).toBe('photo');
@@ -153,7 +153,7 @@ describe('inbox ingest', () => {
     const dir = process.env.STEVENS_DATA_DIR as string;
     dropFixture(dir, 'talk.wav');
     await runInboxPoll();
-    const hits = searchSegments('churn');
+    const hits = await searchSegments('churn');
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0].text.toLowerCase()).toContain('churn');
   });
@@ -163,7 +163,7 @@ describe('vault revisions', () => {
   it('supersedes the old revision and retires its claims', async () => {
     const first = await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs high this year.'));
     expect(first.added).toBe(true);
-    const oldClaims = allPersonalClaims().map((claim) => claim.id);
+    const oldClaims = (await allPersonalClaims()).map((claim) => claim.id);
     expect(oldClaims.length).toBeGreaterThan(0);
     const second = await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs low this year, revised.'));
     expect(second.added).toBe(true);
@@ -171,23 +171,23 @@ describe('vault revisions', () => {
     const revised = readAll().find((e) => e.type === 'item.revised');
     expect(revised?.type).toBe('item.revised');
     if (revised?.type === 'item.revised') expect(revised.supersedes).toBe(first.itemId);
-    expect(getItemBundle(first.itemId)?.item.status).toBe('superseded');
-    const live = allPersonalClaims().map((claim) => claim.id);
+    expect((await getItemBundle(first.itemId))?.item.status).toBe('superseded');
+    const live = (await allPersonalClaims()).map((claim) => claim.id);
     expect(live.length).toBeGreaterThan(0);
     for (const id of oldClaims) expect(live).not.toContain(id);
-    expect(searchSegments('revised').every((hit) => hit.itemId === second.itemId)).toBe(true);
+    expect((await searchSegments('revised')).every((hit) => hit.itemId === second.itemId)).toBe(true);
   });
 
   it('retires a deleted note from retrieval while keeping its ledger history', async () => {
     const added = await ingestRaw(vaultRaw('gone.md', '# Gone\n\nChurn notes to delete.'));
-    expect(allPersonalClaims().length).toBeGreaterThan(0);
-    expect(retireVaultRemoved(['gone.md', 'never-there.md'])).toBe(1);
+    expect((await allPersonalClaims()).length).toBeGreaterThan(0);
+    expect(await retireVaultRemoved(['gone.md', 'never-there.md'])).toBe(1);
     const removed = readAll().find((e) => e.type === 'item.removed');
     expect(removed?.type).toBe('item.removed');
     if (removed?.type === 'item.removed') expect(removed.itemId).toBe(added.itemId);
-    expect(getItemBundle(added.itemId)?.item.status).toBe('removed');
-    expect(allPersonalClaims()).toHaveLength(0);
-    expect(searchSegments('delete')).toHaveLength(0);
+    expect((await getItemBundle(added.itemId))?.item.status).toBe('removed');
+    expect(await allPersonalClaims()).toHaveLength(0);
+    expect(await searchSegments('delete')).toHaveLength(0);
     expect(readAll().some((e) => e.type === 'item.ingested')).toBe(true);
   });
 
@@ -195,16 +195,16 @@ describe('vault revisions', () => {
     await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs high this year.'));
     await ingestRaw(vaultRaw('note.md', '# Note\n\nChurn runs low this year, revised.'));
     await ingestRaw(vaultRaw('gone.md', '# Gone\n\nChurn notes to delete.'));
-    retireVaultRemoved(['gone.md']);
-    closeDb();
+    await retireVaultRemoved(['gone.md']);
+    await closeDb();
     rmSync(join(process.env.STEVENS_DATA_DIR as string, 'personal.db'), { force: true });
-    const rebuilt = ensureDb(readAll());
+    const rebuilt = await ensureDb(readAll());
     expect(rebuilt.rebuilt).toBe(true);
-    const db = getDb();
-    const statuses = (db.prepare(`select status from items`).all() as { status: string }[]).map((row) => row.status);
+    const db = await getDb();
+    const statuses = ((await db.all(`select status from items`)) as { status: string }[]).map((row) => row.status);
     expect(statuses).toContain('superseded');
     expect(statuses).toContain('removed');
-    expect(allPersonalClaims().every((claim) => !claim.quote.includes('delete'))).toBe(true);
+    expect((await allPersonalClaims()).every((claim) => !claim.quote.includes('delete'))).toBe(true);
   });
 });
 
@@ -230,7 +230,7 @@ describe('durable pipeline', () => {
         throw new Error('boom');
       },
     })).rejects.toThrow('boom');
-    const bundle = getItemBundle(itemIdFor(raw));
+    const bundle = await getItemBundle(itemIdFor(raw));
     expect(bundle?.item.status).toBe('failed');
     const failed = readAll().find((e) => e.type === 'attempt.failed');
     expect(failed).toBeDefined();
@@ -241,21 +241,21 @@ describe('durable pipeline', () => {
     dropFixture(dir, 'talk.wav');
     dropFixture(dir, 'slide.jpg');
     await runInboxPoll();
-    const db = getDb();
-    const itemsBefore = (db.prepare(`select count(*) as n from items`).get() as unknown as { n: number }).n;
-    const claimsBefore = (db.prepare(`select count(*) as n from claims`).get() as unknown as { n: number }).n;
+    const db = await getDb();
+    const itemsBefore = ((await db.get(`select count(*) as n from items`)) as unknown as { n: number }).n;
+    const claimsBefore = ((await db.get(`select count(*) as n from claims`)) as unknown as { n: number }).n;
     expect(itemsBefore).toBe(2);
     expect(claimsBefore).toBeGreaterThan(0);
     const spent = calls(dir);
-    closeDb();
+    await closeDb();
     rmSync(join(dir, 'personal.db'), { force: true });
     expect(existsSync(join(dir, 'personal.db'))).toBe(false);
-    const rebuilt = ensureDb(readAll());
+    const rebuilt = await ensureDb(readAll());
     expect(rebuilt.rebuilt).toBe(true);
-    const again = getDb();
-    expect((again.prepare(`select count(*) as n from items`).get() as unknown as { n: number }).n).toBe(itemsBefore);
-    expect((again.prepare(`select count(*) as n from claims`).get() as unknown as { n: number }).n).toBe(claimsBefore);
-    expect(searchSegments('churn').length).toBeGreaterThan(0);
+    const again = await getDb();
+    expect(((await again.get(`select count(*) as n from items`)) as unknown as { n: number }).n).toBe(itemsBefore);
+    expect(((await again.get(`select count(*) as n from claims`)) as unknown as { n: number }).n).toBe(claimsBefore);
+    expect((await searchSegments('churn')).length).toBeGreaterThan(0);
     expect(calls(dir)).toBe(spent);
   });
 });

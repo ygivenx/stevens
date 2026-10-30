@@ -867,6 +867,32 @@ Two more demos on the same machinery. Each scenario is a fixtures directory with
 
 v3.2 cut order, if behind: mercy media (reuse forge generator outputs is forbidden; cut the slide, keep the WAV); the mercy wall document (keep attending-only); the in-app bar (keep `demo.html` tabs). Never cut: the data-driven UI rule, the file-mode label, replay per scenario.
 
+## Persistence (v3.3): Postgres replaces SQLite
+
+Both processes store live state in real Postgres tables; `node:sqlite` remains only as the offline backend for tests and recorded replay. The ledgers stay JSONL and stay first: every projection row in Postgres is still rebuildable from the ledger plus fixtures with zero API calls.
+
+**Databases.** One firm and one personal database per scenario, all in the `pw` sandbox Postgres:
+
+| Scenario | Firm database | Personal database |
+|---|---|---|
+| `helios` | `darlington_crm` (existing) | `darlington_personal` |
+| `forge` | `forge_firm` | `forge_personal` |
+| `mercy` | `mercy_firm` | `mercy_personal` |
+
+Connection URLs live in `.env.local` (helios: `FIRM_DATABASE_URL`, `PERSONAL_DATABASE_URL`) and `.env.forge` / `.env.mercy` (same key names); servers load `.env.local` then `.env.<scenario>`, environment wins. The firm process only ever sees a firm URL, the personal process only its personal URL; nothing changes about which process may read which store.
+
+**Firm databases.** The `crm` schema stays the system of record exactly as in R3 (roles, grants, RLS, connectors), with the role prefix per scenario (`dh_`, `fg_`, `mc_`). The `firm.db` projection moves into plain tables in the same database (`people`, `deals`, `meetings`, `documents`, `memberships`, `connector_state`, `filings`, `release_provenance`), written by the same ledger-first sync. Setup: `npx tsx scripts/firm-crm-setup.ts --scenario <id>`.
+
+**Personal databases.** The `personal.db` tables move over unchanged (`items`, `segments`, `claims`, `shares`, `adapter_state`, `vault_meta`, `events`), plus a `conversations` table for chat; full-text search moves from FTS5 to a `tsvector` column with `plainto_tsquery`. The ingestion layer (adapters, normalize, ingest, extract) writes these tables through the same store functions. Setup: `npx tsx scripts/personal-pg-setup.ts --scenario <id>`.
+
+**Store layer.** One async `StoreDb` interface (`all`/`get`/`run`/`exec`/`withTransaction`, `$n` placeholders, portable SQL), two implementations: `pg` for live servers, `node:sqlite` for tests and replay (`STEVENS_STORE=sqlite`). `npm test` stays green with Postgres down; `pg-parity` tests run the same store operations against both backends when Postgres is reachable and skip otherwise. `npm run demo` replays with the sqlite backend, so the judge path still needs no key and no Postgres.
+
+**File mode removed.** With Postgres as the store, the v3.2 file-mode fallback is dead: `defaultReader()` requires `FIRM_DATABASE_URL` again, `seed` and `record-replay` run the setup scripts for their scenario, and every scenario stack needs Postgres up.
+
+| Day | Build | Exit check |
+|---|---|---|
+| P1 | Store layer, both schemas, setup scripts, async stores and callers, sqlite backend, parity tests, file-mode removal | 176+ tests green offline and on Postgres; `stevensctl` seed + full flow on all three scenarios against real tables; `npm run demo` still keyless and Postgres-less |
+
 ## Stretch (gated)
 
 - **Follow-up chat in Stevens · yours.** After the first answer, the owner can ask follow-ups in the meeting card.

@@ -22,8 +22,8 @@ function calls(): number {
   return (JSON.parse(readFileSync(join(dir, 'meta-calls.json'), 'utf8')) as { count: number }).count;
 }
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   const dir = mkdtempSync(join(tmpdir(), 'stevens-extract-'));
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_NOW = '2026-10-28T14:00:00-04:00';
@@ -33,11 +33,11 @@ beforeEach(() => {
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
 });
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.STEVENS_NOW;
   delete process.env.STEVENS_BACKFILL_DAYS;
   delete process.env.STEVENS_DAILY_TOKENS;
-  closeDb();
+  await closeDb();
 });
 
 describe('backfill window', () => {
@@ -48,15 +48,15 @@ describe('backfill window', () => {
     expect(withinBackfill(stale.capturedAt)).toBe(false);
     await ingestRaw(fresh);
     await ingestRaw(stale);
-    expect(getItemBundle(itemIdFor(fresh))?.claims.length).toBeGreaterThan(0);
-    const staleBundle = getItemBundle(itemIdFor(stale));
+    expect((await getItemBundle(itemIdFor(fresh)))?.claims.length).toBeGreaterThan(0);
+    const staleBundle = await getItemBundle(itemIdFor(stale));
     expect(staleBundle?.item.status).toBe('ready');
     expect(staleBundle?.segments.length).toBeGreaterThan(0);
     expect(staleBundle?.claims).toHaveLength(0);
-    expect(searchSegments('ancient').length).toBeGreaterThan(0);
+    expect((await searchSegments('ancient')).length).toBeGreaterThan(0);
   });
 
-  it('honors a custom backfill window', () => {
+  it('honors a custom backfill window', async () => {
     process.env.STEVENS_BACKFILL_DAYS = '3650';
     expect(withinBackfill('2020-01-01T00:00:00Z')).toBe(true);
   });
@@ -66,13 +66,13 @@ describe('on-demand extraction', () => {
   it('extracts an old item when it ranks in the top hits', async () => {
     const stale = noteRaw('stale.md', '# Stale\n\nAncient churn benchmarks live here.', '2020-01-01T00:00:00Z');
     await ingestRaw(stale);
-    expect(pendingExtractionIds()).toContain(itemIdFor(stale));
+    expect(await pendingExtractionIds()).toContain(itemIdFor(stale));
     const before = calls();
     const result = await ensureExtractedForTerms(['ancient']);
     expect(result.extracted).toBe(1);
     expect(calls()).toBeGreaterThan(before);
-    expect(getItemBundle(itemIdFor(stale))?.claims.length).toBeGreaterThan(0);
-    expect(pendingExtractionIds()).not.toContain(itemIdFor(stale));
+    expect((await getItemBundle(itemIdFor(stale)))?.claims.length).toBeGreaterThan(0);
+    expect(await pendingExtractionIds()).not.toContain(itemIdFor(stale));
   });
 
   it('skips items that never rank', async () => {
@@ -80,12 +80,12 @@ describe('on-demand extraction', () => {
     await ingestRaw(stale);
     const result = await ensureExtractedForTerms(['zebras']);
     expect(result.extracted).toBe(0);
-    expect(getItemBundle(itemIdFor(stale))?.claims).toHaveLength(0);
+    expect((await getItemBundle(itemIdFor(stale)))?.claims).toHaveLength(0);
   });
 });
 
 describe('daily budget', () => {
-  it('sums extract input tokens from the ledger for the current day', () => {
+  it('sums extract input tokens from the ledger for the current day', async () => {
     expect(dailyTokenCap()).toBe(3000000);
     expect(extractInputTokensToday()).toBe(0);
     append({
@@ -107,22 +107,22 @@ describe('daily budget', () => {
     });
     const fresh = noteRaw('fresh.md', '# Fresh\n\nChurn benchmarks live here.', '2026-10-27T10:00:00-04:00');
     await ingestRaw(fresh);
-    expect(getItemBundle(itemIdFor(fresh))?.claims).toHaveLength(0);
-    expect(extractionPaused()).toBe(true);
+    expect((await getItemBundle(itemIdFor(fresh)))?.claims).toHaveLength(0);
+    expect(await extractionPaused()).toBe(true);
     const direct = await extractItem(itemIdFor(fresh));
     expect(direct.paused).toBe(true);
   });
 
-  it('stays unpaused when nothing is waiting', () => {
+  it('stays unpaused when nothing is waiting', async () => {
     process.env.STEVENS_DAILY_TOKENS = '0';
-    expect(extractionPaused()).toBe(false);
+    expect(await extractionPaused()).toBe(false);
   });
 
   it('keeps writers uncapped', async () => {
     process.env.STEVENS_DAILY_TOKENS = '0';
     const fresh = noteRaw('fresh.md', '# Fresh\n\nChurn benchmarks live here.', '2026-10-27T10:00:00-04:00');
     await ingestRaw(fresh);
-    expect(allPersonalClaims()).toHaveLength(0);
-    expect(getItemBundle(itemIdFor(fresh))?.segments.length).toBeGreaterThan(0);
+    expect(await allPersonalClaims()).toHaveLength(0);
+    expect((await getItemBundle(itemIdFor(fresh)))?.segments.length).toBeGreaterThan(0);
   });
 });

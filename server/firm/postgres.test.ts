@@ -60,14 +60,14 @@ async function withAdmin<T>(fn: (client: Client) => Promise<T>): Promise<T> {
 const TOKEN = 'test-agent-token-pg';
 
 async function freshDir(): Promise<string> {
-  closeFirmDb();
+  await closeFirmDb();
   const dir = join(mkdtempSync(join(tmpdir(), 'stevens-pg-')), 'firm');
   mkdirSync(dir, { recursive: true });
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = TOKEN;
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
-  seedPeople(getFirmDb(), TOKEN);
+  await seedPeople(TOKEN);
   return dir;
 }
 
@@ -94,7 +94,7 @@ describe.skipIf(!LIVE)('postgres crm', () => {
         await client.query(`set role "${person.role}"`);
         const res = await client.query(`select document_id from crm.document_bodies`);
         const seen = new Set((res.rows as { document_id: string }[]).map((row) => row.document_id));
-        for (const doc of firmDocuments().filter((entry) => entry.connector === 'crm')) {
+        for (const doc of (await firmDocuments()).filter((entry) => entry.connector === 'crm')) {
           found.set(person.id + '|' + doc.id, seen.has(doc.id));
         }
         await client.query(`reset role`);
@@ -102,16 +102,16 @@ describe.skipIf(!LIVE)('postgres crm', () => {
       return found;
     });
     for (const person of people) {
-      for (const doc of firmDocuments().filter((entry) => entry.connector === 'crm')) {
+      for (const doc of (await firmDocuments()).filter((entry) => entry.connector === 'crm')) {
         const acl = grants.filter((grant) => grant.document_id === doc.id).map((grant) => granteePrincipal(grant.grantee));
-        expect(isMember(person.id, acl)).toBe(readable.get(person.id + '|' + doc.id));
+        expect(await isMember(person.id, acl)).toBe(readable.get(person.id + '|' + doc.id));
       }
     }
   });
 
   it('keeps the legal-hold body out of firm.db and the firm ledger', async () => {
     const body = 'Do not discuss, cite, or reason over this note';
-    const row = getFirmDb().prepare(`select body from documents where id = 'd-granite'`).get() as unknown as { body: string | null };
+    const row = await (await getFirmDb()).get<{ body: string | null }>(`select body from documents where id = 'd-granite'`);
     expect(row.body).toBeNull();
     const dumped = execFileSync('sqlite3', [join(process.env.STEVENS_DATA_DIR as string, 'firm.db'), '.dump'], { encoding: 'utf8', timeout: 15000 });
     expect(dumped).not.toContain(body);
@@ -121,16 +121,16 @@ describe.skipIf(!LIVE)('postgres crm', () => {
   it('downgrades a document within 60s of a grant revoke', async () => {
     const started = Date.now();
     const jordan = { id: 'p-jordan', name: 'Jordan Blake', role: 'Partner' as const };
-    const before = agentContext(jordan, 'beacon', 'brief');
+    const before = await agentContext(jordan, 'beacon', 'brief');
     expect(before.sources.map((source) => source.id)).toContain('d-beacon-memo');
     await withAdmin(async (client) => {
       await client.query(`delete from crm.document_grants where document_id = 'd-beacon-memo'`);
     });
     try {
       await runConnectorSync({ reader: new PgCrmReader(STEVENS_URL) });
-      const after = agentContext(jordan, 'beacon', 'brief');
+      const after = await agentContext(jordan, 'beacon', 'brief');
       expect(after.sources.map((source) => source.id)).not.toContain('d-beacon-memo');
-      const row = getFirmDb().prepare(`select body from documents where id = 'd-beacon-memo'`).get() as unknown as { body: string | null };
+      const row = await (await getFirmDb()).get<{ body: string | null }>(`select body from documents where id = 'd-beacon-memo'`);
       expect(row.body).toBeNull();
       expect(Date.now() - started).toBeLessThan(60000);
     } finally {
@@ -139,20 +139,20 @@ describe.skipIf(!LIVE)('postgres crm', () => {
       });
       await runConnectorSync({ reader: new PgCrmReader(STEVENS_URL) });
     }
-    const restored = agentContext(jordan, 'beacon', 'brief');
+    const restored = await agentContext(jordan, 'beacon', 'brief');
     expect(restored.sources.map((source) => source.id)).toContain('d-beacon-memo');
   });
 
   it('shows visible sources as member-readable and hidden ones otherwise', async () => {
     const jordan = { id: 'p-jordan', name: 'Jordan Blake', role: 'Partner' as const };
-    for (const doc of firmDocuments().filter((entry) => entry.connector === 'crm')) {
-      const acl = documentAcl(doc.id);
+    for (const doc of (await firmDocuments()).filter((entry) => entry.connector === 'crm')) {
+      const acl = await documentAcl(doc.id);
       const source = firmSourceFor(
         { id: doc.id, kind: doc.kind as 'memo', title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
         classifyAcl(acl).classification,
       );
-      const decision = policy(source, 'Partner', 'brief', isMember('p-jordan', acl));
-      const seen = agentContext(jordan, doc.dealId ?? 'helios', 'brief').sources.some((entry) => entry.id === doc.id);
+      const decision = policy(source, 'Partner', 'brief', await isMember('p-jordan', acl));
+      const seen = (await agentContext(jordan, doc.dealId ?? 'helios', 'brief')).sources.some((entry) => entry.id === doc.id);
       expect(seen).toBe(decision.access === 'visible');
     }
   });
@@ -163,23 +163,23 @@ describe.skipIf(!LIVE)('postgres rebuild', () => {
     const dir = await freshDir();
     await runConnectorSync({ reader: new PgCrmReader(STEVENS_URL) });
     const alex = { id: 'p-alex', name: 'Alex Rivera', role: 'Associate' as const };
-    inboundRelease(alex, {
+    await inboundRelease(alex, {
       dealId: 'helios', claimId: 'c-rebuild-1', quote: 'churn is two percent on logos',
       provenance: { title: 'note', origin: 'vault', capturedAt: '2026-10-27T00:00:00Z' },
     });
-    const db = getFirmDb();
+    const db = await getFirmDb();
     const snapshot = {
-      documents: db.prepare(`select id, connector, deal_id, kind, title, body, media_path, created_at, shared_by from documents order by id`).all(),
-      acl: db.prepare(`select document_id, principal from document_acl order by document_id, principal`).all(),
-      memberships: db.prepare(`select person_id, principal from memberships order by person_id, principal`).all(),
-      people: db.prepare(`select id, name, role from people order by id`).all(),
-      deals: db.prepare(`select * from deals order by id`).all(),
-      meetings: db.prepare(`select * from meetings order by id`).all(),
-      portfolio: db.prepare(`select * from portfolio order by company`).all(),
-      provenance: db.prepare(`select * from release_provenance order by document_id`).all(),
+      documents: await db.all(`select id, connector, deal_id, kind, title, body, media_path, created_at, shared_by from documents order by id`),
+      acl: await db.all(`select document_id, principal from document_acl order by document_id, principal`),
+      memberships: await db.all(`select person_id, principal from memberships order by person_id, principal`),
+      people: await db.all(`select id, name, role from people order by id`),
+      deals: await db.all(`select * from deals order by id`),
+      meetings: await db.all(`select * from meetings order by id`),
+      portfolio: await db.all(`select * from portfolio order by company`),
+      provenance: await db.all(`select * from release_provenance order by document_id`),
     };
     const callsBefore = (JSON.parse(readFileSync(join(dir, 'meta-calls.json'), 'utf8')) as { count: number }).count;
-    closeFirmDb();
+    await closeFirmDb();
     rmSync(join(dir, 'firm.db'));
     const savedAdmin = process.env.FIRM_ADMIN_DATABASE_URL;
     const savedStevens = process.env.FIRM_DATABASE_URL;
@@ -193,17 +193,17 @@ describe.skipIf(!LIVE)('postgres rebuild', () => {
       if (savedAdmin !== undefined) process.env.FIRM_ADMIN_DATABASE_URL = savedAdmin;
       if (savedStevens !== undefined) process.env.FIRM_DATABASE_URL = savedStevens;
     }
-    const rebuilt = getFirmDb();
-    expect(rebuilt.prepare(`select id, connector, deal_id, kind, title, body, media_path, created_at, shared_by from documents order by id`).all()).toEqual(snapshot.documents);
-    expect(rebuilt.prepare(`select document_id, principal from document_acl order by document_id, principal`).all()).toEqual(snapshot.acl);
-    expect(rebuilt.prepare(`select person_id, principal from memberships order by person_id, principal`).all()).toEqual(snapshot.memberships);
-    expect(rebuilt.prepare(`select id, name, role from people order by id`).all()).toEqual(snapshot.people);
-    expect(rebuilt.prepare(`select * from deals order by id`).all()).toEqual(snapshot.deals);
-    expect(rebuilt.prepare(`select * from meetings order by id`).all()).toEqual(snapshot.meetings);
-    expect(rebuilt.prepare(`select * from portfolio order by company`).all()).toEqual(snapshot.portfolio);
-    expect(rebuilt.prepare(`select * from release_provenance order by document_id`).all()).toEqual(snapshot.provenance);
+    const rebuilt = await getFirmDb();
+    expect((await rebuilt.all(`select id, connector, deal_id, kind, title, body, media_path, created_at, shared_by from documents order by id`))).toEqual(snapshot.documents);
+    expect((await rebuilt.all(`select document_id, principal from document_acl order by document_id, principal`))).toEqual(snapshot.acl);
+    expect((await rebuilt.all(`select person_id, principal from memberships order by person_id, principal`))).toEqual(snapshot.memberships);
+    expect((await rebuilt.all(`select id, name, role from people order by id`))).toEqual(snapshot.people);
+    expect((await rebuilt.all(`select * from deals order by id`))).toEqual(snapshot.deals);
+    expect((await rebuilt.all(`select * from meetings order by id`))).toEqual(snapshot.meetings);
+    expect((await rebuilt.all(`select * from portfolio order by company`))).toEqual(snapshot.portfolio);
+    expect((await rebuilt.all(`select * from release_provenance order by document_id`))).toEqual(snapshot.provenance);
     const callsAfter = (JSON.parse(readFileSync(join(dir, 'meta-calls.json'), 'utf8')) as { count: number }).count;
     expect(callsAfter).toBe(callsBefore);
-    closeFirmDb();
+    await closeFirmDb();
   });
 });

@@ -70,7 +70,9 @@ async function main(): Promise<void> {
   env.STEVENS_FIRM_URL = 'http://localhost:' + stack.firm;
   env.STEVENS_REPLAY = '1';
   env.STEVENS_NOW = readFileSync(join(replay, 'now.txt'), 'utf8').trim();
+  env.STEVENS_STORE = 'sqlite';
   env.FIRM_DATABASE_URL = '';
+  env.PERSONAL_DATABASE_URL = '';
   delete env.MODEL_API_KEY;
   console.log('demo: serving the recorded ' + scenario + ' run from ' + data);
   const child = spawn('npm', ['run', 'dev'], { cwd: process.cwd(), env, stdio: 'inherit' });

@@ -29,7 +29,7 @@ function toSource(entry: Entry): Source {
 }
 
 describe('policy', () => {
-  it('matches the SPEC defaults for every role, source, purpose, and membership', () => {
+  it('matches the SPEC defaults for every role, source, purpose, and membership', async () => {
     const entries = manifest();
     expect(entries.length).toBeGreaterThan(0);
     for (const entry of entries) {
@@ -45,7 +45,7 @@ describe('policy', () => {
     }
   });
 
-  it('covers a Partner-owned personal source symmetrically', () => {
+  it('covers a Partner-owned personal source symmetrically', async () => {
     const source: Source = {
       id: 'p1', vault: 'personal', title: 'p', capturedAt: '2026-10-20T00:00:00Z',
       kind: 'article', fixture: 'x', ownerRole: 'Partner',
@@ -54,7 +54,7 @@ describe('policy', () => {
     expect(policy(source, 'Associate', 'brief', false).access).toBe('excluded');
   });
 
-  it('gives every rule a unique id', () => {
+  it('gives every rule a unique id', async () => {
     const ids = RULES.map((r) => r.id);
     expect(new Set(ids).size).toBe(ids.length);
   });

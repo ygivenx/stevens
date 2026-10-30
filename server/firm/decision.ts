@@ -15,17 +15,17 @@ export interface DecisionDeps {
   writeFn?: (prompt: string, claims: Claim[], sources: Source[]) => Promise<Written>;
 }
 
-export function decisionSources(to: Role, dealId: string, toPerson: string | null): { sources: Source[]; claims: Claim[] } {
+export async function decisionSources(to: Role, dealId: string, toPerson: string | null): Promise<{ sources: Source[]; claims: Claim[] }> {
   const sources: Source[] = [];
   const ids = new Set<string>();
-  for (const doc of firmDocuments()) {
+  for (const doc of await firmDocuments()) {
     if (doc.dealId !== null && doc.dealId !== dealId) continue;
-    const acl = documentAcl(doc.id);
+    const acl = await documentAcl(doc.id);
     const source = firmSourceFor(
       { id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
       classifyAcl(acl).classification,
     );
-    const member = toPerson !== null && isMember(toPerson, acl);
+    const member = toPerson !== null && (await isMember(toPerson, acl));
     if (policy(source, to, 'decision', member).access !== 'visible') continue;
     sources.push(source);
     ids.add(doc.id);
@@ -44,10 +44,14 @@ export async function draftDecision(questionId: string, dealId: string, to: Role
   const key = stageKey('decision', [questionId], PROMPT_VERSION, WONDER_MODEL);
   const found = findCompleted(key);
   if (found && found.type === 'draft.created') return found.draft;
-  const { sources, claims } = decisionSources(to, dealId, toPerson);
+  const { sources, claims } = await decisionSources(to, dealId, toPerson);
   const sourceById = new Map(sources.map((source) => [source.id, source]));
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
-  const { prompt, manifest } = assemble('decision', to, WONDER_MODEL, key, sources, claims, undefined, (source) => toPerson !== null && isMember(toPerson, documentAcl(source.id)));
+  const memberById = new Map<string, boolean>();
+  for (const source of sources) {
+    memberById.set(source.id, toPerson !== null && (await isMember(toPerson, await documentAcl(source.id))));
+  }
+  const { prompt, manifest } = assemble('decision', to, WONDER_MODEL, key, sources, claims, undefined, (source) => memberById.get(source.id) ?? false);
   const task = `${prompt}\n\nTask: draft the ${to} decision for deal ${dealId}${question ? ' on the question: ' + question : ''}. Every sentence needs at least one citation. Recommend proceed, hold, or decline with the reason the cited sources support.`;
   let written;
   try {
@@ -78,9 +82,10 @@ export function verdictForEscalation(questionId: string): { verdict: Verdict; de
   return null;
 }
 
-export function recipientName(recipientId: string | null): string | null {
+export async function recipientName(recipientId: string | null): Promise<string | null> {
   if (!recipientId) return null;
-  const row = getFirmDb().prepare(`select name from people where id = ?`).get(recipientId) as unknown as { name: string } | undefined;
+  const db = await getFirmDb();
+  const row = await db.get<{ name: string }>(`select name from people where id = $1`, recipientId);
   return row?.name ?? null;
 }
 
@@ -88,7 +93,7 @@ export async function draftEscalation(fromId: string, dealId: string, questionId
   const noun = scenarioDisplay().reviewerNoun;
   for (const event of readAll()) {
     if (event.type === 'escalation.drafted' && event.questionId === questionId && event.escalationId && event.to) {
-      return { escalationId: event.escalationId, to: event.to, toName: recipientName(recipientFor(event.to, event.dealId ?? '')), reviewerNoun: noun };
+      return { escalationId: event.escalationId, to: event.to, toName: await recipientName(await recipientFor(event.to, event.dealId ?? '')), reviewerNoun: noun };
     }
   }
   const judged = verdictForEscalation(questionId);
@@ -96,9 +101,9 @@ export async function draftEscalation(fromId: string, dealId: string, questionId
     throw new Error('nothing to escalate for ' + questionId);
   }
   const to = judged.verdict.routeTo;
-  const recipient = recipientFor(to, dealId);
+  const recipient = await recipientFor(to, dealId);
   await draftDecision(questionId, dealId, to, question, deps, recipient);
   const escalationId = 'es-' + createHash('sha256').update(questionId).digest('hex').slice(0, 12);
   append({ at: new Date().toISOString(), type: 'escalation.drafted', escalationId, questionId, dealId, from: fromId, to });
-  return { escalationId, to, toName: recipientName(recipient), reviewerNoun: noun };
+  return { escalationId, to, toName: await recipientName(recipient), reviewerNoun: noun };
 }

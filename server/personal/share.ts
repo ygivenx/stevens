@@ -23,8 +23,8 @@ export interface ShareDeps {
   releaseFn?: (payload: SharePayload) => Promise<{ documentId: string }>;
 }
 
-export function sharePayload(claim: Claim, dealId: string): SharePayload {
-  const bundle = getItemBundle(claim.sourceId);
+export async function sharePayload(claim: Claim, dealId: string): Promise<SharePayload> {
+  const bundle = await getItemBundle(claim.sourceId);
   if (!bundle) throw new Error('unknown claim ' + claim.id);
   const segment = bundle.segments.find((part) => part.id === claim.segmentId);
   if (claim.quote.length > 500) throw new Error('quote over 500 characters');
@@ -45,9 +45,9 @@ export function sharePayload(claim: Claim, dealId: string): SharePayload {
 export async function shareClaim(claimId: string, dealId: string, deps: ShareDeps = {}): Promise<{ documentId: string }> {
   if (soloMode()) throw new Error('solo mode: sharing needs a firm');
   const releaseFn = deps.releaseFn ?? firmRelease;
-  const claim = allPersonalClaims().find((entry) => entry.id === claimId);
+  const claim = (await allPersonalClaims()).find((entry) => entry.id === claimId);
   if (!claim) throw new Error('unknown claim ' + claimId);
-  const payload = sharePayload(claim, dealId);
+  const payload = await sharePayload(claim, dealId);
   const { documentId } = await releaseFn(payload);
   append({ at: new Date().toISOString(), type: 'share.sent', claimId, dealId, documentId });
   return { documentId };

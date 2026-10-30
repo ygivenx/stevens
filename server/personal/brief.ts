@@ -21,10 +21,10 @@ export async function writeMeetingBrief(dealId: string, company: string, slice: 
   const writeFn = deps.writeFn ?? writeDraft;
   const viewer = ownerRole();
   const shells = firmShells(slice);
-  const mine = personalSources(viewer);
+  const mine = await personalSources(viewer);
   const sources = [...mine, ...shells];
   const sourceById = new Map(sources.map((source) => [source.id, source]));
-  const claims = [...allPersonalClaims(), ...slice.claims];
+  const claims = [...(await allPersonalClaims()), ...slice.claims];
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const key = briefKey(dealId, claims, slice.sources.map((source) => source.id));
   const found = findCompleted(key);
@@ -60,10 +60,10 @@ export async function writeAnswer(questionId: string, dealId: string, question: 
   await ensureExtractedForTerms(queryTerms(question)).catch(() => {});
   const viewer = ownerRole();
   const shells = firmShells(slice);
-  const mine = personalSources(viewer);
+  const mine = await personalSources(viewer);
   const sources = [...mine, ...shells];
   const sourceById = new Map(sources.map((source) => [source.id, source]));
-  const claims = [...allPersonalClaims(), ...slice.claims];
+  const claims = [...(await allPersonalClaims()), ...slice.claims];
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const key = stageKey('answer', [questionId], PROMPT_VERSION, WONDER_MODEL);
   const found = findCompleted(key);

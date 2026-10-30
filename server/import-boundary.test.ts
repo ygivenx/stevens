@@ -59,7 +59,7 @@ describe('import boundary', () => {
       'server/common/boundary/policy.ts',
       'server/common/boundary/assemble.ts',
       'server/common/ledger/store.ts',
-      'server/common/db.ts',
+      'server/common/store-db.ts',
       'server/common/clock.ts',
       'server/firm/index.ts',
       'server/firm/agent-auth.ts',

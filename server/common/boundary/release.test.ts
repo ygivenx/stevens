@@ -11,7 +11,7 @@ const SOURCE: Source = {
 };
 const CLAIM: Claim = { id: 'c1', sourceId: 'mine1', entity: 'e', quote: 'MINE-GOLF-HOTEL' };
 
-beforeEach(() => {
+beforeEach(async () => {
   process.env.STEVENS_DATA_DIR = mkdtempSync(join(tmpdir(), 'stevens-release-'));
 });
 
@@ -20,7 +20,7 @@ function maps() {
 }
 
 describe('release gate', () => {
-  it('lets the owner release one quote and logs the event', () => {
+  it('lets the owner release one quote and logs the event', async () => {
     const { claims, sources } = maps();
     const events: LedgerEvent[] = [];
     expect(personalQuoteVisible(CLAIM, SOURCE, 'Partner', events)).toBe(false);
@@ -31,12 +31,12 @@ describe('release gate', () => {
     expect(OWNER_ONLY).toBe('Personal source (owner only)');
   });
 
-  it('rejects a release by anyone but the owner', () => {
+  it('rejects a release by anyone but the owner', async () => {
     const { claims, sources } = maps();
     expect(() => releaseClaim('c1', 'Partner', claims, sources, [])).toThrow('only the owner');
   });
 
-  it('rejects releasing unknown or enterprise claims', () => {
+  it('rejects releasing unknown or enterprise claims', async () => {
     const { claims, sources } = maps();
     expect(() => releaseClaim('nope', 'Associate', claims, sources, [])).toThrow('unknown claim');
     const team: Source = { ...SOURCE, id: 'team1', vault: 'enterprise', classification: 'team', ownerRole: undefined };

@@ -33,25 +33,25 @@ beforeAll(async () => {
   process.env.STEVENS_NOW = '2026-10-28T14:00:00-04:00';
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
-  seedPeople(getFirmDb(), TOKEN);
+  await seedPeople(TOKEN);
   await runConnectorSync({ reader: testReader() });
   const mod = await import('./index.js');
   app = mod.app;
 });
 
-afterAll(() => {
+afterAll(async () => {
   delete process.env.STEVENS_NOW;
-  closeFirmDb();
+  await closeFirmDb();
 });
 
 describe('crm sync', () => {
-  it('loads documents, acl rows, and people into firm.db', () => {
-    const db = getFirmDb();
-    const docs = db.prepare(`select count(*) as n from documents`).get() as unknown as { n: number };
+  it('loads documents, acl rows, and people into firm.db', async () => {
+    const db = await getFirmDb();
+    const docs = await db.get<{ n: number }>(`select count(*) as n from documents`);
     expect(docs.n).toBe(9);
-    const acl = db.prepare(`select count(*) as n from document_acl`).get() as unknown as { n: number };
+    const acl = await db.get<{ n: number }>(`select count(*) as n from document_acl`);
     expect(acl.n).toBe(9);
-    const people = db.prepare(`select count(*) as n from people`).get() as unknown as { n: number };
+    const people = await db.get<{ n: number }>(`select count(*) as n from people`);
     expect(people.n).toBe(3);
   });
 
@@ -66,26 +66,26 @@ describe('crm sync', () => {
 });
 
 describe('agent meetings', () => {
-  it('returns the Helios meeting within 24 hours for Alex', () => {
-    const person = agentFromHeader(TOKEN);
+  it('returns the Helios meeting within 24 hours for Alex', async () => {
+    const person = await agentFromHeader(TOKEN);
     expect(person?.id).toBe('p-alex');
-    const meetings = agentMeetings(person as { id: string; name: string; role: 'Associate' }, 24);
+    const meetings = await agentMeetings(person as { id: string; name: string; role: 'Associate' }, 24);
     expect(meetings.map((m) => m.id)).toContain('m-helios-2');
     expect(meetings[0].company).toBe('Helios');
   });
 
-  it('returns nothing outside the window', () => {
-    const person = agentFromHeader(TOKEN);
-    const meetings = agentMeetings(person as { id: string; name: string; role: 'Associate' }, 1);
+  it('returns nothing outside the window', async () => {
+    const person = await agentFromHeader(TOKEN);
+    const meetings = await agentMeetings(person as { id: string; name: string; role: 'Associate' }, 1);
     expect(meetings).toEqual([]);
   });
 });
 
 describe('agent context boundary', () => {
   for (const purpose of ['bridge', 'brief', 'answer'] as const) {
-    it(`serves ${purpose} context without privy or wall text`, () => {
-      const person = agentFromHeader(TOKEN) as { id: string; name: string; role: 'Associate' };
-      const context = agentContext(person, 'helios', purpose);
+    it(`serves ${purpose} context without privy or wall text`, async () => {
+      const person = await agentFromHeader(TOKEN) as { id: string; name: string; role: 'Associate' };
+      const context = await agentContext(person, 'helios', purpose);
       const body = JSON.stringify(context);
       expect(body).toContain('churn');
       for (const leaked of ['Lumen', 'Granite', 'legal hold', 'd-conflicts-lumen', 'd-granite']) {
@@ -97,12 +97,12 @@ describe('agent context boundary', () => {
   }
 
   it('serves the deck photo bytes but not partner-only media', async () => {
-    const person = agentFromHeader(TOKEN) as { id: string; name: string; role: 'Associate' };
-    const deck = agentMedia(person, 'd-helios-deck');
+    const person = await agentFromHeader(TOKEN) as { id: string; name: string; role: 'Associate' };
+    const deck = await agentMedia(person, 'd-helios-deck');
     expect(deck?.contentType).toBe('image/jpeg');
     expect((deck?.bytes.length ?? 0)).toBeGreaterThan(0);
-    expect(agentMedia(person, 'd-conflicts-lumen')).toBeNull();
-    expect(agentMedia(person, 'no-such-doc')).toBeNull();
+    expect(await agentMedia(person, 'd-conflicts-lumen')).toBeNull();
+    expect(await agentMedia(person, 'no-such-doc')).toBeNull();
   });
 
   it('rejects unknown agents at the HTTP layer', async () => {
