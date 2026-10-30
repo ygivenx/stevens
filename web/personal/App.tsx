@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Play, CalendarDays, Library, Share2, Building2, Ear, Sparkles, Send, Database } from 'lucide-react';
 import type { Claim, Draft, SourceRef } from '../../shared/data.js';
 import {
-  getState, getBundle, askQuestion, shareClaim, getReceipts,
+  getState, getBundle, askQuestion, shareClaim, getReceipts, chatFollowUp,
   mediaUrl, firmMediaUrl, watchEvents, formatDateLine, formatMeetingTime, formatClock, msLabel,
   type PersonalState, type ItemBundle,
 } from './client.js';
@@ -388,7 +388,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
         <p className="mt-2 text-xs text-smoke">{state.solo ? 'Answered from your notebook. No firm is connected.' : 'Your question goes to the firm\u2019s privy check. Nothing from your notebook does.'}</p>
       </div>
       {answers.map((answer) => (
-        <AnswerCard key={answer.id} answer={answer} state={state} claimsById={claimsById} sourcesById={sourcesById} onReceipts={() => onReceipts(answer.id)} />
+        <AnswerCard key={answer.id} answer={answer} state={state} claimsById={claimsById} sourcesById={sourcesById} onReceipts={() => onReceipts(answer.id)} onFollowUp={onAsk} onToast={onToast} />
       ))}
     </Card>
   );
@@ -477,6 +477,7 @@ function AudioReplay({ personal }: { personal: Claim }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
+    if (personal.startMs == null) return () => { live = false; };
     fetch(mediaUrl(personal.sourceId))
       .then(async (res) => {
         if (!res.ok) return null;
@@ -600,15 +601,34 @@ function BriefFooter({ brief, now, onReceipts }: { brief: Draft; now: string; on
   );
 }
 
-function AnswerCard({ answer, state, claimsById, sourcesById, onReceipts }: {
+function AnswerCard({ answer, state, claimsById, sourcesById, onReceipts, onFollowUp, onToast }: {
   answer: Draft;
   state: PersonalState;
   claimsById: Map<string, Claim>;
   sourcesById: Map<string, SourceRef>;
   onReceipts: () => void;
+  onFollowUp: () => void;
+  onToast: (message: string) => void;
 }) {
   const escalation = state.escalations.find((e) => e.questionId === answer.questionId);
   const verdict = answer.verdict?.verdict ?? 'hold';
+  const thread = state.conversations.find((t) => t.questionId === answer.questionId);
+  const [followUp, setFollowUp] = useState('');
+  const [chatting, setChatting] = useState(false);
+
+  async function submitFollowUp() {
+    if (!answer.questionId || followUp.trim().length === 0 || chatting) return;
+    setChatting(true);
+    try {
+      await chatFollowUp(answer.questionId, followUp.trim());
+      setFollowUp('');
+      onFollowUp();
+    } catch {
+      onToast('Could not reach Stevens. Try again.');
+    } finally {
+      setChatting(false);
+    }
+  }
   return (
     <div data-testid="answer" className="mt-6 rounded-md border border-hairline bg-paper p-4">
       <div className="flex items-center gap-2">
@@ -631,6 +651,32 @@ function AnswerCard({ answer, state, claimsById, sourcesById, onReceipts }: {
       <button onClick={onReceipts} data-testid="receipts-button" className="mt-2 text-xs font-semibold text-brass-deep underline hover:text-brass">
         Receipts
       </button>
+      {thread && thread.messages.length > 0 && (
+        <div data-testid="chat-thread" className="mt-4 space-y-3 border-t border-hairline pt-3">
+          {thread.messages.map((message) => (
+            <div key={message.id}>
+              {message.role === 'user' ? (
+                <p className="text-sm font-semibold">{message.text}</p>
+              ) : (
+                <SentenceList sentences={message.sentences} claimsById={claimsById} sourcesById={sourcesById} display={state.display} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input
+          data-testid="chat-input"
+          value={followUp}
+          onChange={(e) => setFollowUp(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') void submitFollowUp(); }}
+          placeholder="Ask a follow-up…"
+          className="min-w-0 flex-1 rounded-md border border-hairline bg-paper px-3 py-2 text-sm"
+        />
+        <Button tone="brass" testid="chat-send" onClick={submitFollowUp} disabled={chatting}>
+          {chatting ? 'Sending…' : 'Send'}
+        </Button>
+      </div>
     </div>
   );
 }

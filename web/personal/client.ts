@@ -1,4 +1,4 @@
-import type { Claim, Draft, Item, Meeting, Person, Receipt, Role, ScenarioDev, ScenarioDisplay, Segment, SourceRef } from '../../shared/data.js';
+import type { ChatThread, Claim, Draft, Item, Meeting, Person, Receipt, Role, ScenarioDev, ScenarioDisplay, Segment, SourceRef } from '../../shared/data.js';
 
 export interface PersonalState {
   owner: Person;
@@ -13,6 +13,7 @@ export interface PersonalState {
   claims: Claim[];
   sources: SourceRef[];
   shares: { claimId: string; dealId: string; sharedAt: string }[];
+  conversations: ChatThread[];
   escalations: { questionId: string; dealId: string; to: Role | null; toName?: string; reviewerNoun?: string; status: 'sent' | 'queued' }[];
   firm: { reachable: boolean; checkedAt: string };
   display: ScenarioDisplay;
@@ -54,6 +55,10 @@ export function shareClaim(claimId: string, dealId: string): Promise<{ documentI
 
 export function getReceipts(draftId: string): Promise<Receipt[]> {
   return req<Receipt[]>('/api/receipts/' + encodeURIComponent(draftId));
+}
+
+export function chatFollowUp(questionId: string, message: string): Promise<{ sentences: { text: string; citations: { kind: string }[] }[]; dropped: number }> {
+  return req<{ sentences: { text: string; citations: { kind: string }[] }[]; dropped: number }>('/api/chat', { method: 'POST', body: JSON.stringify({ questionId, message }) });
 }
 
 export function mediaUrl(itemId: string): string {

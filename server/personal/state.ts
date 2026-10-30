@@ -1,10 +1,10 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Claim, Draft, Item, Meeting, Origin, Person, Role, ScenarioDev, ScenarioDisplay, SourceRef } from '../../shared/data.js';
+import type { ChatThread, Claim, Draft, Item, Meeting, Origin, Person, Role, ScenarioDev, ScenarioDisplay, Sentence, SourceRef } from '../../shared/data.js';
 import { readAll } from '../common/ledger/store.js';
 import { nowIso } from '../common/clock.js';
 import { DEFAULT_DISPLAY, devBlock } from '../common/scenarios.js';
-import { getAdapterState, getDb, allPersonalClaims } from './store.js';
+import { getAdapterState, getDb, allPersonalClaims, chatThread } from './store.js';
 import { extractionPaused } from './extract.js';
 import { firmContext, firmMeetings, firmMeta, soloMode, type FirmMeeting } from './firm-client.js';
 import { inboxDir } from './adapters/inbox.js';
@@ -25,6 +25,7 @@ export interface PersonalState {
   claims: Claim[];
   sources: SourceRef[];
   shares: { claimId: string; dealId: string; sharedAt: string }[];
+  conversations: ChatThread[];
   escalations: { questionId: string; dealId: string; to: Role | null; toName?: string; reviewerNoun?: string; status: 'sent' | 'queued' }[];
   firm: { reachable: boolean; checkedAt: string };
   display: ScenarioDisplay;
@@ -288,6 +289,32 @@ export async function buildPersonalState(): Promise<PersonalState> {
     simulated.push(display.firmDataLabel);
   }
   simulated.push('Real glasses captures, pre-recorded, imported not streamed');
+  const conversations: ChatThread[] = [];
+  for (const draft of drafts) {
+    if (draft.kind !== 'answer' || !draft.questionId || !draft.dealId) continue;
+    if (conversations.some((thread) => thread.questionId === draft.questionId)) continue;
+    try {
+      const rows = await chatThread(draft.questionId);
+      if (rows.length === 0) continue;
+      conversations.push({
+        questionId: draft.questionId,
+        dealId: draft.dealId,
+        messages: rows.map((row) => {
+          let sentences: Sentence[] = [];
+          if (row.citations) {
+            try {
+              sentences = JSON.parse(row.citations) as Sentence[];
+            } catch {
+              sentences = [];
+            }
+          }
+          return { id: row.id, role: row.role as 'user' | 'assistant', text: row.text, sentences, at: row.createdAt };
+        }),
+      });
+    } catch {
+      continue;
+    }
+  }
   const dev = devBlock();
   return {
     owner,
@@ -303,6 +330,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
     claims,
     sources,
     shares,
+    conversations,
     escalations,
     firm: { reachable: firmReachable, checkedAt: now },
     display,
