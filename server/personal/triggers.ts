@@ -53,7 +53,11 @@ export async function runMeetingTrigger(deps: TriggerDeps = {}): Promise<{ brief
     if (activeDeals.has(meeting.dealId)) continue;
     activeDeals.add(meeting.dealId);
     try {
-      const slice = soloMode() ? { sources: [], claims: [] } : await contextFn(meeting.dealId, 'brief');
+      let slice = soloMode() ? { sources: [], claims: [] } : await contextFn(meeting.dealId, 'brief');
+      for (let waited = 0; !soloMode() && slice.claims.length === 0 && waited < 24; waited += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+        slice = await contextFn(meeting.dealId, 'brief');
+      }
       const judged = await judgeBridges(slice);
       const key = briefKey(meeting.dealId, slice.claims, slice.sources.map((source) => source.id));
       const found = readAll().find((event) => event.type === 'draft.created' && event.draft.kind === 'brief' && event.api?.stageKey === key);
@@ -62,7 +66,8 @@ export async function runMeetingTrigger(deps: TriggerDeps = {}): Promise<{ brief
         continue;
       }
       const seen = new Set(judged.map((bridge) => bridge.id));
-      const bridges = [...judged, ...recordedBridges().filter((bridge) => !seen.has(bridge.id))];
+      const inSlice = new Set(slice.claims.map((claim) => claim.id));
+      const bridges = [...judged, ...recordedBridges().filter((bridge) => !seen.has(bridge.id) && inSlice.has(bridge.workClaimId))];
       briefs.push(await writeMeetingBrief(meeting.dealId, meeting.company, slice, bridges));
     } catch {
       continue;

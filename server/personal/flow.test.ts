@@ -145,6 +145,29 @@ describe('meeting trigger', () => {
   });
 });
 
+describe('bridge scoping', () => {
+  it('keeps each brief bridges to its own deal slice', async () => {
+    const sliceFor = (deal: string): FirmSlice => ({
+      sources: [{ id: 'd-' + deal, vault: 'enterprise', kind: 'memo', title: deal, capturedAt: '2026-10-23T00:00:00Z', connector: 'crm', access: 'visible', ruleId: 'r-team-associate' }],
+      claims: [{ id: deal + '-c0', sourceId: 'd-' + deal, entity: 'churn', quote: 'vendors quoting churn under two percent are measuring something else' }],
+    });
+    const contextFn = async (dealId: string) => sliceFor(dealId);
+    const meetingsFn = async () => [
+      { id: 'm-a', dealId: 'aaa', company: 'Aaa', title: 'Aaa review', startsAt: '2026-10-29T10:00:00-04:00' },
+      { id: 'm-b', dealId: 'bbb', company: 'Bbb', title: 'Bbb review', startsAt: '2026-10-29T11:00:00-04:00' },
+    ];
+    await usePersonal();
+    const result = await runMeetingTrigger({ meetingsFn, contextFn });
+    expect(result.briefs).toHaveLength(2);
+    for (const brief of result.briefs) {
+      expect((brief.bridges ?? []).length).toBeGreaterThan(0);
+      for (const bridge of brief.bridges ?? []) {
+        expect(bridge.workClaimId.startsWith(brief.dealId + '-')).toBe(true);
+      }
+    }
+  });
+});
+
 describe('ask and escalation', () => {
   it('holds, queues the escalation, and drafts an answer when the firm is down', async () => {
     await usePersonal();

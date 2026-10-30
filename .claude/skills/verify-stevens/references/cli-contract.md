@@ -44,11 +44,11 @@ Local copy of the deployment: `npm run dev`. `up` starts all four pieces and wai
 
 Configures Stevens for a real owner: writes the v3.1 keys to `.env.local` (merged, other keys kept), checks `MODEL_API_KEY` plus each source, and prints one line per source without ever printing a token or URL. Flags are agent-runnable; missing values prompt in a terminal and error elsewhere. `--firm-url off` (the default) means solo mode. (v3.1: day R1.)
 
-### seed
+### seed [--scenario helios|forge|mercy]
 
 Rebuilds this instance's state from fixtures, with fresh ledgers:
-- **firm:** `firm-crm-setup` builds the Postgres CRM from `fixtures/enterprise/crm.json`, then a connector sync fills `firm.db`; Form D rows come from `fixtures/enterprise/formd/*.json` (v3.1: day R3);
-- **yours:** the instance `vault/` from `fixtures/personal/vault/`; Readwise from `fixtures/personal/readwise-export.json` (the sealed stack unsets `READWISE_TOKEN`); an **empty** inbox.
+- **firm:** `firm-crm-setup --scenario <id> --reset` builds the scenario Postgres CRM from its `crm.json` and truncates the projection tables, then a connector sync refills them; Form D rows come from `fixtures/enterprise/formd/*.json` (v3.1: day R3; v3.3: P1);
+- **yours:** `personal-pg-setup --scenario <id> --reset` rebuilds the scenario personal database; the instance `vault/` from the scenario `personal/vault/`; Readwise from its `readwise-export.json` (the sealed stack unsets `READWISE_TOKEN`); an **empty** inbox.
 
 `--with-captures` also drops the talk and the slide, and waits until both items are `ready`. Synthetic and fictional only (plus public Form D rows); refuses to run against anything but the local stack. (v3: day 9b for the databases, day 10–11 for the adapters.)
 
@@ -60,9 +60,9 @@ Idempotent bootstrap of the Postgres firm CRM inside the `pw` sandbox, and only 
 
 Dev drills on CRM document grants (`STEVENS_DEV=1` only). The change takes effect at the next connector sync, within 60 seconds. (v3.1: day R3.)
 
-### record-replay
+### record-replay [--scenario helios|forge|mercy] [--live]
 
-Runs the full fixture-only flow (CRM sync, talk, slide, brief, ask, escalation, share, approve) against a fresh data dir on ports 18887/18888, then writes `fixtures/replay/{firm,personal}.jsonl` plus `now.txt` for review. Refuses to run when owner sources are configured (non-empty `READWISE_TOKEN` or `STEVENS_CALENDAR_ICS`, or `STEVENS_VAULT_DIR` outside `/tmp/stevens-verify`), and refuses to write ledgers mentioning user paths or database URLs. Media paths are rewritten to fixture-relative. (v3.1: day R4.)
+Runs the full fixture-only flow (CRM sync, talk, slide, brief, ask, escalation, share, approve) against a fresh data dir on the scenario record ports, then writes `<fixtures>/replay/{firm,personal}.jsonl` plus `now.txt` for review. Waits for every card to brief before asking. Refuses to run when owner sources are configured (non-empty `READWISE_TOKEN` or `STEVENS_CALENDAR_ICS`, or `STEVENS_VAULT_DIR` outside `/tmp/stevens-verify`), and refuses to write ledgers mentioning user paths or database URLs. Media paths are rewritten to fixture-relative. `--live` spends real API calls so the replay carries real model passes. (v3.1: day R4; v3.3: P1, S2.)
 
 ### drop <talk|slide|path> [--wait]
 

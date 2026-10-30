@@ -15,18 +15,26 @@ function stackFor(name) {
 const PERSONAL = 'http://localhost:5173';
 const FIRM = 'http://localhost:5174/?as=p-morgan';
 
-const FLOWS = {
+const FLOW_TEXT = {
+  helios: { deal: 'Helios', workCol: 'The deck says', personalCol: 'You heard', question: 'Should we take the second meeting?', approved: 'Approved by Morgan Hale', sourcesExtra: 'SEC Form D' },
+  forge: { deal: 'Compass', workCol: 'The request says', personalCol: 'You read', question: 'Should Compass ship the support copilot?', approved: 'Approved by Theo Osei', sourcesExtra: 'Fictional firm data' },
+  mercy: { deal: 'M-2417', workCol: 'The chart says', personalCol: 'You read', question: 'Should we change the plan for case M-2417?', approved: 'Approved by Dr. Helen Marsh', sourcesExtra: 'Fictional clinical data' },
+};
+
+function flowsFor(scn) {
+  const text = FLOW_TEXT[scn] ?? FLOW_TEXT.helios;
+  return {
   'associate-today': [
     { expectTestId: 'meeting-card' },
-    { expect: 'Helios' },
-    { expect: 'The deck says' },
-    { expect: 'You heard' },
-    { expect: 'Ask about Helios' },
+    { expect: text.deal },
+    { expect: text.workCol },
+    { expect: text.personalCol },
+    { expect: 'Ask about ' + text.deal },
     { expectTestId: 'bridge' },
   ],
   'associate-ask': [
     { expectTestId: 'meeting-card' },
-    { fill: 'ask-input', with: 'Should we take the second meeting?' },
+    { fill: 'ask-input', with: text.question },
     { click: 'ask-send' },
     { expect: 'Hold' },
     { expect: 'nothing enclosed' },
@@ -34,25 +42,25 @@ const FLOWS = {
   ],
   'partner-inbox': [
     { expectTestId: 'inbox' },
-    { expect: 'asked about Helios' },
+    { expect: 'asked about ' + text.deal },
     { expect: "Enclosed from" },
   ],
   'partner-approve': [
     { expectTestId: 'decision' },
     { click: 'approve' },
-    { expect: 'Approved by Morgan Hale' },
+    { expect: text.approved },
   ],
   'partner-sources': [
     { click: 'nav-sources' },
     { expectTestId: 'sources' },
     { expect: 'Where the firm reads from' },
-    { expect: 'SEC Form D' },
+    { expect: text.sourcesExtra },
   ],
   'demo-two-screens': [
     { url: PERSONAL + '/#/today' },
-    { expect: 'The deck says' },
+    { expect: text.workCol },
     { url: FIRM + '#/inbox' },
-    { expect: 'asked about Helios' },
+    { expect: 'asked about ' + text.deal },
   ],
   'associate-share': [
     { expectTestId: 'meeting-card' },
@@ -74,7 +82,8 @@ const FLOWS = {
     { expect: 'Speaker 1' },
     { expect: 'Glasses inbox' },
   ],
-};
+  };
+}
 
 const BANNED_WORDS = ['pipeline', 'stage', 'ledger', 'manifest', 'vault'];
 const BANNED_CONTROLS = ['Run pipeline', 'Run ', 'Ingest', 'Extract', 'Bridge', 'Brief'];
@@ -127,6 +136,7 @@ async function run() {
   const flowName = argv.flow ?? argv._[1];
   const evidence = argv.evidence;
   const stack = stackFor(argv.scenario);
+  const FLOWS = flowsFor(argv.scenario ?? 'helios');
   const url = argv.url ?? ('http://localhost:' + stack.yoursWeb);
   const twoScreens = FLOWS['demo-two-screens'];
   twoScreens[0].url = 'http://localhost:' + stack.yoursWeb + '/#/today';

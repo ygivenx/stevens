@@ -103,7 +103,7 @@ export type LedgerEvent = { at: string } & (
       document?: { id: string; dealId: string; kind: string; title: string; createdAt: string; body: string; acl: string[] };
       provenance?: { title: string; origin: string; capturedAt: string; speaker?: string; at?: string } }
   | { type: 'connector.synced'; connector: 'crm'; cursor: string;
-      upserted: { people: { id: string; name: string; title: string }[]; deals: { id: string; company: string; sector: string; stage: string; askUsd: number }[];
+      upserted: { people: { id: string; name: string; title: string }[]; deals: { id: string; company: string; sector: string; stage: string; askUsd: number | null }[];
         meetings: { id: string; dealId: string; title: string; startsAt: string; askHint?: string }[];
         documents: { id: string; dealId: string | null; kind: string; title: string; createdAt: string; body: string | null; mediaPath: string | null; acl: string[] }[] };
       deletedDocumentIds: string[]; grants: { documentId: string; grantee: string }[];

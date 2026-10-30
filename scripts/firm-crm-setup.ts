@@ -101,7 +101,12 @@ async function main(): Promise<void> {
     for (const person of crm.people) await ensureGroup(client, personRole(prefix, person.id));
     await ensureGroup(client, prefix + '_all_staff');
     await ensureGroup(client, prefix + '_partners');
+    const wanted = new Set(crm.deals.map((deal) => prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_]/g, '_')));
     for (const deal of crm.deals) await ensureGroup(client, prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_]/g, '_'));
+    const stale = await client.query(`select rolname from pg_roles where rolname like $1`, [prefix + '\_deal\_team\_%']);
+    for (const row of stale.rows as { rolname: string }[]) {
+      if (!wanted.has(row.rolname)) await client.query(`drop role "${row.rolname}"`);
+    }
     const holds = new Set<string>();
     for (const doc of crm.documents) for (const principal of doc.acl) {
       const hold = /^legal-hold:(.+)$/.exec(principal);
