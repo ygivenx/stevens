@@ -65,9 +65,35 @@ const CANNED_TRANSCRIPT_FORGE: Transcript = {
 
 const CANNED_IMAGE_FORGE = 'Deflection (contained) 41%\\nReopened in 7 days 22%\\nResolved, no reopen 63%\\nSilence counts as contained\\nContainment is cheap to measure and easy to game\\nSource: fictional evals talk, demo slide';
 
+const CANNED_TRANSCRIPT_MERCY: Transcript = {
+  sessionId: 'fake/transcribe/mercy0000000000000000000000000000',
+  transcript: "M-2417's biomarker results are back, EGFR exon 19 deletion with PD-L1 at forty percent, and the chart still says start the standard regimen next week. Dictating between cases. Did you see the Nature paper from yesterday? Biomarker-driven combination, seventy six percent response in exon 19 deletion, against sixty one on standard. That is exactly M-2417's marker profile. If I walk into the tumor board Thursday, I open with the biomarker results, then the response numbers, then I ask about trial eligibility before anyone votes to start.",
+  audioSeconds: 38.71,
+  turns: [
+    { turnId: 0, startMs: 60, endMs: 13500, transcript: "M-2417's biomarker results are back, EGFR exon 19 deletion with PD-L1 at forty percent, and the chart still says start the standard regimen next week. Dictating between cases.", speaker: 'A' },
+    { turnId: 1, startMs: 13700, endMs: 22500, transcript: 'Did you see the Nature paper from yesterday? Biomarker-driven combination, seventy six percent response in exon 19 deletion, against sixty one on standard.', speaker: 'B' },
+    { turnId: 2, startMs: 22700, endMs: 38300, transcript: "That is exactly M-2417's marker profile. If I walk into the tumor board Thursday, I open with the biomarker results, then the response numbers, then I ask about trial eligibility before anyone votes to start.", speaker: 'A' },
+  ],
+};
+
+const CANNED_IMAGE_MERCY = 'Biomarker match: exon 19 deletion, PD-L1 40%\\nOsimertinib + chemo 76% response\\nStandard chemo-IO 61% response\\nResponse concentrates in exon 19 deletion\\nSource: fictional journal club, demo slide';
+
 const BRIDGE_KEYWORD: Record<string, { word: string; reason: string }> = {
   forge: { word: 'deflection', reason: 'both quote deflection figures with incompatible definitions' },
+  mercy: { word: 'biomarker', reason: 'both cite the same biomarker profile with different recommendations' },
 };
+
+function cannedTranscript(): Transcript {
+  if (scenarioId() === 'forge') return CANNED_TRANSCRIPT_FORGE;
+  if (scenarioId() === 'mercy') return CANNED_TRANSCRIPT_MERCY;
+  return CANNED_TRANSCRIPT;
+}
+
+function cannedImage(): string {
+  if (scenarioId() === 'forge') return CANNED_IMAGE_FORGE;
+  if (scenarioId() === 'mercy') return CANNED_IMAGE_MERCY;
+  return CANNED_IMAGE;
+}
 
 function bridgeKeyword(): { word: string; reason: string } {
   return BRIDGE_KEYWORD[scenarioId()] ?? { word: 'churn', reason: 'both quote churn benchmarks with incompatible definitions' };
@@ -90,7 +116,7 @@ export async function transcribe(wavPath: string): Promise<Transcript> {
   if (mode === 'slow') await sleep(5000);
   if (mode === 'empty') return { sessionId: 'fake/transcribe/empty', transcript: '', audioSeconds: 0, turns: [] };
   if (mode === 'garbage') return { sessionId: 'fake/transcribe/garbage', transcript: 42 as unknown as string, audioSeconds: 0, turns: [] };
-  if (mode !== 'live') return scenarioId() === 'forge' ? CANNED_TRANSCRIPT_FORGE : CANNED_TRANSCRIPT;
+  if (mode !== 'live') return cannedTranscript();
   const form = new FormData();
   form.set('request', new Blob([JSON.stringify({ model: VOICE_MODEL, audioEncoding: 'WAV', mode: 'DIARIZATION' })], { type: 'application/json' }));
   form.set('audio', new Blob([readFileSync(wavPath)], { type: 'audio/wav' }), 'recording.wav');
@@ -112,7 +138,7 @@ export async function readImage(jpgPath: string, prompt: string): Promise<ImageT
   if (mode === 'slow') await sleep(5000);
   if (mode === 'empty') return { text: '', responseId: 'fake_resp_empty', usage: fakeUsage() };
   if (mode === 'garbage') return { text: 42 as unknown as string, responseId: 'fake_resp_garbage', usage: fakeUsage() };
-  if (mode !== 'live') return { text: scenarioId() === 'forge' ? CANNED_IMAGE_FORGE : CANNED_IMAGE, responseId: 'fake_resp_normal', usage: fakeUsage() };
+  if (mode !== 'live') return { text: cannedImage(), responseId: 'fake_resp_normal', usage: fakeUsage() };
   const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
   const dataUrl = 'data:image/jpeg;base64,' + readFileSync(jpgPath).toString('base64');
   const resp = await client.responses.create({
@@ -147,6 +173,7 @@ function fakeClaims(text: string): RawClaim[] {
   const lowered = text.toLowerCase();
   if (lowered.includes('churn')) return [{ entity: 'churn', metric: 'churn', value: 'see quote', quote }];
   if (lowered.includes('deflection')) return [{ entity: 'deflection', metric: 'deflection', value: 'see quote', quote }];
+  if (lowered.includes('biomarker')) return [{ entity: 'biomarker', metric: 'biomarker', value: 'see quote', quote }];
   return [{ entity: 'general', quote }];
 }
 
@@ -326,25 +353,33 @@ export async function writeDraft(prompt: string, claims: Claim[], sources: Sourc
     };
   }
   const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
-  const resp = await client.responses.create({
-    model: WONDER_MODEL,
-    reasoning: { effort: 'high' },
-    input: prompt,
-    text: { format: { type: 'json_schema', name: 'draft', schema: DRAFT_SCHEMA, strict: true } },
-  });
-  const parsed = DraftBody.parse(JSON.parse(resp.output_text));
-  const sentences = parsed.sentences.map((s) => ({
-    text: s.text,
-    citations: s.citations.map((c) => {
-      if (c.kind === 'Fact') {
-        if (!c.claimId || !c.vault || !c.quote) throw new Error('fact citation missing fields');
-        return { kind: 'Fact' as const, claimId: c.claimId, vault: c.vault, quote: c.quote };
-      }
-      if (!c.fromClaimIds || c.fromClaimIds.length === 0) throw new Error('inference citation missing claims');
-      return { kind: 'Inference' as const, fromClaimIds: c.fromClaimIds };
-    }),
-  }));
-  return { sentences, responseId: resp.id, usage: wonderUsage(resp.usage?.input_tokens, resp.usage?.output_tokens) };
+  let failures = 0;
+  for (;;) {
+    const resp = await client.responses.create({
+      model: WONDER_MODEL,
+      reasoning: { effort: 'high' },
+      input: prompt,
+      text: { format: { type: 'json_schema', name: 'draft', schema: DRAFT_SCHEMA, strict: true } },
+    });
+    try {
+      const parsed = DraftBody.parse(JSON.parse(resp.output_text));
+      const sentences = parsed.sentences.map((s) => ({
+        text: s.text,
+        citations: s.citations.map((c) => {
+          if (c.kind === 'Fact') {
+            if (!c.claimId || !c.vault || !c.quote) throw new Error('fact citation missing fields');
+            return { kind: 'Fact' as const, claimId: c.claimId, vault: c.vault, quote: c.quote };
+          }
+          if (!c.fromClaimIds || c.fromClaimIds.length === 0) throw new Error('inference citation missing claims');
+          return { kind: 'Inference' as const, fromClaimIds: c.fromClaimIds };
+        }),
+      }));
+      return { sentences, responseId: resp.id, usage: wonderUsage(resp.usage?.input_tokens, resp.usage?.output_tokens) };
+    } catch (err) {
+      failures += 1;
+      if (failures > 1) throw err;
+    }
+  }
 }
 
 export const VerdictShape = z.strictObject({
