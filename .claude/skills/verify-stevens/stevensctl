@@ -1392,8 +1392,17 @@ def record_http(method, port, path, data=None, viewer=None):
         headers['X-Viewer-Id'] = viewer
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:
             return resp.status, resp.read().decode()
+    except TimeoutError:
+        for _ in range(3):
+            time.sleep(10)
+            try:
+                with urllib.request.urlopen(req, timeout=120) as resp:
+                    return resp.status, resp.read().decode()
+            except TimeoutError:
+                continue
+        raise
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()
 
@@ -1408,17 +1417,18 @@ def record_state(port, viewer=None):
 def cmd_record_replay(argv):
     if '--help' in argv:
         print('stevensctl record-replay: record the fixture-only demo ledgers.\n')
-        print('Usage: stevensctl record-replay [--scenario helios|forge|mercy]\n')
+        print('Usage: stevensctl record-replay [--scenario helios|forge|mercy] [--live]\n')
         print('Runs the full flow (sync, talk, slide, brief, ask, share, approve) against')
         print('a fresh data dir with fixtures only, then commits nothing: it writes')
         print('<fixtures>/replay/{firm,personal}.jsonl plus now.txt for review.\n')
         print('Refuses to run when owner sources are configured: a non-empty READWISE_TOKEN')
         print('or STEVENS_CALENDAR_ICS, or a STEVENS_VAULT_DIR outside /tmp/stevens-verify.')
-        print('helios needs Postgres up (stevensctl crm-db up); other scenarios record')
-        print('in file mode. Needs the scenario record ports free (helios 18887/18888).\n')
+        print('Every scenario records against its Postgres databases (run the setup scripts')
+        print('or stevensctl seed first). Needs the scenario record ports free.')
+        print('--live spends real API calls so the replay carries real model passes.\n')
         print('Examples:')
         print('  stevensctl record-replay')
-        print('  stevensctl record-replay --scenario forge')
+        print('  stevensctl record-replay --scenario forge --live')
         return 0
     if os.environ.get('READWISE_TOKEN'):
         print('record-replay refuses: READWISE_TOKEN is set (owner data).', file=sys.stderr)
@@ -1443,13 +1453,16 @@ def cmd_record_replay(argv):
     data = os.path.join(record, 'data')
     if os.path.isdir(record):
         shutil.rmtree(record)
+    live = '--live' in argv
     for processdir in ('firm', 'personal'):
         processdir_path = os.path.join(data, processdir)
         os.makedirs(processdir_path, exist_ok=True)
         with open(os.path.join(processdir_path, 'meta-fake.json'), 'w') as f:
-            json.dump({'mode': 'normal'}, f)
+            json.dump({'mode': 'live' if live else 'normal'}, f)
         with open(os.path.join(processdir_path, 'meta-calls.json'), 'w') as f:
             json.dump({'count': 0}, f)
+    if live:
+        plus('live mode: model passes will spend real API calls')
     inbox = os.path.join(data, 'personal', 'inbox')
     os.makedirs(inbox, exist_ok=True)
     vault_dir = os.path.join(data, 'personal', 'vault')
@@ -1512,16 +1525,17 @@ def cmd_record_replay(argv):
             time.sleep(2)
         else:
             return fail('talk and slide never reached ready; see %s/servers.log' % record)
-        plus('captures ready; waiting for the first brief')
+        plus('captures ready; waiting for every card to brief')
         briefed = None
-        for _ in range(120):
+        for _ in range(300 if live else 120):
             state = record_state(personal_port)
-            briefed = [meeting for meeting in state['meetings'] if meeting.get('briefId')]
-            if briefed:
+            meetings = state['meetings']
+            briefed = [meeting for meeting in meetings if meeting.get('briefId')]
+            if meetings and len(briefed) == len(meetings):
                 break
             time.sleep(2)
         else:
-            return fail('no meeting brief appeared; see %s/servers.log' % record)
+            return fail('some cards never briefed; see %s/servers.log' % record)
         plus('POST /api/ask (%s)' % scn)
         status, body = record_http('POST', personal_port, '/api/ask',
                                    {'dealId': cfg['deal'], 'question': cfg['question']})
@@ -1529,7 +1543,7 @@ def cmd_record_replay(argv):
             return fail('ask failed: %d %s' % (status, body))
         question_id = json.loads(body)['questionId']
         plus('waiting for the answer and the escalation')
-        for _ in range(120):
+        for _ in range(300 if live else 120):
             state = record_state(personal_port)
             answers = [draft for draft in state['drafts'] if draft['kind'] == 'answer' and draft.get('questionId') == question_id]
             escalated = [e for e in state['escalations'] if e['questionId'] == question_id and e['status'] == 'sent']

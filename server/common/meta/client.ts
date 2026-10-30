@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import type { Citation, Claim, Source, Usage, Verdict } from '../../../shared/data.js';
+import { scenarioId } from '../scenarios.js';
 
 export type FakeMode = 'live' | 'normal' | 'empty' | 'fail' | 'garbage' | 'slow';
 
@@ -51,6 +52,27 @@ const CANNED_TRANSCRIPT: Transcript = {
 
 const CANNED_IMAGE = 'Mid-Market SaaS Benchmarks 2026\nLogo churn 6-8% annually\nNet churn under 2% = check the definition\nSource: fictional conference talk\nSpeaker 2, Oct 20 talk';
 
+const CANNED_TRANSCRIPT_FORGE: Transcript = {
+  sessionId: 'fake/transcribe/forge0000000000000000000000000000',
+  transcript: 'The Compass pilot quotes forty one percent deflection, and the evals speaker just called deflection the wrong headline metric. Hallway track after the talk. Because they count containment, not resolution? No human reply in twenty four hours, and silence counts too? Exactly. Contained tickets reopen about a fifth of the time, and the reopened ones never get surveyed. If I walk into the ship review Thursday, I open with the definition, then I ask for the reopen rate before reacting to the forty one percent.',
+  audioSeconds: 30.41,
+  turns: [
+    { turnId: 0, startMs: 60, endMs: 9500, transcript: 'The Compass pilot quotes forty one percent deflection, and the evals speaker just called deflection the wrong headline metric. Hallway track after the talk.', speaker: 'A' },
+    { turnId: 1, startMs: 9700, endMs: 16200, transcript: 'Because they count containment, not resolution? No human reply in twenty four hours, and silence counts too?', speaker: 'B' },
+    { turnId: 2, startMs: 16400, endMs: 30000, transcript: 'Exactly. Contained tickets reopen about a fifth of the time, and the reopened ones never get surveyed. If I walk into the ship review Thursday, I open with the definition, then I ask for the reopen rate before reacting to the forty one percent.', speaker: 'A' },
+  ],
+};
+
+const CANNED_IMAGE_FORGE = 'Deflection (contained) 41%\\nReopened in 7 days 22%\\nResolved, no reopen 63%\\nSilence counts as contained\\nContainment is cheap to measure and easy to game\\nSource: fictional evals talk, demo slide';
+
+const BRIDGE_KEYWORD: Record<string, { word: string; reason: string }> = {
+  forge: { word: 'deflection', reason: 'both quote deflection figures with incompatible definitions' },
+};
+
+function bridgeKeyword(): { word: string; reason: string } {
+  return BRIDGE_KEYWORD[scenarioId()] ?? { word: 'churn', reason: 'both quote churn benchmarks with incompatible definitions' };
+}
+
 function fakeUsage(): Usage {
   return { inputTokens: 0, outputTokens: 0, costUsd: 0 };
 }
@@ -68,7 +90,7 @@ export async function transcribe(wavPath: string): Promise<Transcript> {
   if (mode === 'slow') await sleep(5000);
   if (mode === 'empty') return { sessionId: 'fake/transcribe/empty', transcript: '', audioSeconds: 0, turns: [] };
   if (mode === 'garbage') return { sessionId: 'fake/transcribe/garbage', transcript: 42 as unknown as string, audioSeconds: 0, turns: [] };
-  if (mode !== 'live') return CANNED_TRANSCRIPT;
+  if (mode !== 'live') return scenarioId() === 'forge' ? CANNED_TRANSCRIPT_FORGE : CANNED_TRANSCRIPT;
   const form = new FormData();
   form.set('request', new Blob([JSON.stringify({ model: VOICE_MODEL, audioEncoding: 'WAV', mode: 'DIARIZATION' })], { type: 'application/json' }));
   form.set('audio', new Blob([readFileSync(wavPath)], { type: 'audio/wav' }), 'recording.wav');
@@ -90,7 +112,7 @@ export async function readImage(jpgPath: string, prompt: string): Promise<ImageT
   if (mode === 'slow') await sleep(5000);
   if (mode === 'empty') return { text: '', responseId: 'fake_resp_empty', usage: fakeUsage() };
   if (mode === 'garbage') return { text: 42 as unknown as string, responseId: 'fake_resp_garbage', usage: fakeUsage() };
-  if (mode !== 'live') return { text: CANNED_IMAGE, responseId: 'fake_resp_normal', usage: fakeUsage() };
+  if (mode !== 'live') return { text: scenarioId() === 'forge' ? CANNED_IMAGE_FORGE : CANNED_IMAGE, responseId: 'fake_resp_normal', usage: fakeUsage() };
   const client = new OpenAI({ baseURL: 'https://api.meta.ai/v1', apiKey: requireKey() });
   const dataUrl = 'data:image/jpeg;base64,' + readFileSync(jpgPath).toString('base64');
   const resp = await client.responses.create({
@@ -124,6 +146,7 @@ function fakeClaims(text: string): RawClaim[] {
   const quote = firstSentence(text);
   const lowered = text.toLowerCase();
   if (lowered.includes('churn')) return [{ entity: 'churn', metric: 'churn', value: 'see quote', quote }];
+  if (lowered.includes('deflection')) return [{ entity: 'deflection', metric: 'deflection', value: 'see quote', quote }];
   return [{ entity: 'general', quote }];
 }
 
@@ -211,10 +234,11 @@ export async function judgeBridge(personal: Claim, work: Claim, prompt: string):
   if (mode === 'empty') return { judgement: { relation: 'reject', reason: 'empty' }, responseId: 'fake_judge_empty', usage: fakeUsage() };
   if (mode === 'garbage') return { judgement: Judgement.parse({ relation: 'maybe', reason: '' }), responseId: 'fake_judge_garbage', usage: fakeUsage() };
   if (mode !== 'live') {
-    const both = personal.quote.toLowerCase().includes('churn') && work.quote.toLowerCase().includes('churn');
+    const keyword = bridgeKeyword();
+    const both = personal.quote.toLowerCase().includes(keyword.word) && work.quote.toLowerCase().includes(keyword.word);
     return {
       judgement: both
-        ? { relation: 'contradicts', reason: 'both quote churn benchmarks with incompatible definitions' }
+        ? { relation: 'contradicts', reason: keyword.reason }
         : { relation: 'reject', reason: 'unrelated claims' },
       responseId: 'fake_judge_normal',
       usage: fakeUsage(),

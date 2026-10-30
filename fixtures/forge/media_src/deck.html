@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Compass pilot dashboard</title>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #f8fafc; color: #0f172a; margin: 0; padding: 56px 72px; }
+  h1 { font-size: 44px; margin: 0 0 4px; }
+  p.sub { font-size: 22px; color: #64748b; margin: 0 0 36px; }
+  .big { font-size: 120px; font-weight: 800; margin: 0; }
+  .big small { font-size: 32px; font-weight: 400; color: #64748b; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; margin-top: 32px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; }
+  .card h2 { font-size: 20px; color: #64748b; margin: 0 0 8px; font-weight: 600; }
+  .card p { font-size: 40px; font-weight: 700; margin: 0; }
+  p.foot { margin-top: 32px; font-size: 20px; color: #64748b; }
+</style>
+</head>
+<body>
+<h1>Compass pilot dashboard</h1>
+<p class="sub">Fictional demo dashboard, six weeks, three queues</p>
+<p class="big">41% <small>agent deflection</small></p>
+<div class="grid">
+<div class="card"><h2>Contained tickets</h2><p>2,148</p></div>
+<div class="card"><h2>Reopened in 7d</h2><p>22%</p></div>
+<div class="card"><h2>Resolved, no reopen</h2><p>63%*</p></div>
+</div>
+<p class="foot">*Sampled on 200 contained tickets. Contained means no human reply within 24 hours of the agent's final message.</p>
+</body>
+</html>

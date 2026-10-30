@@ -1,4 +1,24 @@
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Stevens//Fixtures//EN
+BEGIN:VEVENT
+UID:cal-compass-preread-1
+DTSTAMP:20261027T120000Z
+DTSTART:20261029T130000Z
+DTEND:20261029T133000Z
+SUMMARY:Compass pre-read with Ivy
+DESCRIPTION:Thirty minutes before the ship review. Pin down the reopen rate and who owns the reopened tickets.
+LOCATION:Call
+ATTENDEE:mailto:ivy.chen@example.com
+ORGANIZER:mailto:rae.delgado@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:cal-dentist-2
+DTSTAMP:20261027T120000Z
+DTSTART:20261105T140000Z
+DTEND:20261105T150000Z
+SUMMARY:Dentist
+DESCRIPTION:Routine cleaning. No prep needed.
+LOCATION:Downtown Dental
+END:VEVENT
 END:VCALENDAR

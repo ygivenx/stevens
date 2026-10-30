@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Support agent evals</title>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; background: #0f172a; color: #f1f5f9; margin: 0; padding: 64px 80px; }
+  h1 { font-size: 52px; margin: 0 0 8px; }
+  p.sub { font-size: 24px; color: #94a3b8; margin: 0 0 40px; }
+  table { border-collapse: collapse; width: 100%; font-size: 28px; }
+  th, td { text-align: left; padding: 16px 20px; border-bottom: 1px solid #334155; }
+  th { color: #94a3b8; font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; }
+  tr.callout td { color: #fbbf24; font-weight: 700; }
+  p.foot { margin-top: 36px; font-size: 22px; color: #94a3b8; }
+</style>
+</head>
+<body>
+<h1>Support agent evals: containment vs resolution</h1>
+<p class="sub">Fictional evals talk, demo slide</p>
+<table>
+<tr><th>Metric</th><th>Pilot</th><th>Definition</th></tr>
+<tr><td>Deflection (contained)</td><td class="num">41%</td><td>No human reply in 24h</td></tr>
+<tr><td>Reopened in 7 days</td><td class="num">22%</td><td>Of contained tickets</td></tr>
+<tr class="callout"><td>Resolved, no reopen</td><td class="num">63%</td><td>Of sampled contained</td></tr>
+<tr><td>Went silent, no CSAT</td><td class="num">15%</td><td>Counted as contained</td></tr>
+</table>
+<p class="foot">Containment is cheap to measure and easy to game. Score resolution or do not ship.</p>
+</body>
+</html>

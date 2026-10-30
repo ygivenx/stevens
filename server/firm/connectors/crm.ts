@@ -7,7 +7,7 @@ import type { Connector, ConnectorDocument } from './connector.js';
 
 interface CrmFixture {
   people: { id: string; name: string; role: string }[];
-  deals: { id: string; company: string; sector: string; stage: string; askUsd: number }[];
+  deals: { id: string; company: string; sector: string; stage: string; askUsd: number | null }[];
   dealTeam: { dealId: string; personId: string }[];
   meetings: { id: string; dealId: string; title: string; startsAt: string; askHint?: string }[];
   documents: { id: string; dealId?: string; kind: ConnectorDocument['kind']; title: string; createdAt: string; body?: string; mediaPath?: string; acl: string[] }[];
@@ -31,7 +31,7 @@ export function scenarioDisplay(): ScenarioDisplay {
 }
 
 export interface CrmPerson { id: string; name: string; title: string }
-export interface CrmDeal { id: string; company: string; sector: string; stage: string; askUsd: number }
+export interface CrmDeal { id: string; company: string; sector: string; stage: string; askUsd: number | null }
 export interface CrmMeeting { id: string; dealId: string; title: string; startsAt: string; askHint?: string }
 export interface CrmDocument { id: string; dealId: string | null; kind: string; title: string; createdAt: string; updatedAt: string; body: string | null; mediaPath: string | null }
 export interface CrmGrant { documentId: string; grantee: string }
@@ -90,7 +90,7 @@ export class PgCrmReader implements CrmReader {
   async deals(): Promise<CrmDeal[]> {
     const rows = await this.query<{ id: string; company: string; sector: string; stage: string; ask_usd: string | null }>(
       `select id, company, sector, stage, ask_usd from crm.deals order by id`);
-    return rows.map((row) => ({ id: row.id, company: row.company, sector: row.sector, stage: row.stage, askUsd: Number(row.ask_usd ?? 0) }));
+    return rows.map((row) => ({ id: row.id, company: row.company, sector: row.sector, stage: row.stage, askUsd: row.ask_usd === null ? null : Number(row.ask_usd) }));
   }
 
   async meetings(): Promise<CrmMeeting[]> {

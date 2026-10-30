@@ -95,7 +95,7 @@ export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents
       const meetings = readerMeetings.map((meeting) => ({ ...meeting, askHint: meeting.askHint ?? hintById.get(meeting.id) }));
       const db = await getFirmDb();
       const currentPeople = await db.all<{ id: string; name: string; title: string }>(`select id, name, role as title from people`);
-      const currentDeals = await db.all<{ id: string; company: string; sector: string; stage: string; askUsd: number }>(
+      const currentDeals = await db.all<{ id: string; company: string; sector: string; stage: string; askUsd: number | null }>(
         `select id, company, sector, stage, ask_usd as "askUsd" from deals`,
       );
       const currentMeetings = await db.all<{ id: string; dealId: string; title: string; startsAt: string; askHint?: string }>(
