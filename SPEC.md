@@ -893,6 +893,8 @@ Connection URLs live in `.env.local` (helios: `FIRM_DATABASE_URL`, `PERSONAL_DAT
 |---|---|---|
 | P1 | Store layer, both schemas, setup scripts, async stores and callers, sqlite backend, parity tests, file-mode removal | 176+ tests green offline and on Postgres; `stevensctl` seed + full flow on all three scenarios against real tables; `npm run demo` still keyless and Postgres-less |
 
+**Spend (Oct 30, recorded in the committed replays):** helios $0.00, forge $0.89, mercy $0.80 — $1.69 attributable to shipped artifacts. Live session total including retries, re-records and probes was ≈ $4.4 of the $5 the user approved. Suite at merge: 190/190 green.
+
 ## Stretch (gated)
 
 - **Follow-up chat in Stevens · yours.** After the first answer, the owner can ask follow-ups in the meeting card.
@@ -900,7 +902,7 @@ Connection URLs live in `.env.local` (helios: `FIRM_DATABASE_URL`, `PERSONAL_DAT
   - **One conversation per (owner, draft).**
   - **Tools:** `search_notebook(query)` (FTS over personal segments) and `get_quote(claimId)` over personal claims and the firm context already fetched for that deal. Privy content is never a tool result; the firm is never called from a tool.
   - **The first answer stays on the fixed pipeline,** and the citation resolver applies to every chat sentence.
-  - **Go only if** day 14's exit check passes by the end of Sun Nov 1 and the user confirms. The day-1 tool-calling check passed Oct 27. Chat stays `deferred` until then.
+  - **Shipped Oct 30 (PR #28, `chat-threads`) after the user confirmed.** Day 14's exit check passed; the go/no-go resolved to go. One live probe turn plus a follow-up turn verified cited replies on forge ($0.06); the thread UI sits under the Answer block in yours; `conversations` rows persist in the personal database.
 - **Preference learning (design only).** A future `preference.learned` event would store a Partner's edit as a versioned note that later drafts cite. Not built.
 
 ## Validation
