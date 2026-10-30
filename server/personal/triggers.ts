@@ -90,8 +90,8 @@ export function verdictForQuestion(questionId: string): Verdict | null {
 
 export async function escalateWithRetry(questionId: string, dealId: string, to: Role | null): Promise<'sent' | 'queued'> {
   try {
-    await firmEscalate(dealId, questionId);
-    append({ at: new Date().toISOString(), type: 'escalation.sent', questionId, dealId, to });
+    const sent = await firmEscalate(dealId, questionId);
+    append({ at: new Date().toISOString(), type: 'escalation.sent', questionId, dealId, to, toName: sent.toName ?? undefined, reviewerNoun: sent.reviewerNoun });
     return 'sent';
   } catch {
     append({ at: new Date().toISOString(), type: 'escalation.queued', questionId, dealId, to });

@@ -6,7 +6,8 @@ import { policy } from '../common/boundary/policy.js';
 import { writeDraft, WONDER_MODEL, type Written } from '../common/meta/client.js';
 import { resolveSentences } from '../common/resolver/resolve.js';
 import { classifyAcl } from './connectors/acl-map.js';
-import { documentAcl, firmDocuments, isMember, recipientFor } from './store.js';
+import { documentAcl, firmDocuments, getFirmDb, isMember, recipientFor } from './store.js';
+import { scenarioDisplay } from './connectors/crm.js';
 import { firmSourceFor } from './sync.js';
 import { draftIdFor } from '../common/ids.js';
 
@@ -77,10 +78,17 @@ export function verdictForEscalation(questionId: string): { verdict: Verdict; de
   return null;
 }
 
-export async function draftEscalation(fromId: string, dealId: string, questionId: string, question: string | undefined, deps: DecisionDeps = {}): Promise<{ escalationId: string; to: Role }> {
+export function recipientName(recipientId: string | null): string | null {
+  if (!recipientId) return null;
+  const row = getFirmDb().prepare(`select name from people where id = ?`).get(recipientId) as unknown as { name: string } | undefined;
+  return row?.name ?? null;
+}
+
+export async function draftEscalation(fromId: string, dealId: string, questionId: string, question: string | undefined, deps: DecisionDeps = {}): Promise<{ escalationId: string; to: Role; toName: string | null; reviewerNoun: string }> {
+  const noun = scenarioDisplay().reviewerNoun;
   for (const event of readAll()) {
     if (event.type === 'escalation.drafted' && event.questionId === questionId && event.escalationId && event.to) {
-      return { escalationId: event.escalationId, to: event.to };
+      return { escalationId: event.escalationId, to: event.to, toName: recipientName(recipientFor(event.to, event.dealId ?? '')), reviewerNoun: noun };
     }
   }
   const judged = verdictForEscalation(questionId);
@@ -88,8 +96,9 @@ export async function draftEscalation(fromId: string, dealId: string, questionId
     throw new Error('nothing to escalate for ' + questionId);
   }
   const to = judged.verdict.routeTo;
-  await draftDecision(questionId, dealId, to, question, deps, recipientFor(to, dealId));
+  const recipient = recipientFor(to, dealId);
+  await draftDecision(questionId, dealId, to, question, deps, recipient);
   const escalationId = 'es-' + createHash('sha256').update(questionId).digest('hex').slice(0, 12);
   append({ at: new Date().toISOString(), type: 'escalation.drafted', escalationId, questionId, dealId, from: fromId, to });
-  return { escalationId, to };
+  return { escalationId, to, toName: recipientName(recipient), reviewerNoun: noun };
 }

@@ -26,7 +26,11 @@ interface FormDFixture {
 
 export function loadFormD(): FormDFixture {
   const dir = process.env.STEVENS_FIXTURES_DIR ?? join(process.cwd(), 'fixtures');
-  return JSON.parse(readFileSync(join(dir, 'enterprise', 'formd', 'tech-2025q4-2026q1.json'), 'utf8')) as FormDFixture;
+  try {
+    return JSON.parse(readFileSync(join(dir, 'enterprise', 'formd', 'tech-2025q4-2026q1.json'), 'utf8')) as FormDFixture;
+  } catch {
+    return { quarters: [], industryGroups: [], minOfferingUsd: 0, maxOfferingUsd: 0, count: 0, filings: [] };
+  }
 }
 
 export function median(values: number[]): number {

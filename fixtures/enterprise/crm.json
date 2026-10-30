@@ -131,7 +131,8 @@
       "dealId": "helios",
       "id": "m-helios-2",
       "startsAt": "2026-10-29T10:00:00-04:00",
-      "title": "Helios second meeting"
+      "title": "Helios second meeting",
+      "askHint": "Should we take the second meeting?"
     }
   ],
   "people": [
@@ -160,5 +161,21 @@
       "company": "Northwind",
       "sector": "developer tools"
     }
-  ]
+  ],
+  "display": {
+    "roleTitles": {
+      "Associate": "Associate",
+      "Partner": "Partner"
+    },
+    "reviewerNoun": "a Partner",
+    "labels": {
+      "sourcePrefix": "Firm CRM",
+      "team": "Deal team",
+      "restricted": "Partners",
+      "workColumn": "The deck says",
+      "personalColumn": "You heard",
+      "unit": "deals"
+    },
+    "firmDataLabel": "Fictional firm data"
+  }
 }

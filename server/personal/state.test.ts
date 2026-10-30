@@ -38,6 +38,35 @@ describe('replay status', () => {
   });
 });
 
+describe('owner identity', () => {
+  it('reads the owner name and title from the environment', async () => {
+    process.env.STEVENS_OWNER = 'p-rae';
+    process.env.STEVENS_OWNER_NAME = 'Rae Delgado';
+    process.env.STEVENS_OWNER_TITLE = 'Staff Engineer';
+    try {
+      const state = await buildPersonalState();
+      expect(state.owner).toEqual({ id: 'p-rae', name: 'Rae Delgado', role: 'Associate', title: 'Staff Engineer' });
+    } finally {
+      delete process.env.STEVENS_OWNER;
+      delete process.env.STEVENS_OWNER_NAME;
+      delete process.env.STEVENS_OWNER_TITLE;
+    }
+  });
+
+  it('falls back to the default display when the firm is down', async () => {
+    const state = await buildPersonalState();
+    expect(state.firm.reachable).toBe(false);
+    expect(state.display.reviewerNoun).toBe('a Partner');
+    expect(state.display.labels.unit).toBe('deals');
+  });
+
+  it('carries the escalation recipient name and reviewer noun', async () => {
+    append({ at: new Date().toISOString(), type: 'escalation.sent', questionId: 'q-9', dealId: 'helios', to: 'Partner', toName: 'Morgan Hale', reviewerNoun: 'a Partner' });
+    const state = await buildPersonalState();
+    expect(state.escalations).toEqual([{ questionId: 'q-9', dealId: 'helios', to: 'Partner', toName: 'Morgan Hale', reviewerNoun: 'a Partner', status: 'sent' }]);
+  });
+});
+
 describe('meeting brief selection', () => {
   it('shows the latest brief for the deal, not the first', async () => {
     append({ at: '2026-10-28T10:00:00-04:00', type: 'draft.created', draft: brief('br-first'), manifest: { purpose: 'brief', promptVersion: 'v2', model: 'm', sources: [], verdict: 'go' }, api: { model: 'm', responseId: 'r', usage: {}, stageKey: 'k1' } });

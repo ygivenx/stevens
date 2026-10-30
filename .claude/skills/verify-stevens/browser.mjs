@@ -2,6 +2,16 @@ import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const SCENARIOS = {
+  helios: { yoursWeb: 5173, firmWeb: 5174, reviewer: 'p-morgan' },
+  forge: { yoursWeb: 5273, firmWeb: 5274, reviewer: 'p-theo' },
+  mercy: { yoursWeb: 5373, firmWeb: 5374, reviewer: 'p-helen' },
+};
+
+function stackFor(name) {
+  return SCENARIOS[name] ?? SCENARIOS.helios;
+}
+
 const PERSONAL = 'http://localhost:5173';
 const FIRM = 'http://localhost:5174/?as=p-morgan';
 
@@ -116,7 +126,11 @@ async function run() {
   const action = argv._[0];
   const flowName = argv.flow ?? argv._[1];
   const evidence = argv.evidence;
-  const url = argv.url ?? 'http://localhost:5173';
+  const stack = stackFor(argv.scenario);
+  const url = argv.url ?? ('http://localhost:' + stack.yoursWeb);
+  const twoScreens = FLOWS['demo-two-screens'];
+  twoScreens[0].url = 'http://localhost:' + stack.yoursWeb + '/#/today';
+  twoScreens[2].url = 'http://localhost:' + stack.firmWeb + '/?as=' + stack.reviewer + '#/inbox';
   const browser = await chromium.launch();
   const page = await browser.newPage();
   const failures = [];

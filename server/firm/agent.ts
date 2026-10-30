@@ -8,7 +8,9 @@ import type { AgentPerson } from './agent-auth.js';
 import { personForToken } from './agent-auth.js';
 import { getFirmDb } from './store.js';
 import { classifyAcl, aclLabel } from './connectors/acl-map.js';
-import { documentAcl, firmDocuments, isMember } from './store.js';
+import { documentAcl, ensureMeetingAskHint, firmDocuments, isMember } from './store.js';
+import { scenarioDisplay } from './connectors/crm.js';
+import type { ScenarioDisplay } from '../../shared/data.js';
 import { firmSourceFor } from './sync.js';
 
 const AGENT_PURPOSES: Purpose[] = ['bridge', 'brief', 'answer'];
@@ -23,14 +25,21 @@ export interface AgentMeeting {
   company: string;
   title: string;
   startsAt: string;
+  askHint?: string;
   team: { id: string; name: string; role: string }[];
+}
+
+export function agentMeta(): { display: ScenarioDisplay } {
+  return { display: scenarioDisplay() };
 }
 
 export function agentMeetings(person: AgentPerson, withinHours: number): AgentMeeting[] {
   const db = getFirmDb();
+  ensureMeetingAskHint();
   const cutoff = nowMs() + withinHours * 3600 * 1000;
   const rows = db.prepare(
-    `select m.id as id, m.deal_id as dealId, d.company as company, m.title as title, m.starts_at as startsAt
+    `select m.id as id, m.deal_id as dealId, d.company as company, m.title as title, m.starts_at as startsAt,
+      m.ask_hint as askHint
      from meetings m join deals d on d.id = m.deal_id
      join deal_team t on t.deal_id = m.deal_id
      where t.person_id = ? order by m.starts_at`,

@@ -1,11 +1,13 @@
-import type { Claim, Draft, Meeting, Origin, Person, Role, Source, SourceRef } from '../../shared/data.js';
+import type { Claim, Draft, Meeting, Origin, Person, Role, ScenarioDev, ScenarioDisplay, Source, SourceRef } from '../../shared/data.js';
 import { readAll } from '../common/ledger/store.js';
 import { nowIso } from '../common/clock.js';
 import { policy } from '../common/boundary/policy.js';
+import { devBlock } from '../common/scenarios.js';
 import { getFirmDb } from './store.js';
 import { classifyAcl, aclLabel, ACL_TABLE } from './connectors/acl-map.js';
-import { connectorError, documentAcl, firmDocuments, getReleaseProvenance, isMember } from './store.js';
+import { connectorError, documentAcl, ensureMeetingAskHint, firmDocuments, getReleaseProvenance, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
+import { scenarioDisplay } from './connectors/crm.js';
 import { buildComps, loadFormD, marketSample } from './connectors/formd.js';
 
 export interface FirmDeal {
@@ -41,20 +43,24 @@ export interface FirmState {
   market: FirmMarket[];
   connectors: { id: 'crm' | 'sec-form-d'; label: string; lastSyncAt: string | null; documents: number; simulated?: string; lastError?: { message: string; at: string } }[];
   aclMap: { principal: string; classification: 'team' | 'partner-only' | 'wall' }[];
+  people: Person[];
+  display: ScenarioDisplay;
   simulated: string[];
+  dev?: ScenarioDev;
 }
 
-function peopleById(): Map<string, Person> {
+function peopleById(display: ScenarioDisplay): Map<string, Person> {
   const db = getFirmDb();
-  const rows = db.prepare(`select id, name, role from people`).all() as unknown as Person[];
-  return new Map(rows.map((row) => [row.id, row]));
+  const rows = db.prepare(`select id, name, role from people`).all() as unknown as { id: string; name: string; role: Role }[];
+  return new Map(rows.map((row) => [row.id, { ...row, title: display.roleTitles[row.role] ?? row.role }]));
 }
 
-function personByRole(people: Map<string, Person>, role: Role): Person {
+function personByRole(people: Map<string, Person>, role: Role, display: ScenarioDisplay): Person {
   for (const person of people.values()) {
     if (person.role === role) return person;
   }
-  return { id: 'unknown', name: role === 'Partner' ? 'Morgan Hale' : 'Alex Rivera', role };
+  const title = display.roleTitles[role] ?? role;
+  return { id: 'unknown', name: 'The ' + title.charAt(0).toLowerCase() + title.slice(1), role, title };
 }
 
 function teamForDeal(dealId: string, people: Map<string, Person>): Person[] {
@@ -65,7 +71,8 @@ function teamForDeal(dealId: string, people: Map<string, Person>): Person[] {
 
 function meetingsForDeal(dealId: string): Meeting[] {
   const db = getFirmDb();
-  const rows = db.prepare(`select id, deal_id as dealId, title, starts_at as startsAt from meetings where deal_id = ? order by starts_at`).all(dealId) as unknown as Meeting[];
+  ensureMeetingAskHint();
+  const rows = db.prepare(`select id, deal_id as dealId, title, starts_at as startsAt, ask_hint as askHint from meetings where deal_id = ? order by starts_at`).all(dealId) as unknown as Meeting[];
   return rows;
 }
 
@@ -98,14 +105,15 @@ function clockShort(iso: string): string {
 
 export function viewerFromHeader(header: string | undefined): Person | null {
   if (!header) return null;
-  const people = peopleById();
+  const people = peopleById(scenarioDisplay());
   return people.get(header) ?? null;
 }
 
 export function buildFirmState(viewer: Person): FirmState {
   const now = nowIso();
   const events = readAll();
-  const people = peopleById();
+  const display = scenarioDisplay();
+  const people = peopleById(display);
   const db = getFirmDb();
 
   const dealRows = db.prepare(`select id, company, sector, stage, ask_usd as askUsd from deals order by company`).all() as unknown as { id: string; company: string; sector: string; stage: string; askUsd: number | null }[];
@@ -160,7 +168,7 @@ export function buildFirmState(viewer: Person): FirmState {
   const onTeam = (dealId: string): boolean => teamForDeal(dealId, people).some((member) => member.id === viewer.id);
   for (const event of events) {
     if (event.type === 'escalation.drafted' && event.escalationId && event.to === viewer.role) {
-      const from = event.from ? people.get(event.from) ?? personByRole(people, 'Associate') : personByRole(people, 'Associate');
+      const from = event.from ? people.get(event.from) ?? personByRole(people, 'Associate', display) : personByRole(people, 'Associate', display);
       const dealId = event.dealId ?? '';
       const seesDraft = dealId !== '' && isMember(viewer.id, ['deal-team:' + dealId]);
       inbox.push({
@@ -173,7 +181,7 @@ export function buildFirmState(viewer: Person): FirmState {
       const doc = firmDocuments().find((entry) => entry.id === event.documentId);
       if (!doc || !doc.body) continue;
       const provenance = getReleaseProvenance(event.documentId);
-      const from = doc.sharedBy ? people.get(doc.sharedBy) ?? personByRole(people, 'Associate') : personByRole(people, 'Associate');
+      const from = doc.sharedBy ? people.get(doc.sharedBy) ?? personByRole(people, 'Associate', display) : personByRole(people, 'Associate', display);
       inbox.push({
         kind: 'released-quote', id: event.documentId, dealId: event.dealId, from, at: event.at,
         quote: doc.body,
@@ -200,10 +208,11 @@ export function buildFirmState(viewer: Person): FirmState {
 
   const connectorRows = db.prepare(`select connector, last_sync_at as lastSyncAt, documents from connector_state`).all() as unknown as { connector: string; lastSyncAt: string | null; documents: number }[];
   const connectorMeta: Record<string, { label: string; simulated?: string }> = {
-    crm: { label: 'Fictional firm data' },
+    crm: { label: display.firmDataLabel },
     'sec-form-d': { label: 'SEC Form D (public)' },
   };
-  const connectors: FirmState['connectors'] = (['crm', 'sec-form-d'] as const).map((id) => {
+  const connectorIds = fixture.filings.length > 0 ? (['crm', 'sec-form-d'] as const) : (['crm'] as const);
+  const connectors: FirmState['connectors'] = connectorIds.map((id) => {
     const row = connectorRows.find((entry) => entry.connector === id);
     const docs = id === 'crm' ? firmDocuments().filter((doc) => doc.connector === 'crm').length : firmDocuments().filter((doc) => doc.connector === 'sec-form-d').length;
     const error = connectorError(id);
@@ -222,8 +231,9 @@ export function buildFirmState(viewer: Person): FirmState {
     : error
       ? { line: 'CRM unreachable since ' + clockShort(error.at), busy: false }
       : { line: crmRow?.lastSyncAt ? 'Up to date · CRM synced ' + clockShort(crmRow.lastSyncAt) : 'CRM never synced', busy: false };
+  const dev = devBlock();
   return {
-    viewer,
+    viewer: people.get(viewer.id) ?? viewer,
     now,
     status,
     deals,
@@ -233,7 +243,10 @@ export function buildFirmState(viewer: Person): FirmState {
     market,
     connectors,
     aclMap: ACL_TABLE.map((entry) => ({ principal: entry.principal, classification: entry.classification })),
+    people: [...people.values()],
+    display,
     simulated: ['Simulated sign-in'],
+    ...(dev ? { dev } : {}),
   };
 }
 

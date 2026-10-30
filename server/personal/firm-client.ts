@@ -11,10 +11,11 @@ export interface FirmMeeting {
   company: string;
   title: string;
   startsAt: string;
+  askHint?: string;
   team?: { id: string; name: string; role: string }[];
 }
 
-import type { Claim, SourceRef, Verdict } from '../../shared/data.js';
+import type { Claim, ScenarioDisplay, SourceRef, Verdict } from '../../shared/data.js';
 
 export interface FirmPerson {
   id: string;
@@ -54,8 +55,12 @@ export function firmPrivy(dealId: string, question: string, extra: { questionId:
   return agent('/agent/privy', { method: 'POST', body: JSON.stringify({ dealId, question, questionId: extra.questionId }) });
 }
 
-export function firmEscalate(dealId: string, questionId: string): Promise<{ escalationId: string; to: 'Associate' | 'Partner' | null }> {
+export function firmEscalate(dealId: string, questionId: string): Promise<{ escalationId: string; to: 'Associate' | 'Partner' | null; toName: string | null; reviewerNoun: string }> {
   return agent('/agent/escalations', { method: 'POST', body: JSON.stringify({ dealId, questionId }) });
+}
+
+export function firmMeta(): Promise<{ display: ScenarioDisplay }> {
+  return agent<{ display: ScenarioDisplay }>('/agent/meta');
 }
 
 export interface ReleaseProvenance {

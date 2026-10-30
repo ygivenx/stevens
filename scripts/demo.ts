@@ -3,7 +3,17 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } fr
 import { connect } from 'node:net';
 import { join } from 'node:path';
 
-const PORTS = [8787, 8788, 5173, 5174];
+const SCENARIOS: Record<string, { fixtures: string; firm: number; personal: number; yoursWeb: number; firmWeb: number; owner: string; ownerName: string; ownerTitle?: string }> = {
+  helios: { fixtures: 'fixtures', firm: 8787, personal: 8788, yoursWeb: 5173, firmWeb: 5174, owner: 'p-alex', ownerName: 'Alex Rivera' },
+  forge: { fixtures: 'fixtures/forge', firm: 8887, personal: 8888, yoursWeb: 5273, firmWeb: 5274, owner: 'p-rae', ownerName: 'Rae Delgado', ownerTitle: 'Staff Engineer' },
+  mercy: { fixtures: 'fixtures/mercy', firm: 8987, personal: 8988, yoursWeb: 5373, firmWeb: 5374, owner: 'p-amara', ownerName: 'Dr. Amara Osei', ownerTitle: 'Oncologist' },
+};
+
+function scenarioArg(): string {
+  const flag = process.argv.indexOf('--scenario');
+  if (flag >= 0 && flag + 1 < process.argv.length) return process.argv[flag + 1];
+  return process.env.STEVENS_SCENARIO ?? 'helios';
+}
 
 function portFree(port: number): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
@@ -26,15 +36,18 @@ async function healthy(url: string): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
-  const replay = join(process.cwd(), 'fixtures', 'replay');
+  const scenario = scenarioArg();
+  const stack = SCENARIOS[scenario];
+  if (!stack) throw new Error('unknown scenario ' + scenario + ' (helios|forge|mercy)');
+  const replay = join(process.cwd(), stack.fixtures, 'replay');
   for (const name of ['firm.jsonl', 'personal.jsonl', 'now.txt']) {
-    if (!existsSync(join(replay, name))) throw new Error('fixtures/replay/' + name + ' is missing; run stevensctl record-replay first');
+    if (!existsSync(join(replay, name))) throw new Error(stack.fixtures + '/replay/' + name + ' is missing; run stevensctl record-replay first');
   }
-  for (const port of PORTS) {
+  for (const port of [stack.firm, stack.personal, stack.yoursWeb, stack.firmWeb]) {
     if (!(await portFree(port))) throw new Error('port ' + port + ' is held; stop that stack before the demo');
   }
-  const data = join('/tmp', 'stevens-verify', 'demo', 'data');
-  rmSync(join('/tmp', 'stevens-verify', 'demo'), { recursive: true, force: true });
+  const data = join('/tmp', 'stevens-verify', 'demo-' + scenario, 'data');
+  rmSync(join('/tmp', 'stevens-verify', 'demo-' + scenario), { recursive: true, force: true });
   for (const side of ['firm', 'personal']) {
     mkdirSync(join(data, side), { recursive: true });
     cpSync(join(replay, side + '.jsonl'), join(data, side, 'ledger.jsonl'));
@@ -43,18 +56,35 @@ async function main(): Promise<void> {
   }
   const env = { ...process.env };
   env.STEVENS_DATA_DIR = data;
+  env.STEVENS_SCENARIO = scenario;
+  env.STEVENS_FIXTURES_DIR = join(process.cwd(), stack.fixtures);
+  env.STEVENS_OWNER = stack.owner;
+  env.STEVENS_OWNER_NAME = stack.ownerName;
+  if (stack.ownerTitle) env.STEVENS_OWNER_TITLE = stack.ownerTitle;
+  env.FIRM_PORT = String(stack.firm);
+  env.PERSONAL_PORT = String(stack.personal);
+  env.FIRM_WEB_PORT = String(stack.firmWeb);
+  env.PERSONAL_WEB_PORT = String(stack.yoursWeb);
+  env.FIRM_API_URL = 'http://localhost:' + stack.firm;
+  env.PERSONAL_API_URL = 'http://localhost:' + stack.personal;
+  env.STEVENS_FIRM_URL = 'http://localhost:' + stack.firm;
   env.STEVENS_REPLAY = '1';
   env.STEVENS_NOW = readFileSync(join(replay, 'now.txt'), 'utf8').trim();
   env.FIRM_DATABASE_URL = '';
   delete env.MODEL_API_KEY;
-  console.log('demo: serving the recorded run from ' + data);
+  console.log('demo: serving the recorded ' + scenario + ' run from ' + data);
   const child = spawn('npm', ['run', 'dev'], { cwd: process.cwd(), env, stdio: 'inherit' });
   const stop = () => {
     child.kill('SIGTERM');
   };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
-  const checks = ['http://localhost:8787/api/health', 'http://localhost:8788/api/health', 'http://localhost:5173/', 'http://localhost:5174/'];
+  const checks = [
+    'http://localhost:' + stack.firm + '/api/health',
+    'http://localhost:' + stack.personal + '/api/health',
+    'http://localhost:' + stack.yoursWeb + '/',
+    'http://localhost:' + stack.firmWeb + '/',
+  ];
   for (let i = 0; i < 90; i++) {
     const results = await Promise.all(checks.map(healthy));
     if (results.every(Boolean)) break;

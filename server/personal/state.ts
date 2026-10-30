@@ -1,11 +1,12 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Claim, Draft, Item, Meeting, Origin, Person, Role, SourceRef } from '../../shared/data.js';
+import type { Claim, Draft, Item, Meeting, Origin, Person, Role, ScenarioDev, ScenarioDisplay, SourceRef } from '../../shared/data.js';
 import { readAll } from '../common/ledger/store.js';
 import { nowIso } from '../common/clock.js';
+import { DEFAULT_DISPLAY, devBlock } from '../common/scenarios.js';
 import { getAdapterState, getDb, allPersonalClaims } from './store.js';
 import { extractionPaused } from './extract.js';
-import { firmContext, firmMeetings, soloMode, type FirmMeeting } from './firm-client.js';
+import { firmContext, firmMeetings, firmMeta, soloMode, type FirmMeeting } from './firm-client.js';
 import { inboxDir } from './adapters/inbox.js';
 import { vaultName } from './adapters/vault.js';
 import { calendarMeetings, calendarMode } from './adapters/calendar.js';
@@ -24,14 +25,18 @@ export interface PersonalState {
   claims: Claim[];
   sources: SourceRef[];
   shares: { claimId: string; dealId: string; sharedAt: string }[];
-  escalations: { questionId: string; dealId: string; to: Role | null; status: 'sent' | 'queued' }[];
+  escalations: { questionId: string; dealId: string; to: Role | null; toName?: string; reviewerNoun?: string; status: 'sent' | 'queued' }[];
   firm: { reachable: boolean; checkedAt: string };
+  display: ScenarioDisplay;
   simulated: string[];
+  dev?: ScenarioDev;
 }
 
 function ownerPerson(): Person {
   const id = process.env.STEVENS_OWNER ?? 'p-alex';
-  return { id, name: 'Alex Rivera', role: 'Associate' };
+  const name = process.env.STEVENS_OWNER_NAME ?? 'Alex Rivera';
+  const title = process.env.STEVENS_OWNER_TITLE;
+  return { id, name, role: 'Associate', ...(title ? { title } : {}) };
 }
 
 function listItems(): Item[] {
@@ -204,6 +209,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
       title: meeting.title,
       startsAt: meeting.startsAt,
       origin: 'firm',
+      ...(meeting.askHint ? { askHint: meeting.askHint } : {}),
     }));
     let calendarUpcoming: Meeting[] = [];
     try {
@@ -246,7 +252,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
           const fetched = events.find((e) => e.type === 'context.fetched' && (e as { dealId?: string }).dealId === draft.dealId);
           void fetched;
           briefByDeal.set(draft.dealId, {
-            meeting: { id: 'm-' + draft.dealId, dealId: draft.dealId, company: draft.dealId === 'helios' ? 'Helios' : draft.dealId, title: 'Meeting', startsAt: now, origin: 'firm' },
+            meeting: { id: 'm-' + draft.dealId, dealId: draft.dealId, company: draft.company ?? draft.dealId, title: 'Meeting', startsAt: now, origin: 'firm' },
             briefId: draft.id,
           });
         }
@@ -262,8 +268,8 @@ export async function buildPersonalState(): Promise<PersonalState> {
   });
   const sentIds = new Set(events.filter((e) => e.type === 'escalation.sent').map((e) => (e as { questionId: string }).questionId));
   const escalations = events.filter((e) => e.type === 'escalation.sent' || e.type === 'escalation.queued').map((e) => {
-    const esc = e as unknown as { questionId: string; dealId: string; to: Role | null };
-    return { questionId: esc.questionId, dealId: esc.dealId, to: esc.to, status: (e.type === 'escalation.sent' || sentIds.has(esc.questionId) ? 'sent' : 'queued') as 'sent' | 'queued' };
+    const esc = e as unknown as { questionId: string; dealId: string; to: Role | null; toName?: string; reviewerNoun?: string };
+    return { questionId: esc.questionId, dealId: esc.dealId, to: esc.to, toName: esc.toName, reviewerNoun: esc.reviewerNoun, status: (e.type === 'escalation.sent' || sentIds.has(esc.questionId) ? 'sent' : 'queued') as 'sent' | 'queued' };
   });
   const latestBrief = drafts.filter((d) => d.kind === 'brief').sort((a, b) => (a.id < b.id ? 1 : -1))[0];
   void latestBrief;
@@ -273,8 +279,17 @@ export async function buildPersonalState(): Promise<PersonalState> {
   const adapters = adapterEntries();
   const readwise = adapters.find((a) => a.origin === 'readwise');
   if (readwise?.simulated) simulated.push(readwise.simulated);
-  if (!soloMode()) simulated.push('Fictional firm data');
+  let display = DEFAULT_DISPLAY;
+  if (!soloMode()) {
+    try {
+      display = (await firmMeta()).display;
+    } catch {
+      display = DEFAULT_DISPLAY;
+    }
+    simulated.push(display.firmDataLabel);
+  }
   simulated.push('Real glasses captures, pre-recorded, imported not streamed');
+  const dev = devBlock();
   return {
     owner,
     now,
@@ -291,6 +306,8 @@ export async function buildPersonalState(): Promise<PersonalState> {
     shares,
     escalations,
     firm: { reachable: firmReachable, checkedAt: now },
+    display,
     simulated,
+    ...(dev ? { dev } : {}),
   };
 }

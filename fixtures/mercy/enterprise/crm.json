@@ -1,0 +1,17 @@
+{
+  "people": [
+    {"id": "p-amara", "name": "Dr. Amara Osei", "role": "Associate"},
+    {"id": "p-helen", "name": "Dr. Helen Marsh", "role": "Partner"}
+  ],
+  "deals": [],
+  "dealTeam": [],
+  "meetings": [],
+  "documents": [],
+  "portfolio": [],
+  "display": {
+    "roleTitles": {"Associate": "Oncologist", "Partner": "Attending"},
+    "reviewerNoun": "an Attending",
+    "labels": {"sourcePrefix": "Chart", "team": "Care team", "restricted": "Attendings", "workColumn": "The chart says", "personalColumn": "You read", "unit": "cases"},
+    "firmDataLabel": "Fictional clinical data"
+  }
+}

@@ -1,4 +1,4 @@
-import type { Claim, Draft, Meeting, Person, Receipt, SourceRef } from '../../shared/data.js';
+import type { Claim, Draft, Meeting, Person, Receipt, ScenarioDev, ScenarioDisplay, SourceRef } from '../../shared/data.js';
 
 export interface FirmDeal {
   id: string;
@@ -33,18 +33,23 @@ export interface FirmState {
   market: FirmMarket[];
   connectors: { id: string; label: string; lastSyncAt: string | null; documents: number; simulated?: string; lastError?: { message: string; at: string } }[];
   aclMap: { principal: string; classification: string }[];
+  people: Person[];
+  display: ScenarioDisplay;
   simulated: string[];
+  dev?: ScenarioDev;
+}
+
+export function storedViewerId(): string | null {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('as') ?? localStorage.getItem('stevens-viewer');
 }
 
 function viewerHeaders(): Record<string, string> {
-  const params = new URLSearchParams(window.location.search);
-  const as = params.get('as') ?? localStorage.getItem('stevens-viewer') ?? 'p-morgan';
-  return { 'X-Viewer-Id': as };
+  return { 'X-Viewer-Id': storedViewerId() ?? '' };
 }
 
 export function currentViewerId(): string {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('as') ?? localStorage.getItem('stevens-viewer') ?? 'p-morgan';
+  return storedViewerId() ?? '';
 }
 
 export function setViewerId(id: string): void {

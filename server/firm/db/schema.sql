@@ -20,7 +20,8 @@ create table meetings (
   id text primary key,
   deal_id text not null references deals(id),
   title text not null,
-  starts_at text not null
+  starts_at text not null,
+  ask_hint text
 );
 create table documents (
   id text primary key,
