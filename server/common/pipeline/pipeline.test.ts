@@ -54,6 +54,16 @@ describe('day-5 pipeline', () => {
     expect(candidates([C_TALK, C_TALK], [C_DECK])).toHaveLength(1);
   });
 
+  it('pairs quotes with strong word overlap but different entities', async () => {
+    const nature: Claim = { id: 'rw1-c0', sourceId: 'rw1', entity: 'biomarker driven combination', quote: 'biomarker driven combination 76% response in exon 19 deletion against 61 on standard' };
+    const chart: Claim = { id: 'chart1-c0', sourceId: 'chart1', entity: 'case M-2417', quote: 'Biomarker results are back for case M-2417: EGFR exon 19 deletion, PD-L1 40%' };
+    const pairs = candidates([nature], [chart]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0][0].id).toBe('rw1-c0');
+    const apart: Claim = { id: 'rw2-c0', sourceId: 'rw2', entity: 'trial design', quote: 'Screen for trial eligibility before the board votes' };
+    expect(candidates([apart], [chart])).toHaveLength(0);
+  });
+
   it('rejects malformed verdicts and judgements', async () => {
     expect(VerdictShape.safeParse({ verdict: 'maybe', routeTo: 'Intern' }).success).toBe(false);
     expect(VerdictShape.safeParse({ verdict: 'hold', routeTo: 'Partner', note: 'x' }).success).toBe(false);

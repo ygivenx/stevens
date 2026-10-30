@@ -24,16 +24,16 @@ function loadEnvFile(file: string): Map<string, string> {
 }
 
 function personRole(prefix: string, personId: string): string {
-  return prefix + '_p_' + personId.replace(/^p-/, '').replace(/[^a-z0-9_]/g, '_');
+  return prefix + '_p_' + personId.replace(/^p-/, '').replace(/[^a-z0-9_-]/g, '_');
 }
 
 function principalRole(prefix: string, principal: string): string {
   if (principal === 'all-staff') return prefix + '_all_staff';
   if (principal === 'partners') return prefix + '_partners';
   const team = /^deal-team:(.+)$/.exec(principal);
-  if (team) return prefix + '_deal_team_' + team[1].replace(/[^a-z0-9_]/g, '_');
+  if (team) return prefix + '_deal_team_' + team[1].replace(/[^a-z0-9_-]/g, '_');
   const hold = /^legal-hold:(.+)$/.exec(principal);
-  if (hold) return prefix + '_legal_hold_' + hold[1].replace(/[^a-z0-9_]/g, '_');
+  if (hold) return prefix + '_legal_hold_' + hold[1].replace(/[^a-z0-9_-]/g, '_');
   throw new Error('unknown principal ' + principal);
 }
 
@@ -101,8 +101,8 @@ async function main(): Promise<void> {
     for (const person of crm.people) await ensureGroup(client, personRole(prefix, person.id));
     await ensureGroup(client, prefix + '_all_staff');
     await ensureGroup(client, prefix + '_partners');
-    const wanted = new Set(crm.deals.map((deal) => prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_]/g, '_')));
-    for (const deal of crm.deals) await ensureGroup(client, prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_]/g, '_'));
+    const wanted = new Set(crm.deals.map((deal) => prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_-]/g, '_')));
+    for (const deal of crm.deals) await ensureGroup(client, prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_-]/g, '_'));
     const stale = await client.query(`select rolname from pg_roles where rolname like $1`, [prefix + '\_deal\_team\_%']);
     for (const row of stale.rows as { rolname: string }[]) {
       if (!wanted.has(row.rolname)) await client.query(`drop role "${row.rolname}"`);
@@ -110,7 +110,7 @@ async function main(): Promise<void> {
     const holds = new Set<string>();
     for (const doc of crm.documents) for (const principal of doc.acl) {
       const hold = /^legal-hold:(.+)$/.exec(principal);
-      if (hold) holds.add(prefix + '_legal_hold_' + hold[1].replace(/[^a-z0-9_]/g, '_'));
+      if (hold) holds.add(prefix + '_legal_hold_' + hold[1].replace(/[^a-z0-9_-]/g, '_'));
     }
     for (const hold of holds) await ensureGroup(client, hold);
     for (const person of crm.people) {
@@ -119,7 +119,7 @@ async function main(): Promise<void> {
       if (person.role === 'Partner') await ensureMember(client, prefix + '_partners', role);
     }
     for (const row of crm.dealTeam) {
-      await ensureMember(client, prefix + '_deal_team_' + row.dealId.replace(/[^a-z0-9_]/g, '_'), personRole(prefix, row.personId));
+      await ensureMember(client, prefix + '_deal_team_' + row.dealId.replace(/[^a-z0-9_-]/g, '_'), personRole(prefix, row.personId));
     }
     const stevensIsNew = !(await roleExists(client, stevens));
     if (stevensIsNew) {
@@ -135,7 +135,7 @@ async function main(): Promise<void> {
     await client.query(`grant create on schema public to "${stevens}"`);
     await ensureMember(client, prefix + '_all_staff', stevens);
     await ensureMember(client, prefix + '_partners', stevens);
-    for (const deal of crm.deals) await ensureMember(client, prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_]/g, '_'), stevens);
+    for (const deal of crm.deals) await ensureMember(client, prefix + '_deal_team_' + deal.id.replace(/[^a-z0-9_-]/g, '_'), stevens);
 
     await client.query(`delete from crm.document_grants`);
     await client.query(`delete from crm.document_bodies`);

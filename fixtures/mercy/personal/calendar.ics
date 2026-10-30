@@ -1,4 +1,24 @@
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Stevens//Fixtures//EN
+BEGIN:VEVENT
+UID:cal-board-preread-1
+DTSTAMP:20261027T120000Z
+DTSTART:20261029T130000Z
+DTEND:20261029T133000Z
+SUMMARY:M-2417 pre-read with Lena
+DESCRIPTION:Thirty minutes before the tumor board. Pin down the response numbers and the trial-eligibility question.
+LOCATION:Call
+ATTENDEE:mailto:lena.park@example.com
+ORGANIZER:mailto:amara.osei@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:cal-dentist-3
+DTSTAMP:20261027T120000Z
+DTSTART:20261105T140000Z
+DTEND:20261105T150000Z
+SUMMARY:Dentist
+DESCRIPTION:Routine cleaning. No prep needed.
+LOCATION:Downtown Dental
+END:VEVENT
 END:VCALENDAR

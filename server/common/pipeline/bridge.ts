@@ -11,6 +11,22 @@ export function metricHead(metric: string | undefined): string {
   return tokens.length > 0 ? tokens[tokens.length - 1] : '';
 }
 
+const OVERLAP_STOP = new Set('the and for with from that this these those are was were has have had will would should could there their them then than into over under about across while where which when being been also among between after before results result patient cases study data'.split(' '));
+
+function quoteTokens(quote: string): Set<string> {
+  const tokens = new Set<string>();
+  for (const raw of quote.toLowerCase().split(/[^a-z0-9]+/)) {
+    if (raw.length >= 5 && !OVERLAP_STOP.has(raw)) tokens.add(raw);
+  }
+  return tokens;
+}
+
+function quoteOverlap(a: Set<string>, b: Set<string>): number {
+  let shared = 0;
+  for (const token of a) if (b.has(token)) shared += 1;
+  return shared;
+}
+
 export function candidates(personal: Claim[], work: Claim[]): [Claim, Claim][] {
   const pairs: [Claim, Claim][] = [];
   const seenSources = new Set<string>();
@@ -25,6 +41,23 @@ export function candidates(personal: Claim[], work: Claim[]): [Claim, Claim][] {
         seenSources.add(sourcePair);
         pairs.push([p, w]);
       }
+    }
+  }
+  const pTokens = personal.map((claim) => quoteTokens(claim.quote));
+  const wTokens = work.map((claim) => quoteTokens(claim.quote));
+  const overlapped: { overlap: number; pair: [Claim, Claim] }[] = [];
+  for (let i = 0; i < personal.length; i += 1) {
+    for (let j = 0; j < work.length; j += 1) {
+      const overlap = quoteOverlap(pTokens[i], wTokens[j]);
+      if (overlap >= 2) overlapped.push({ overlap, pair: [personal[i], work[j]] });
+    }
+  }
+  overlapped.sort((a, b) => b.overlap - a.overlap);
+  for (const { pair } of overlapped) {
+    const sourcePair = [pair[0].sourceId, pair[1].sourceId].sort().join('|');
+    if (!seenSources.has(sourcePair)) {
+      seenSources.add(sourcePair);
+      pairs.push(pair);
     }
   }
   return pairs;
