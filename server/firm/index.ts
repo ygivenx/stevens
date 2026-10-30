@@ -1,5 +1,8 @@
 import { serve } from '@hono/node-server';
+import { loadEnvFiles } from '../common/env.js';
 import { join, sep } from 'node:path';
+
+loadEnvFiles();
 import { createApp } from '../common/app.js';
 import { personForToken, seedPeople } from './agent-auth.js';
 import { agentContext, agentFromHeader, agentMedia, agentMeetings, agentMeta, isAgentPurpose } from './agent.js';

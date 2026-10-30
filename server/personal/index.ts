@@ -1,5 +1,8 @@
 import { serve } from '@hono/node-server';
+import { loadEnvFiles } from '../common/env.js';
 import { readFileSync, existsSync } from 'node:fs';
+
+loadEnvFiles();
 import { join, extname, sep } from 'node:path';
 import { createApp } from '../common/app.js';
 import { readAll } from '../common/ledger/store.js';
