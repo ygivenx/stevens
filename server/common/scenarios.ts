@@ -12,6 +12,27 @@ export function scenarioId(): string {
   return process.env.STEVENS_SCENARIO ?? 'helios';
 }
 
+export interface ScenarioStores { prefix: string; firmDb: string; personalDb: string; envFile: string }
+
+export const SCENARIO_STORES: Record<string, ScenarioStores> = {
+  helios: { prefix: 'dh', firmDb: 'darlington_crm', personalDb: 'darlington_personal', envFile: '.env.local' },
+  forge: { prefix: 'fg', firmDb: 'forge_firm', personalDb: 'forge_personal', envFile: '.env.forge' },
+  mercy: { prefix: 'mc', firmDb: 'mercy_firm', personalDb: 'mercy_personal', envFile: '.env.mercy' },
+};
+
+export function scenarioStores(id: string = scenarioId()): ScenarioStores {
+  const found = SCENARIO_STORES[id];
+  if (!found) throw new Error('unknown scenario ' + id);
+  return found;
+}
+
+export function scenarioEnvFiles(id: string = scenarioId()): string[] {
+  const files = ['.env.local'];
+  const overlay = scenarioStores(id).envFile;
+  if (overlay !== '.env.local') files.push(overlay);
+  return files;
+}
+
 export const DEFAULT_DISPLAY: ScenarioDisplay = {
   roleTitles: { Associate: 'Associate', Partner: 'Partner' },
   reviewerNoun: 'a Partner',

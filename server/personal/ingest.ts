@@ -50,9 +50,9 @@ function modelForKind(kind: RawItem['kind']): string {
 
 export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ itemId: string; added: boolean }> {
   const itemId = itemIdFor(raw);
-  if (ingestedItemIds().has(itemId) || hasContentHash(raw.contentHash)) return { itemId, added: false };
+  if (ingestedItemIds().has(itemId) || (await hasContentHash(raw.contentHash))) return { itemId, added: false };
   const at = new Date().toISOString();
-  const prior = raw.origin === 'vault' ? activeItemForOrigin(raw.origin, raw.originId) : null;
+  const prior = raw.origin === 'vault' ? await activeItemForOrigin(raw.origin, raw.originId) : null;
   const revising = prior && prior.contentHash !== raw.contentHash ? prior.id : null;
   let pieces: Piece[] = [];
   let api: Api | null = null;
@@ -81,10 +81,10 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
     };
     if (revising) {
       append({ at, type: 'item.revised', item: failed, segments: [], contentHash: raw.contentHash, mediaPath: raw.mediaPath, supersedes: revising });
-      writeRevised(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at }, revising);
+      await writeRevised(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at }, revising);
     } else {
       append({ at, type: 'item.ingested', item: failed, segments: [], contentHash: raw.contentHash, mediaPath: raw.mediaPath });
-      writeIngested(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
+      await writeIngested(failed, [], { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
     }
     throw err;
   }
@@ -104,10 +104,10 @@ export async function ingestRaw(raw: RawItem, deps: IngestDeps = {}): Promise<{ 
   };
   if (revising) {
     append({ at, type: 'item.revised', item, segments, contentHash: raw.contentHash, mediaPath: raw.mediaPath, supersedes: revising, api: api as Api });
-    writeRevised(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at }, revising);
+    await writeRevised(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at }, revising);
   } else {
     append({ at, type: 'item.ingested', item, segments, contentHash: raw.contentHash, mediaPath: raw.mediaPath, api: api as Api });
-    writeIngested(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
+    await writeIngested(item, segments, { contentHash: raw.contentHash, mediaPath: raw.mediaPath, ingestedAt: at });
   }
   if (withinBackfill(raw.capturedAt)) await extractItem(itemId, deps);
   return { itemId, added: true };
@@ -137,10 +137,10 @@ export async function runInboxPoll(deps: IngestDeps = {}): Promise<{ added: numb
       }
     }
     append({ at: new Date().toISOString(), type: 'sync.completed', adapter: 'glasses', added });
-    setAdapterState('glasses', { lastSyncAt: new Date().toISOString(), lastError: null });
+    await setAdapterState('glasses', { lastSyncAt: new Date().toISOString(), lastError: null });
     return { added, rejected };
   } catch (err) {
-    setAdapterState('glasses', { lastError: err instanceof Error ? err.message : String(err) });
+    await setAdapterState('glasses', { lastError: err instanceof Error ? err.message : String(err) });
     throw err;
   } finally {
     running = false;
@@ -154,7 +154,7 @@ export async function ingestVaultScan(scan: { raws: RawItem[]; meta: Map<string,
       const result = await ingestRaw(raw, deps);
       if (result.added) added += 1;
       const meta = scan.meta.get(raw.originId);
-      if (meta) writeVaultMeta(raw.origin, raw.originId, meta);
+      if (meta) await writeVaultMeta(raw.origin, raw.originId, meta);
     } catch {
       continue;
     }
@@ -162,13 +162,13 @@ export async function ingestVaultScan(scan: { raws: RawItem[]; meta: Map<string,
   return { added };
 }
 
-export function retireVaultRemoved(originIds: string[]): number {
+export async function retireVaultRemoved(originIds: string[]): Promise<number> {
   let retired = 0;
   for (const originId of originIds) {
-    const active = activeItemForOrigin('vault', originId);
+    const active = await activeItemForOrigin('vault', originId);
     if (!active) continue;
     append({ at: new Date().toISOString(), type: 'item.removed', origin: 'vault', originId, itemId: active.id });
-    markRemoved(active.id);
+    await markRemoved(active.id);
     retired += 1;
   }
   return retired;

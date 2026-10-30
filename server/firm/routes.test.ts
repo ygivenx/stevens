@@ -10,14 +10,14 @@ import type { FirmState } from './state.js';
 let app: typeof import('./index.js')['app'];
 
 beforeEach(async () => {
-  closeFirmDb();
+  await closeFirmDb();
   const dir = join(mkdtempSync(join(tmpdir(), 'stevens-routes-')), 'firm');
   mkdirSync(dir, { recursive: true });
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = 'test-agent-token-9b';
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
-  seedPeople(getFirmDb(), 'test-agent-token-9b');
+  await seedPeople('test-agent-token-9b');
   await runConnectorSync({ reader: testReader() });
   const mod = await import('./index.js');
   app = mod.app;

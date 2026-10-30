@@ -43,7 +43,7 @@ const FROM = Date.parse('2026-10-27T00:00:00Z');
 const TO = Date.parse('2026-11-10T00:00:00Z');
 
 describe('parseIcs', () => {
-  it('keeps timed events inside the window and skips the rest', () => {
+  it('keeps timed events inside the window and skips the rest', async () => {
     const parsed = parseIcs(ICS, FROM, TO);
     const uids = parsed.map((event) => event.uid);
     expect(uids).toContain('in-window');
@@ -52,13 +52,13 @@ describe('parseIcs', () => {
     expect(uids).not.toContain('allday');
   });
 
-  it('expands recurrences inside the window', () => {
+  it('expands recurrences inside the window', async () => {
     const parsed = parseIcs(ICS, FROM, TO);
     const standups = parsed.filter((event) => event.uid === 'weekly');
     expect(standups).toHaveLength(2);
   });
 
-  it('reads attendees and descriptions', () => {
+  it('reads attendees and descriptions', async () => {
     const parsed = parseIcs(ICS, FROM, TO);
     const found = parsed.find((event) => event.uid === 'in-window');
     expect(found?.attendees).toEqual(['Priya Nair <priya@example.com>']);
@@ -68,19 +68,19 @@ describe('parseIcs', () => {
 
 describe('linkDealId', () => {
   const deals = [{ id: 'helios', company: 'Helios' }];
-  it('links when the company is named', () => {
+  it('links when the company is named', async () => {
     expect(linkDealId('Helios follow-up with Priya', deals)).toBe('helios');
   });
-  it('stays unlinked otherwise', () => {
+  it('stays unlinked otherwise', async () => {
     expect(linkDealId('Dentist appointment', deals)).toBeNull();
   });
 });
 
 describe('calendarMode', () => {
-  afterEach(() => {
+  afterEach(async () => {
     delete process.env.STEVENS_CALENDAR_ICS;
   });
-  it('is off when unset, fixture when blank, feed when set', () => {
+  it('is off when unset, fixture when blank, feed when set', async () => {
     expect(calendarMode()).toBe('off');
     process.env.STEVENS_CALENDAR_ICS = '';
     expect(calendarMode()).toBe('fixture');
@@ -90,17 +90,17 @@ describe('calendarMode', () => {
 });
 
 describe('syncCalendar', () => {
-  beforeEach(() => {
-    closeDb();
+  beforeEach(async () => {
+    await closeDb();
     process.env.STEVENS_DATA_DIR = mkdtempSync(join(tmpdir(), 'stevens-cal-'));
     process.env.STEVENS_CALENDAR_ICS = '';
     process.env.STEVENS_NOW = '2026-10-27T12:00:00Z';
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     delete process.env.STEVENS_CALENDAR_ICS;
     delete process.env.STEVENS_NOW;
-    closeDb();
+    await closeDb();
   });
 
   it('syncs the fixture once and reports no change the second time', async () => {
@@ -108,7 +108,7 @@ describe('syncCalendar', () => {
     expect(first.mode).toBe('fixture');
     expect(first.events).toBe(1);
     expect(first.changed).toBe(true);
-    const rows = upcomingEvents(Date.parse('2026-10-27T12:00:00Z'), Date.parse('2026-11-04T12:00:00Z'));
+    const rows = await upcomingEvents(Date.parse('2026-10-27T12:00:00Z'), Date.parse('2026-11-04T12:00:00Z'));
     expect(rows).toHaveLength(1);
     expect(rows[0].title).toContain('Helios');
     const second = await syncCalendar();
@@ -118,7 +118,7 @@ describe('syncCalendar', () => {
   it('links calendar meetings to deals by company name', async () => {
     await syncCalendar();
     process.env.STEVENS_NOW = '2026-10-28T14:00:00Z';
-    const meetings = calendarMeetings([{ id: 'helios', company: 'Helios' }]);
+    const meetings = await calendarMeetings([{ id: 'helios', company: 'Helios' }]);
     expect(meetings).toHaveLength(1);
     expect(meetings[0].dealId).toBe('helios');
     expect(meetings[0].origin).toBe('calendar');
@@ -127,6 +127,6 @@ describe('syncCalendar', () => {
   it('records the error when the feed fails', async () => {
     process.env.STEVENS_CALENDAR_ICS = 'https://example.com/cal.ics';
     await expect(syncCalendar({ fetchFn: async () => { throw new Error('feed is down'); } })).rejects.toThrow('feed is down');
-    expect(getAdapterState('calendar')?.lastError).toBe('feed is down');
+    expect((await getAdapterState('calendar'))?.lastError).toBe('feed is down');
   });
 });

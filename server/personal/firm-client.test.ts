@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe('firm client timeout', () => {
-  it('defaults to 120s and honors the override', () => {
+  it('defaults to 120s and honors the override', async () => {
     expect(firmTimeoutMs()).toBe(120000);
     process.env.STEVENS_FIRM_TIMEOUT_MS = '5000';
     expect(firmTimeoutMs()).toBe(5000);

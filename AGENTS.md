@@ -83,8 +83,10 @@ Allowed in v3 (new): SQLite through the built-in `node:sqlite` (exactly two file
 
 Allowed in v3.1 (new): Postgres 16+ as the firm's CRM only (dev: Postgres 18 in the `pw` sandbox, published on `127.0.0.1:5433`) (Stevens's own stores stay SQLite); the `pg` driver with plain SQL; `ical.js`; the owner's calendar ICS feed.
 
+Allowed in v3.3 (new): Postgres as the live store for both processes (one firm + one personal database per scenario, plain SQL, `pg` only, no ORM); `node:sqlite` only as the offline backend for tests and recorded replay.
+
 Not in this build:
-- Postgres for Stevens's own stores, ORMs, vector stores, MCP servers or clients;
+- ORMs, vector stores, MCP servers or clients;
 - real CRM, Google Drive or other SaaS connectors;
 - SAM 3.1, unless the SPEC condition triggers;
 - a learning ranker or protected time;

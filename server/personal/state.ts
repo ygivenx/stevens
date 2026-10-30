@@ -39,13 +39,13 @@ function ownerPerson(): Person {
   return { id, name, role: 'Associate', ...(title ? { title } : {}) };
 }
 
-function listItems(): Item[] {
+async function listItems(): Promise<Item[]> {
   try {
-    const db = getDb();
-    const rows = db.prepare(
-      `select id, origin, origin_id as originId, kind, title, captured_at as capturedAt, status, error, media_path as mediaPath
+    const db = await getDb();
+    const rows = await db.all<Omit<Item, 'hasMedia'> & { mediaPath: string | null }>(
+      `select id, origin, origin_id as "originId", kind, title, captured_at as "capturedAt", status, error, media_path as "mediaPath"
        from items where status not in ('superseded', 'removed') order by captured_at desc`,
-    ).all() as unknown as (Omit<Item, 'hasMedia'> & { mediaPath: string | null })[];
+    );
     return rows.map((row) => {
       const { mediaPath, ...rest } = row;
       return { ...rest, hasMedia: mediaPath !== null };
@@ -55,10 +55,10 @@ function listItems(): Item[] {
   }
 }
 
-function adapterEntries(): PersonalState['adapters'] {
-  const inbox = getAdapterState('glasses');
-  const readwise = getAdapterState('readwise');
-  const vault = getAdapterState('vault');
+async function adapterEntries(): Promise<PersonalState['adapters']> {
+  const inbox = await getAdapterState('glasses');
+  const readwise = await getAdapterState('readwise');
+  const vault = await getAdapterState('vault');
   const inboxSync = lastSyncFor('glasses');
   return [
     { origin: 'glasses' as Origin, label: 'Glasses inbox', lastSyncAt: inbox?.lastSyncAt ?? inboxSync },
@@ -80,11 +80,11 @@ function lastSyncFor(adapter: Origin): string | null {
   return last;
 }
 
-function sourceEntries(firmReachable: boolean, checkedAt: string): PersonalState['sourceStatus'] {
-  const glasses = getAdapterState('glasses');
-  const readwise = getAdapterState('readwise');
-  const vault = getAdapterState('vault');
-  const calendar = getAdapterState('calendar');
+async function sourceEntries(firmReachable: boolean, checkedAt: string): Promise<PersonalState['sourceStatus']> {
+  const glasses = await getAdapterState('glasses');
+  const readwise = await getAdapterState('readwise');
+  const vault = await getAdapterState('vault');
+  const calendar = await getAdapterState('calendar');
   return [
     { id: 'glasses', label: 'Glasses inbox', lastSyncAt: glasses?.lastSyncAt ?? lastSyncFor('glasses'), lastError: glasses?.lastError ?? null },
     {
@@ -103,12 +103,12 @@ function sourceEntries(firmReachable: boolean, checkedAt: string): PersonalState
   ];
 }
 
-function statusLine(items: Item[], firmReachable: boolean, lastBriefAt: string | null): { line: string; busy: boolean } {
+async function statusLine(items: Item[], firmReachable: boolean, lastBriefAt: string | null): Promise<{ line: string; busy: boolean }> {
   if (process.env.STEVENS_REPLAY === '1') return { line: 'Replaying a recorded run', busy: false };
   const pending = pendingInboxTitle(items);
   if (pending) return { line: 'Reading the ' + pending + '…', busy: true };
   try {
-    if (extractionPaused()) return { line: 'Paused: daily reading budget reached', busy: false };
+    if (await extractionPaused()) return { line: 'Paused: daily reading budget reached', busy: false };
   } catch {
     void 0;
   }
@@ -174,7 +174,7 @@ export function personalSourceRefs(items: Item[]): SourceRef[] {
 export async function buildPersonalState(): Promise<PersonalState> {
   const owner = ownerPerson();
   const now = nowIso();
-  const items = listItems();
+  const items = await listItems();
   const events = readAll();
   const drafts = events.filter((e) => e.type === 'draft.created').map((e) => (e as { draft: Draft }).draft);
   const failedDeals = new Set<string>();
@@ -184,13 +184,12 @@ export async function buildPersonalState(): Promise<PersonalState> {
   for (const draft of drafts) {
     if (draft.kind === 'brief' && draft.dealId) failedDeals.delete(draft.dealId);
   }
-  const personalClaims = (() => {
-    try {
-      return allPersonalClaims();
-    } catch {
-      return [];
-    }
-  })();
+  let personalClaims: Claim[] = [];
+  try {
+    personalClaims = await allPersonalClaims();
+  } catch {
+    personalClaims = [];
+  }
   let meetings: (Meeting & { briefId?: string; team?: Person[]; briefFailed: boolean })[] = [];
   let firmReachable = true;
   let firmClaims: Claim[] = [];
@@ -213,7 +212,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
     }));
     let calendarUpcoming: Meeting[] = [];
     try {
-      calendarUpcoming = calendarMeetings(pairs);
+      calendarUpcoming = await calendarMeetings(pairs);
     } catch {
       void 0;
     }
@@ -241,7 +240,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
         for (const draft of drafts) {
           if (draft.kind === 'brief' && draft.dealId !== undefined) briefByDeal.set(draft.dealId, draft.id);
         }
-        meetings = calendarMeetings([]).map((meeting) => ({ ...meeting, briefId: briefByDeal.get(meeting.dealId), briefFailed: failedDeals.has(meeting.dealId), team: [] }));
+        meetings = (await calendarMeetings([])).map((meeting) => ({ ...meeting, briefId: briefByDeal.get(meeting.dealId), briefFailed: failedDeals.has(meeting.dealId), team: [] }));
       } catch {
         meetings = [];
       }
@@ -274,9 +273,9 @@ export async function buildPersonalState(): Promise<PersonalState> {
   const latestBrief = drafts.filter((d) => d.kind === 'brief').sort((a, b) => (a.id < b.id ? 1 : -1))[0];
   void latestBrief;
   const lastBriefEvent = events.filter((e) => e.type === 'draft.created' && (e as { draft: Draft }).draft.kind === 'brief').sort((a, b) => (a.at < b.at ? 1 : -1))[0];
-  const status = statusLine(items, firmReachable, lastBriefEvent ? lastBriefEvent.at : null);
+  const status = await statusLine(items, firmReachable, lastBriefEvent ? lastBriefEvent.at : null);
   const simulated: string[] = [];
-  const adapters = adapterEntries();
+  const adapters = await adapterEntries();
   const readwise = adapters.find((a) => a.origin === 'readwise');
   if (readwise?.simulated) simulated.push(readwise.simulated);
   let display = DEFAULT_DISPLAY;
@@ -295,7 +294,7 @@ export async function buildPersonalState(): Promise<PersonalState> {
     now,
     vaultName: vaultName(),
     solo: soloMode(),
-    sourceStatus: sourceEntries(firmReachable, nowIso()),
+    sourceStatus: await sourceEntries(firmReachable, nowIso()),
     status,
     adapters,
     items,

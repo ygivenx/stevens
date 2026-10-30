@@ -5,7 +5,7 @@ import { policy } from '../common/boundary/policy.js';
 import { devBlock } from '../common/scenarios.js';
 import { getFirmDb } from './store.js';
 import { classifyAcl, aclLabel, ACL_TABLE } from './connectors/acl-map.js';
-import { connectorError, documentAcl, ensureMeetingAskHint, firmDocuments, getReleaseProvenance, isMember } from './store.js';
+import { connectorError, connectorState, documentAcl, ensureMeetingAskHint, firmDocuments, getReleaseProvenance, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
 import { scenarioDisplay } from './connectors/crm.js';
 import { buildComps, loadFormD, marketSample } from './connectors/formd.js';
@@ -49,9 +49,9 @@ export interface FirmState {
   dev?: ScenarioDev;
 }
 
-function peopleById(display: ScenarioDisplay): Map<string, Person> {
-  const db = getFirmDb();
-  const rows = db.prepare(`select id, name, role from people`).all() as unknown as { id: string; name: string; role: Role }[];
+async function peopleById(display: ScenarioDisplay): Promise<Map<string, Person>> {
+  const db = await getFirmDb();
+  const rows = await db.all<{ id: string; name: string; role: Role }>(`select id, name, role from people`);
   return new Map(rows.map((row) => [row.id, { ...row, title: display.roleTitles[row.role] ?? row.role }]));
 }
 
@@ -63,17 +63,19 @@ function personByRole(people: Map<string, Person>, role: Role, display: Scenario
   return { id: 'unknown', name: 'The ' + title.charAt(0).toLowerCase() + title.slice(1), role, title };
 }
 
-function teamForDeal(dealId: string, people: Map<string, Person>): Person[] {
-  const db = getFirmDb();
-  const rows = db.prepare(`select person_id as personId from deal_team where deal_id = ?`).all(dealId) as unknown as { personId: string }[];
+async function teamForDeal(dealId: string, people: Map<string, Person>): Promise<Person[]> {
+  const db = await getFirmDb();
+  const rows = await db.all<{ personId: string }>(`select person_id as "personId" from deal_team where deal_id = $1`, dealId);
   return rows.map((row) => people.get(row.personId)).filter((person): person is Person => person !== undefined);
 }
 
-function meetingsForDeal(dealId: string): Meeting[] {
-  const db = getFirmDb();
-  ensureMeetingAskHint();
-  const rows = db.prepare(`select id, deal_id as dealId, title, starts_at as startsAt, ask_hint as askHint from meetings where deal_id = ? order by starts_at`).all(dealId) as unknown as Meeting[];
-  return rows;
+async function meetingsForDeal(dealId: string): Promise<Meeting[]> {
+  const db = await getFirmDb();
+  await ensureMeetingAskHint();
+  return db.all<Meeting>(
+    `select id, deal_id as "dealId", title, starts_at as "startsAt", ask_hint as "askHint" from meetings where deal_id = $1 order by starts_at`,
+    dealId,
+  );
 }
 
 function draftStatus(draftId: string): Draft['status'] {
@@ -103,32 +105,34 @@ function clockShort(iso: string): string {
   return hours + ':' + minutes + ' ' + suffix;
 }
 
-export function viewerFromHeader(header: string | undefined): Person | null {
+export async function viewerFromHeader(header: string | undefined): Promise<Person | null> {
   if (!header) return null;
-  const people = peopleById(scenarioDisplay());
+  const people = await peopleById(scenarioDisplay());
   return people.get(header) ?? null;
 }
 
-export function buildFirmState(viewer: Person): FirmState {
+export async function buildFirmState(viewer: Person): Promise<FirmState> {
   const now = nowIso();
   const events = readAll();
   const display = scenarioDisplay();
-  const people = peopleById(display);
-  const db = getFirmDb();
+  const people = await peopleById(display);
+  const db = await getFirmDb();
 
-  const dealRows = db.prepare(`select id, company, sector, stage, ask_usd as askUsd from deals order by company`).all() as unknown as { id: string; company: string; sector: string; stage: string; askUsd: number | null }[];
+  const dealRows = await db.all<{ id: string; company: string; sector: string; stage: string; askUsd: number | null }>(
+    `select id, company, sector, stage, ask_usd as "askUsd" from deals order by company`,
+  );
   const deals: FirmDeal[] = [];
   const visibleSourceIds = new Set<string>();
   const documentsById = new Map<string, SourceRef>();
   for (const deal of dealRows) {
     const documents: SourceRef[] = [];
-    for (const doc of firmDocuments(deal.id)) {
-      const acl = documentAcl(doc.id);
+    for (const doc of await firmDocuments(deal.id)) {
+      const acl = await documentAcl(doc.id);
       const source = firmSourceFor(
         { id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
         classifyAcl(acl).classification,
       );
-      const decision = policy(source, viewer.role, 'brief', isMember(viewer.id, acl));
+      const decision = policy(source, viewer.role, 'brief', await isMember(viewer.id, acl));
       if (decision.access !== 'visible') continue;
       visibleSourceIds.add(doc.id);
       const ref: SourceRef = {
@@ -141,7 +145,7 @@ export function buildFirmState(viewer: Person): FirmState {
     }
     deals.push({
       id: deal.id, company: deal.company, sector: deal.sector, stage: deal.stage, askUsd: deal.askUsd,
-      team: teamForDeal(deal.id, people), meetings: meetingsForDeal(deal.id), documents,
+      team: await teamForDeal(deal.id, people), meetings: await meetingsForDeal(deal.id), documents,
     });
   }
 
@@ -157,7 +161,7 @@ export function buildFirmState(viewer: Person): FirmState {
   for (const event of events) {
     if (event.type === 'draft.created' && event.draft.kind === 'decision') {
       if (viewer.role !== 'Partner') continue;
-      if (!isMember(viewer.id, ['deal-team:' + event.draft.dealId])) continue;
+      if (!(await isMember(viewer.id, ['deal-team:' + event.draft.dealId]))) continue;
       const status = draftStatus(event.draft.id);
       drafts.push({ ...event.draft, status });
       if (event.draft.questionId) decisionByQuestion.set(event.draft.questionId, event.draft.id);
@@ -165,22 +169,22 @@ export function buildFirmState(viewer: Person): FirmState {
   }
 
   const inbox: FirmInboxEntry[] = [];
-  const onTeam = (dealId: string): boolean => teamForDeal(dealId, people).some((member) => member.id === viewer.id);
+  const onTeam = async (dealId: string): Promise<boolean> => (await teamForDeal(dealId, people)).some((member) => member.id === viewer.id);
   for (const event of events) {
     if (event.type === 'escalation.drafted' && event.escalationId && event.to === viewer.role) {
       const from = event.from ? people.get(event.from) ?? personByRole(people, 'Associate', display) : personByRole(people, 'Associate', display);
       const dealId = event.dealId ?? '';
-      const seesDraft = dealId !== '' && isMember(viewer.id, ['deal-team:' + dealId]);
+      const seesDraft = dealId !== '' && (await isMember(viewer.id, ['deal-team:' + dealId]));
       inbox.push({
         kind: 'escalation', id: event.escalationId, dealId, from,
         at: event.at, decisionDraftId: event.questionId && seesDraft ? decisionByQuestion.get(event.questionId) : undefined,
       });
     }
     if (event.type === 'personal.released' && event.documentId && event.dealId) {
-      if (!onTeam(event.dealId)) continue;
-      const doc = firmDocuments().find((entry) => entry.id === event.documentId);
+      if (!(await onTeam(event.dealId))) continue;
+      const doc = (await firmDocuments()).find((entry) => entry.id === event.documentId);
       if (!doc || !doc.body) continue;
-      const provenance = getReleaseProvenance(event.documentId);
+      const provenance = await getReleaseProvenance(event.documentId);
       const from = doc.sharedBy ? people.get(doc.sharedBy) ?? personByRole(people, 'Associate', display) : personByRole(people, 'Associate', display);
       inbox.push({
         kind: 'released-quote', id: event.documentId, dealId: event.dealId, from, at: event.at,
@@ -206,25 +210,27 @@ export function buildFirmState(viewer: Person): FirmState {
     sample: marketSample(fixture.filings, entry.quarter),
   }));
 
-  const connectorRows = db.prepare(`select connector, last_sync_at as lastSyncAt, documents from connector_state`).all() as unknown as { connector: string; lastSyncAt: string | null; documents: number }[];
+  const connectorRows = await connectorState();
   const connectorMeta: Record<string, { label: string; simulated?: string }> = {
     crm: { label: display.firmDataLabel },
     'sec-form-d': { label: 'SEC Form D (public)' },
   };
   const connectorIds = fixture.filings.length > 0 ? (['crm', 'sec-form-d'] as const) : (['crm'] as const);
-  const connectors: FirmState['connectors'] = connectorIds.map((id) => {
+  const allDocs = await firmDocuments();
+  const connectors: FirmState['connectors'] = [];
+  for (const id of connectorIds) {
     const row = connectorRows.find((entry) => entry.connector === id);
-    const docs = id === 'crm' ? firmDocuments().filter((doc) => doc.connector === 'crm').length : firmDocuments().filter((doc) => doc.connector === 'sec-form-d').length;
-    const error = connectorError(id);
-    return {
+    const docs = allDocs.filter((doc) => doc.connector === id).length;
+    const entryError = await connectorError(id);
+    connectors.push({
       id, label: connectorMeta[id].label,
       lastSyncAt: row?.lastSyncAt ?? null, documents: row?.documents ?? docs,
       simulated: connectorMeta[id].simulated,
-      ...(error ? { lastError: error } : {}),
-    };
-  });
+      ...(entryError ? { lastError: entryError } : {}),
+    });
+  }
 
-  const error = connectorError('crm');
+  const error = await connectorError('crm');
   const crmRow = connectorRows.find((entry) => entry.connector === 'crm');
   const status = process.env.STEVENS_REPLAY === '1'
     ? { line: 'Replaying a recorded run', busy: false }
@@ -250,9 +256,9 @@ export function buildFirmState(viewer: Person): FirmState {
   };
 }
 
-export function firmTitles(): Map<string, string> {
+export async function firmTitles(): Promise<Map<string, string>> {
   const titles = new Map<string, string>();
-  for (const doc of firmDocuments()) titles.set(doc.id, doc.title);
+  for (const doc of await firmDocuments()) titles.set(doc.id, doc.title);
   return titles;
 }
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { DatabaseSync } from 'node:sqlite';
 import type { Role } from '../../shared/data.js';
 import { loadCrm } from './connectors/crm.js';
+import { getFirmDb } from './store.js';
 
 export interface AgentPerson {
   id: string;
@@ -13,7 +13,7 @@ export function tokenDigest(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-export function seedPeople(db: DatabaseSync, agentToken: string | undefined): void {
+export async function seedPeople(agentToken: string | undefined): Promise<void> {
   const ownerId = process.env.STEVENS_OWNER ?? 'p-alex';
   let people: { id: string; name: string; role: string }[];
   try {
@@ -24,19 +24,21 @@ export function seedPeople(db: DatabaseSync, agentToken: string | undefined): vo
       { id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' },
     ];
   }
-  const upsert = db.prepare(
-    `insert into people (id, name, role, agent_token_sha256) values (?, ?, ?, ?)
-     on conflict(id) do update set name = excluded.name, role = excluded.role, agent_token_sha256 = excluded.agent_token_sha256`,
-  );
+  const db = await getFirmDb();
   for (const person of people) {
-    upsert.run(person.id, person.name, person.role, person.id === ownerId && agentToken ? tokenDigest(agentToken) : null);
+    await db.run(
+      `insert into people (id, name, role, agent_token_sha256) values ($1, $2, $3, $4)
+       on conflict(id) do update set name = excluded.name, role = excluded.role, agent_token_sha256 = excluded.agent_token_sha256`,
+      person.id, person.name, person.role, person.id === ownerId && agentToken ? tokenDigest(agentToken) : null,
+    );
   }
 }
 
-export function personForToken(db: DatabaseSync, token: string | undefined): AgentPerson | null {
+export async function personForToken(token: string | undefined): Promise<AgentPerson | null> {
   if (!token) return null;
-  const row = db
-    .prepare(`select id, name, role from people where agent_token_sha256 = ?`)
-    .get(tokenDigest(token)) as { id: string; name: string; role: Role } | undefined;
+  const db = await getFirmDb();
+  const row = await db.get<{ id: string; name: string; role: Role }>(
+    `select id, name, role from people where agent_token_sha256 = $1`, tokenDigest(token),
+  );
   return row ?? null;
 }

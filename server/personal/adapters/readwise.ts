@@ -98,12 +98,12 @@ export class ReadwiseAdapter implements Adapter {
 
   async poll(): Promise<RawItem[]> {
     const token = process.env.READWISE_TOKEN;
-    const state = getAdapterState('readwise');
+    const state = await getAdapterState('readwise');
     const cursor = state?.cursor ?? null;
     const fetched = token ? await fetchLive(cursor, token) : await fetchFile();
     const fresh = fetched.books.filter((book) => !cursor || book.updated > cursor);
     if (fetched.nextCursor && fetched.nextCursor !== cursor) {
-      setAdapterState('readwise', { cursor: fetched.nextCursor, lastSyncAt: new Date().toISOString() });
+      await setAdapterState('readwise', { cursor: fetched.nextCursor, lastSyncAt: new Date().toISOString() });
     }
     return fresh.map(bookToRawItem);
   }

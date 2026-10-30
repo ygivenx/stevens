@@ -94,20 +94,20 @@ export async function syncCalendar(deps: CalendarDeps = {}): Promise<{ events: n
   const mode = calendarMode();
   try {
     if (mode === 'off') {
-      replaceEvents([]);
+      await replaceEvents([]);
       setAdapterState('calendar', { lastSyncAt: new Date().toISOString(), lastError: null });
       return { events: 0, mode, changed: false };
     }
     const text = mode === 'feed' ? await readFeed(process.env.STEVENS_CALENDAR_ICS as string, deps) : fixtureIcs();
     const now = nowMs();
     const parsed = parseIcs(text, now, now + 7 * 24 * 3600 * 1000);
-    replaceEvents(parsed);
+    await replaceEvents(parsed);
     const hash = createHash('sha256').update(JSON.stringify(parsed.map((event) => [event.uid, event.startsAt]))).digest('hex');
-    const changed = getAdapterState('calendar')?.cursor !== hash;
-    setAdapterState('calendar', { cursor: hash, lastSyncAt: new Date().toISOString(), lastError: null });
+    const changed = (await getAdapterState('calendar'))?.cursor !== hash;
+    await setAdapterState('calendar', { cursor: hash, lastSyncAt: new Date().toISOString(), lastError: null });
     return { events: parsed.length, mode, changed };
   } catch (err) {
-    setAdapterState('calendar', { lastError: err instanceof Error ? err.message : String(err) });
+    await setAdapterState('calendar', { lastError: err instanceof Error ? err.message : String(err) });
     throw err;
   }
 }
@@ -126,7 +126,7 @@ function meetingFor(stored: StoredEvent, deals: { id: string; company: string }[
   return { id: 'cal-' + stored.uid, dealId: dealId ?? '', company, title: stored.title, startsAt: stored.startsAt, origin: 'calendar' };
 }
 
-export function calendarMeetings(deals: { id: string; company: string }[]): Meeting[] {
+export async function calendarMeetings(deals: { id: string; company: string }[]): Promise<Meeting[]> {
   const now = nowMs();
-  return upcomingEvents(now, now + 24 * 3600 * 1000).map((stored) => meetingFor(stored, deals));
+  return (await upcomingEvents(now, now + 24 * 3600 * 1000)).map((stored) => meetingFor(stored, deals));
 }

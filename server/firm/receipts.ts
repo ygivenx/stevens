@@ -5,27 +5,27 @@ import { classifyAcl } from './connectors/acl-map.js';
 import { documentAcl, firmDocuments, isMember } from './store.js';
 import { firmSourceFor } from './sync.js';
 
-function labelFor(sourceId: string): string {
-  const doc = firmDocuments().find((entry) => entry.id === sourceId);
+async function labelFor(sourceId: string): Promise<string> {
+  const doc = (await firmDocuments()).find((entry) => entry.id === sourceId);
   return doc?.title ?? sourceId;
 }
 
-function viewerSeesAll(viewer: Person, sourceIds: string[]): boolean {
+async function viewerSeesAll(viewer: Person, sourceIds: string[]): Promise<boolean> {
   for (const sourceId of sourceIds) {
-    const doc = firmDocuments().find((entry) => entry.id === sourceId);
+    const doc = (await firmDocuments()).find((entry) => entry.id === sourceId);
     if (!doc) return false;
-    const acl = documentAcl(doc.id);
+    const acl = await documentAcl(doc.id);
     const source = firmSourceFor(
       { id: doc.id, kind: doc.kind as Parameters<typeof firmSourceFor>[0]['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
       classifyAcl(acl).classification,
     );
-    const member = isMember(viewer.id, acl);
+    const member = await isMember(viewer.id, acl);
     if (policy(source, viewer.role, 'privy', member).access !== 'visible' && policy(source, viewer.role, 'brief', member).access !== 'visible') return false;
   }
   return true;
 }
 
-export function receiptsForDraft(viewer: Person, draftId: string): Receipt[] {
+export async function receiptsForDraft(viewer: Person, draftId: string): Promise<Receipt[]> {
   const events = readAll();
   const created = events.find((event) => event.type === 'draft.created' && event.draft.id === draftId);
   if (!created || created.type !== 'draft.created') return [];
@@ -35,11 +35,15 @@ export function receiptsForDraft(viewer: Person, draftId: string): Receipt[] {
     const privy = events.find((event) => event.type === 'privy.judged' && event.questionId === questionId);
     if (privy && privy.type === 'privy.judged') {
       const includedIds = privy.manifest.included.map((entry) => entry.sourceId);
-      if (viewerSeesAll(viewer, includedIds)) {
+      if (await viewerSeesAll(viewer, includedIds)) {
+        const included = [];
+        for (const entry of privy.manifest.included) {
+          included.push({ label: await labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId });
+        }
         receipts.push({
           callId: privy.manifest.callId, purpose: 'privy', model: privy.api?.model ?? 'hidden', at: privy.at,
           costUsd: privy.api?.usage.costUsd ?? 0,
-          included: privy.manifest.included.map((entry) => ({ label: labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId })),
+          included,
           withheld: privy.manifest.withheld.map((entry) => ({ label: null, access: entry.access, ruleId: entry.ruleId })),
           privyHidden: false, webSearch: privy.manifest.webSearch, tokens: privy.manifest.tokens,
         });
@@ -51,9 +55,13 @@ export function receiptsForDraft(viewer: Person, draftId: string): Receipt[] {
       }
     }
   }
+  const createdIncluded = [];
+  for (const entry of created.manifest.included) {
+    createdIncluded.push({ label: await labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId });
+  }
   receipts.push({
     callId: created.manifest.callId, purpose: created.draft.kind, model: created.api.model, at: created.at, costUsd: created.api.usage.costUsd,
-    included: created.manifest.included.map((entry) => ({ label: labelFor(entry.sourceId), access: entry.access, ruleId: entry.ruleId })),
+    included: createdIncluded,
     withheld: created.manifest.withheld.map((entry) => ({ label: null, access: entry.access, ruleId: entry.ruleId })),
     privyHidden: false, webSearch: created.manifest.webSearch, tokens: created.manifest.tokens,
   });

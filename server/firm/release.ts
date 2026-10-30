@@ -21,15 +21,15 @@ const ReleasePayload = z.strictObject({
 
 export type ReleasePayload = z.infer<typeof ReleasePayload>;
 
-function onDealTeam(db: ReturnType<typeof getFirmDb>, dealId: string, personId: string): boolean {
-  const row = db.prepare(`select deal_id from deal_team where deal_id = ? and person_id = ?`).get(dealId, personId) as unknown as { deal_id: string } | undefined;
+async function onDealTeam(dealId: string, personId: string): Promise<boolean> {
+  const db = await getFirmDb();
+  const row = await db.get<{ deal_id: string }>(`select deal_id from deal_team where deal_id = $1 and person_id = $2`, dealId, personId);
   return row !== undefined;
 }
 
-export function inboundRelease(agent: AgentPerson, payload: unknown): { documentId: string } {
+export async function inboundRelease(agent: AgentPerson, payload: unknown): Promise<{ documentId: string }> {
   const parsed = ReleasePayload.parse(payload);
-  const db = getFirmDb();
-  if (!onDealTeam(db, parsed.dealId, agent.id)) {
+  if (!(await onDealTeam(parsed.dealId, agent.id))) {
     throw new Error('sender is not on the deal team');
   }
   const documentId = 'rel-' + createHash('sha256').update(parsed.dealId + '|' + parsed.claimId).digest('hex').slice(0, 12);
@@ -50,7 +50,7 @@ export function inboundRelease(agent: AgentPerson, payload: unknown): { document
     },
     provenance: { title: provenance.title, origin: provenance.origin, capturedAt: provenance.capturedAt, speaker: provenance.speaker, at: provenance.at },
   });
-  upsertDocument('release', {
+  await upsertDocument('release', {
     id: documentId,
     dealId: parsed.dealId,
     kind: 'released-quote',
@@ -58,7 +58,8 @@ export function inboundRelease(agent: AgentPerson, payload: unknown): { document
     createdAt,
     body: parsed.quote,
   }, ['deal-team:' + parsed.dealId]);
-  db.prepare(`update documents set shared_by = ? where id = ?`).run(agent.id, documentId);
-  saveReleaseProvenance(documentId, provenance);
+  const db = await getFirmDb();
+  await db.run(`update documents set shared_by = $1 where id = $2`, agent.id, documentId);
+  await saveReleaseProvenance(documentId, provenance);
   return { documentId };
 }

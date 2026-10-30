@@ -21,7 +21,7 @@ afterAll(async () => {
   delete process.env.STEVENS_CALENDAR_ICS;
   delete process.env.STEVENS_NOW;
   const { closeDb } = await import('./store.js');
-  closeDb();
+  await closeDb();
 });
 
 describe('personal routes in solo mode', () => {

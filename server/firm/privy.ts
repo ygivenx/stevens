@@ -14,16 +14,16 @@ export interface PrivyDeps {
 
 
 
-export function privySourcesFor(person: AgentPerson, dealId: string): { sources: Source[]; claims: Claim[] } {
+export async function privySourcesFor(person: AgentPerson, dealId: string): Promise<{ sources: Source[]; claims: Claim[] }> {
   const sources: Source[] = [];
   const ids = new Set<string>();
-  for (const doc of firmDocuments(dealId)) {
-    const acl = documentAcl(doc.id);
+  for (const doc of await firmDocuments(dealId)) {
+    const acl = await documentAcl(doc.id);
     const source = firmSourceFor(
       { id: doc.id, kind: doc.kind as Source['kind'], title: doc.title, createdAt: doc.createdAt, body: doc.body, mediaPath: doc.mediaPath },
       classifyAcl(acl).classification,
     );
-    if (policy(source, person.role, 'privy', isMember(person.id, acl)).access !== 'privy') continue;
+    if (policy(source, person.role, 'privy', await isMember(person.id, acl)).access !== 'privy') continue;
     sources.push(source);
     ids.add(doc.id);
   }
@@ -58,8 +58,12 @@ export async function runPrivy(person: AgentPerson, dealId: string, question: st
       }
     }
   }
-  const { sources, claims } = privySourcesFor(person, dealId);
-  const { prompt, manifest } = assemble('privy', person.role, WONDER_MODEL, key, sources, claims, undefined, (source) => isMember(person.id, documentAcl(source.id)));
+  const { sources, claims } = await privySourcesFor(person, dealId);
+  const memberById = new Map<string, boolean>();
+  for (const source of sources) {
+    memberById.set(source.id, await isMember(person.id, await documentAcl(source.id)));
+  }
+  const { prompt, manifest } = assemble('privy', person.role, WONDER_MODEL, key, sources, claims, undefined, (source) => memberById.get(source.id) ?? false);
   const task = `${prompt}\n\nTask: the user asks about deal ${dealId}: ${question}. Reply with exactly a verdict (proceed, hold, decline) and where to route it (Associate, Partner, or null). Return nothing else.`;
   let attempts = 0;
   let result: { verdict: Verdict; responseId: string; usage: Usage } | null = null;

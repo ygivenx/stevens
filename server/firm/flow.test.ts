@@ -29,35 +29,35 @@ beforeAll(async () => {
   process.env.STEVENS_AGENT_TOKEN = TOKEN;
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
-  seedPeople(getFirmDb(), TOKEN);
+  await seedPeople(TOKEN);
   await runConnectorSync({ reader: testReader() });
   const mod = await import('./index.js');
   app = mod.app;
 });
 
-afterAll(() => {
-  closeFirmDb();
+afterAll(async () => {
+  await closeFirmDb();
 });
 
 describe('form d comps', () => {
-  it('recomputes the comps numbers from the fixture JSON', () => {
+  it('recomputes the comps numbers from the fixture JSON', async () => {
     const fixture = loadFormD();
     const comps = buildComps(fixture.filings);
     expect(comps).toHaveLength(2);
-    const db = getFirmDb();
+    const db = await getFirmDb();
     for (const entry of comps) {
-      const row = db.prepare(`select body from documents where id = ?`).get('formd-comps-' + entry.quarter) as unknown as { body: string };
+      const row = await db.get<{ body: string }>(`select body from documents where id = $1`, 'formd-comps-' + entry.quarter);
       expect(row.body).toBe(entry.sentence);
     }
     expect(comps[0].issuers).toBe(449);
     expect(comps[1].issuers).toBe(404);
   });
 
-  it('resolves every comps claim verbatim', () => {
+  it('resolves every comps claim verbatim', async () => {
     const claims = readAll().flatMap((e) => (e.type === 'claims.extracted' && !e.itemId && e.sourceId.startsWith('formd-') ? e.claims : []));
     expect(claims.length).toBeGreaterThan(0);
     for (const claim of claims) {
-      const row = getFirmDb().prepare(`select body from documents where id = ?`).get(claim.sourceId) as unknown as { body: string };
+      const row = await (await getFirmDb()).get<{ body: string }>(`select body from documents where id = $1`, claim.sourceId);
       expect(quoteIn(claim.quote, row.body)).toBe(true);
     }
   });
@@ -99,28 +99,28 @@ describe('privy channel', () => {
 describe('release gates', () => {
   const provenance = { title: 'Oct 20 talk', origin: 'glasses' as const, capturedAt: '2026-10-20T14:00:00Z' };
 
-  it('rejects payloads with extra fields', () => {
+  it('rejects payloads with extra fields', async () => {
     const alex = { id: 'p-alex', name: 'Alex Rivera', role: 'Associate' as const };
-    expect(() => inboundRelease(alex, { dealId: 'helios', claimId: 'c1', quote: 'q', provenance, injected: true })).toThrow();
+    await expect(inboundRelease(alex, { dealId: 'helios', claimId: 'c1', quote: 'q', provenance, injected: true })).rejects.toThrow();
   });
 
-  it('rejects quotes over 500 characters', () => {
+  it('rejects quotes over 500 characters', async () => {
     const alex = { id: 'p-alex', name: 'Alex Rivera', role: 'Associate' as const };
-    expect(() => inboundRelease(alex, { dealId: 'helios', claimId: 'c1', quote: 'x'.repeat(501), provenance })).toThrow();
+    await expect(inboundRelease(alex, { dealId: 'helios', claimId: 'c1', quote: 'x'.repeat(501), provenance })).rejects.toThrow();
   });
 
-  it('rejects senders outside the deal team', () => {
+  it('rejects senders outside the deal team', async () => {
     const jordan = { id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' as const };
-    expect(() => inboundRelease({ ...jordan, id: 'p-jordan' }, { dealId: 'helios', claimId: 'c1', quote: 'q', provenance })).toThrow('sender is not on the deal team');
+    await expect(inboundRelease({ ...jordan, id: 'p-jordan' }, { dealId: 'helios', claimId: 'c1', quote: 'q', provenance })).rejects.toThrow('sender is not on the deal team');
   });
 
-  it('stores exactly the shared quote for a teammate', () => {
+  it('stores exactly the shared quote for a teammate', async () => {
     const alex = { id: 'p-alex', name: 'Alex Rivera', role: 'Associate' as const };
-    const { documentId } = inboundRelease(alex, { dealId: 'helios', claimId: 'c-talk-1', quote: 'mid-market churn runs 6 to 8%', provenance });
-    const row = getFirmDb().prepare(`select body, kind from documents where id = ?`).get(documentId) as unknown as { body: string; kind: string };
+    const { documentId } = await inboundRelease(alex, { dealId: 'helios', claimId: 'c-talk-1', quote: 'mid-market churn runs 6 to 8%', provenance });
+    const row = await (await getFirmDb()).get<{ body: string; kind: string }>(`select body, kind from documents where id = $1`, documentId);
     expect(row.body).toBe('mid-market churn runs 6 to 8%');
     expect(row.kind).toBe('released-quote');
-    const acl = getFirmDb().prepare(`select principal from document_acl where document_id = ?`).all(documentId) as unknown as { principal: string }[];
+    const acl = await (await getFirmDb()).all<{ principal: string }>(`select principal from document_acl where document_id = $1`, documentId);
     expect(acl.map((entry) => entry.principal)).toEqual(['deal-team:helios']);
   });
 });

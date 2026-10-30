@@ -20,8 +20,8 @@ function settleVault(): void {
   walk(vaultDir());
 }
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   const dir = mkdtempSync(join(tmpdir(), 'stevens-adapters-'));
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_NOW = '2026-10-28T14:00:00-04:00';
@@ -31,11 +31,11 @@ beforeEach(() => {
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
 });
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.STEVENS_NOW;
   delete process.env.STEVENS_VAULT_DIR;
   delete process.env.STEVENS_VAULT_EXCLUDE;
-  closeDb();
+  await closeDb();
 });
 
 describe('readwise adapter', () => {
@@ -50,7 +50,7 @@ describe('readwise adapter', () => {
       const result = await ingestRaw(raw);
       expect(result.added).toBe(true);
     }
-    const bundle = getItemBundle(itemIdFor(raws[0]));
+    const bundle = await getItemBundle(itemIdFor(raws[0]));
     expect(bundle?.item.status).toBe('ready');
     expect(bundle?.segments).toHaveLength(1);
     expect(bundle?.segments[0].locator).toContain('example.com');
@@ -64,16 +64,16 @@ describe('readwise adapter', () => {
     for (const raw of first) await ingestRaw(raw);
     const second = await adapter.poll();
     expect(second).toHaveLength(0);
-    const state = getAdapterState('readwise');
+    const state = await getAdapterState('readwise');
     expect(state?.cursor).toBe('2026-10-23T09:00:00Z');
   });
 
-  it('keeps content hashes stable for the same book', () => {
+  it('keeps content hashes stable for the same book', async () => {
     const book = { id: 1, title: 'T', author: null, updated: '2026-10-21T09:00:00Z', highlights: [{ id: 1, text: '  hello   world ', locator: 'u' }] };
     expect(bookToRawItem(book).contentHash).toBe(bookToRawItem(book).contentHash);
   });
 
-  it('rejects empty highlight books', () => {
+  it('rejects empty highlight books', async () => {
     expect(() => highlightPieces([])).toThrow();
     expect(() => highlightPieces([{ text: '   ' }])).toThrow();
   });
@@ -92,13 +92,13 @@ describe('vault adapter', () => {
     expect(note?.origin).toBe('vault');
     const result = await ingestRaw(note as NonNullable<typeof note>);
     expect(result.added).toBe(true);
-    const bundle = getItemBundle(result.itemId);
+    const bundle = await getItemBundle(result.itemId);
     expect(bundle?.item.status).toBe('ready');
     const locators = (bundle?.segments ?? []).map((segment) => segment.locator);
     expect(locators.some((locator) => (locator ?? '').startsWith('#'))).toBe(true);
   });
 
-  it('skips dot folders, excluded prefixes and stevens-skip notes', () => {
+  it('skips dot folders, excluded prefixes and stevens-skip notes', async () => {
     process.env.STEVENS_VAULT_EXCLUDE = 'Archive';
     seedVault();
     settleVault();
@@ -109,7 +109,7 @@ describe('vault adapter', () => {
     expect(ids.every((id) => !id.includes('.obsidian'))).toBe(true);
   });
 
-  it('reads tags, aliases and wikilink targets without ingesting frontmatter', () => {
+  it('reads tags, aliases and wikilink targets without ingesting frontmatter', async () => {
     seedVault();
     settleVault();
     const scan = scanVault();
@@ -124,7 +124,7 @@ describe('vault adapter', () => {
     expect(note?.text).not.toContain('aliases:');
   });
 
-  it('holds unsettled notes until the quiet period passes', () => {
+  it('holds unsettled notes until the quiet period passes', async () => {
     seedVault();
     const fresh = scanVault();
     expect(fresh.settled).toBe(false);
@@ -135,7 +135,7 @@ describe('vault adapter', () => {
     expect(settled.raws.length).toBeGreaterThan(0);
   });
 
-  it('never writes into a configured vault', () => {
+  it('never writes into a configured vault', async () => {
     const configured = mkdtempSync(join(tmpdir(), 'stevens-real-vault-'));
     writeFileSync(join(configured, 'mine.md'), '# Mine\n');
     process.env.STEVENS_VAULT_DIR = configured;
@@ -143,7 +143,7 @@ describe('vault adapter', () => {
     expect(readdirSync(configured)).toEqual(['mine.md']);
   });
 
-  it('parses frontmatter lists and the skip marker', () => {
+  it('parses frontmatter lists and the skip marker', async () => {
     const parsed = parseFrontmatter('---\ntags:\n  - a\n  - b\naliases: Solo\n---\n\nBody.\n');
     expect(parsed.skip).toBe(false);
     expect(parsed.tags).toEqual(['a', 'b']);
@@ -153,7 +153,7 @@ describe('vault adapter', () => {
     expect(parseFrontmatter('No frontmatter.\n').body).toBe('No frontmatter.\n');
   });
 
-  it('creates the default vault dir but not a configured one', () => {
+  it('creates the default vault dir but not a configured one', async () => {
     const dir = vaultDir();
     expect(statSync(dir).isDirectory()).toBe(true);
     const missing = join(tmpdir(), 'stevens-no-vault-' + Date.now());
@@ -163,14 +163,14 @@ describe('vault adapter', () => {
 });
 
 describe('note splitting', () => {
-  it('splits on headings and blank lines with heading locators', () => {
+  it('splits on headings and blank lines with heading locators', async () => {
     const pieces = splitNote('# Title\n\nFirst para.\n\n## Sub\n\nSecond para.\n\nThird para.');
     expect(pieces.map((piece) => piece.locator)).toEqual(['#Title', '#Sub', '#Sub']);
     expect(pieces[0].text).toBe('First para.');
     expect(pieces[2].text).toBe('Third para.');
   });
 
-  it('keeps locator note without headings', () => {
+  it('keeps locator note without headings', async () => {
     expect(splitNote('Just a note.')).toEqual([{ text: 'Just a note.', locator: 'note' }]);
   });
 });

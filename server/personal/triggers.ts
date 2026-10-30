@@ -44,7 +44,7 @@ export async function runMeetingTrigger(deps: TriggerDeps = {}): Promise<{ brief
   let meetings: (FirmMeeting & { origin: 'firm' | 'calendar' })[] = firmUpcoming.map((meeting) => ({ ...meeting, origin: 'firm' as const }));
   try {
     const pairs = firmUpcoming.map((meeting) => ({ id: meeting.dealId, company: meeting.company }));
-    meetings = [...meetings, ...calendarMeetings(pairs)];
+    meetings = [...meetings, ...(await calendarMeetings(pairs))];
   } catch {
     void 0;
   }

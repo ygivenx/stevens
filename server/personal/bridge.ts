@@ -64,14 +64,14 @@ export function firmTerms(firmClaims: Claim[]): string[] {
   return [...terms];
 }
 
-export function widenedPersonalClaims(firmClaims: Claim[], limit: number = 50): Claim[] {
-  const mine = allPersonalClaims();
+export async function widenedPersonalClaims(firmClaims: Claim[], limit: number = 50): Promise<Claim[]> {
+  const mine = await allPersonalClaims();
   const terms = firmTerms(firmClaims);
   const widened = new Map<string, Claim>();
   for (const claim of mine) widened.set(claim.id, claim);
   for (const term of terms) {
     try {
-      for (const hit of searchSegments(term, limit)) {
+      for (const hit of await searchSegments(term, limit)) {
         const found = mine.filter((claim) => claim.segmentId === hit.id);
         for (const claim of found) widened.set(claim.id, claim);
       }
@@ -96,7 +96,7 @@ export async function judgeBridges(slice: FirmSlice, deps: BridgeDeps = {}): Pro
   const shells = firmShells(slice);
   const shellById = new Map(shells.map((shell) => [shell.id, shell]));
   await ensureExtractedForTerms(firmTerms(slice.claims)).catch(() => {});
-  const mine = widenedPersonalClaims(slice.claims);
+  const mine = await widenedPersonalClaims(slice.claims);
   const judged: Bridge[] = [];
   const done = judgedPairs();
   for (const [personal, work] of candidates(mine, slice.claims)) {
@@ -105,7 +105,7 @@ export async function judgeBridges(slice: FirmSlice, deps: BridgeDeps = {}): Pro
     const key = stageKey('bridge', [personal.id, work.id].sort(), PROMPT_VERSION, WONDER_MODEL);
     if (done.has(pairKey) || findCompleted(key)) continue;
     const workSource = shellById.get(work.sourceId);
-    const mineSources = personalSources(ownerRole());
+    const mineSources = await personalSources(ownerRole());
     const personalSource = mineSources.find((source) => source.id === personal.sourceId);
     if (!personalSource || !workSource) continue;
     const { prompt, manifest } = assemble('bridge', ownerRole(), WONDER_MODEL, key, [personalSource, workSource], [personal, work], undefined, vettedMembership());

@@ -20,15 +20,15 @@ const TOKEN = 'test-agent-token-flow';
 
 let base: string;
 
-function usePersonal(): void {
-  closeDb();
-  closeFirmDb();
+async function usePersonal(): Promise<void> {
+  await closeDb();
+  await closeFirmDb();
   process.env.STEVENS_DATA_DIR = join(base, 'personal');
 }
 
-function useFirm(): void {
-  closeDb();
-  closeFirmDb();
+async function useFirm(): Promise<void> {
+  await closeDb();
+  await closeFirmDb();
   process.env.STEVENS_DATA_DIR = join(base, 'firm');
 }
 
@@ -63,10 +63,10 @@ beforeAll(async () => {
   }
   process.env.STEVENS_AGENT_TOKEN = TOKEN;
   process.env.STEVENS_NOW = '2026-10-28T14:00:00-04:00';
-  useFirm();
-  seedPeople(getFirmDb(), TOKEN);
+  await useFirm();
+  await seedPeople(TOKEN);
   await runConnectorSync({ reader: testReader() });
-  usePersonal();
+  await usePersonal();
   copyFileSync(join(process.cwd(), 'fixtures', 'personal', 'talk.wav'), join(base, 'personal', 'inbox', 'talk.wav'));
   await runInboxPoll();
   const { seedVault, scanVault } = await import('./adapters/vault.js');
@@ -85,17 +85,17 @@ beforeAll(async () => {
   await ingestVaultScan(scanVault());
 });
 
-afterAll(() => {
+afterAll(async () => {
   delete process.env.STEVENS_NOW;
-  closeDb();
-  closeFirmDb();
+  await closeDb();
+  await closeFirmDb();
 });
 
 async function heliosSlice(): Promise<FirmSlice> {
-  useFirm();
-  const person = agentFromHeader(TOKEN) as { id: string; name: string; role: 'Associate' };
-  const slice = agentContext(person, 'helios', 'brief');
-  usePersonal();
+  await useFirm();
+  const person = await agentFromHeader(TOKEN) as { id: string; name: string; role: 'Associate' };
+  const slice = await agentContext(person, 'helios', 'brief');
+  await usePersonal();
   return slice;
 }
 
@@ -108,10 +108,10 @@ describe('bridge over firm context', () => {
     expect(judged.length).toBeGreaterThan(0);
     const body = JSON.stringify(judged);
     for (const leaked of ['Lumen', 'Granite']) expect(body).not.toContain(leaked);
-    usePersonal();
+    await usePersonal();
   });
 
-  it('withholds a forged privy source even when marked visible', () => {
+  it('withholds a forged privy source even when marked visible', async () => {
     const forged: FirmSlice = {
       sources: [{ id: 'x', vault: 'enterprise', kind: 'memo', title: 'X', capturedAt: '2026-10-23T00:00:00Z', connector: 'crm', access: 'visible', ruleId: 'r-partner-only-associate' }],
       claims: [{ id: 'x-c0', sourceId: 'x', entity: 'e', quote: 'secret eleven' }],
@@ -129,7 +129,7 @@ describe('meeting trigger', () => {
   it('writes a cited brief for the upcoming meeting and never repeats', async () => {
     const contextFn = async () => heliosSlice();
     const meetingsFn = async () => [{ id: 'm-helios-2', dealId: 'helios', company: 'Helios', title: 'Helios second meeting', startsAt: '2026-10-29T10:00:00-04:00' }];
-    usePersonal();
+    await usePersonal();
     const first = await runMeetingTrigger({ meetingsFn, contextFn });
     expect(first.briefs).toHaveLength(1);
     expect(first.briefs[0].sentences.length).toBeGreaterThan(0);
@@ -147,7 +147,7 @@ describe('meeting trigger', () => {
 
 describe('ask and escalation', () => {
   it('holds, queues the escalation, and drafts an answer when the firm is down', async () => {
-    usePersonal();
+    await usePersonal();
     const result = await askQuestion('helios', 'Should we take the second meeting?', {
       privyFn: async () => {
         throw new Error('firm unreachable');
@@ -161,7 +161,7 @@ describe('ask and escalation', () => {
   }, 30000);
 
   it('replays the same question with zero new calls', async () => {
-    usePersonal();
+    await usePersonal();
     const before = calls('personal');
     const result = await askQuestion('helios', 'Should we take the second meeting?', {
       privyFn: async () => {
@@ -176,7 +176,7 @@ describe('ask and escalation', () => {
 
 describe('personal routes', () => {
   it('serves ask with 202 and share with 201 shapes ahead of legacy routes', async () => {
-    usePersonal();
+    await usePersonal();
     const mod = await import('./index.js');
     const asked = await mod.app.request('/api/ask', {
       method: 'POST',
@@ -197,7 +197,7 @@ describe('personal routes', () => {
 
 describe('share gate', () => {
   it('logs share.sent only after the firm answers 201', async () => {
-    usePersonal();
+    await usePersonal();
     const before = readLedger('personal').length;
     const claim = readAll().flatMap((e) => (e.type === 'claims.extracted' && e.itemId ? e.claims : []) as Claim[])[0];
     const result = await shareClaim(claim.id, 'helios', { releaseFn: async () => ({ documentId: 'rel-1' }) });
@@ -208,7 +208,7 @@ describe('share gate', () => {
   });
 
   it('never logs when the firm refuses', async () => {
-    usePersonal();
+    await usePersonal();
     const claim = readAll().flatMap((e) => (e.type === 'claims.extracted' && e.itemId ? e.claims : []) as Claim[])[0];
     await expect(shareClaim(claim.id, 'helios', {
       releaseFn: async () => {

@@ -25,7 +25,7 @@ const CLAIMS = [
 ];
 
 describe('assembler', () => {
-  it('keeps privy and excluded text out of Associate writer prompts', () => {
+  it('keeps privy and excluded text out of Associate writer prompts', async () => {
     for (const purpose of ['brief', 'answer'] as const) {
       const { prompt, manifest } = assemble(purpose, 'Associate', 'm', 'k', SOURCES, CLAIMS, { verdict: 'hold', routeTo: 'Partner' }, () => true);
       expect(prompt).toContain('TEAM-ALPHA-BRAVO');
@@ -43,7 +43,7 @@ describe('assembler', () => {
     }
   });
 
-  it('includes privy text only for the privy purpose', () => {
+  it('includes privy text only for the privy purpose', async () => {
     const privy = assemble('privy', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, () => true);
     expect(privy.prompt).toContain('MEMO-CHARLIE-DELTA-LUMEN');
     expect(privy.prompt).not.toContain('WALL-ECHO-FOXTROT');
@@ -51,7 +51,7 @@ describe('assembler', () => {
     expect(privy.manifest.included.map((i) => i.sourceId).sort()).toEqual(['memo1', 'mine1', 'team1']);
   });
 
-  it('shows the Partner everything except the wall and others personal', () => {
+  it('shows the Partner everything except the wall and others personal', async () => {
     const { prompt } = assemble('answer', 'Partner', 'm', 'k', SOURCES, CLAIMS, undefined, () => true);
     expect(prompt).toContain('MEMO-CHARLIE-DELTA-LUMEN');
     expect(prompt).toContain('THEIRS-INDIA-JULIET');
@@ -59,7 +59,7 @@ describe('assembler', () => {
     expect(prompt).not.toContain('MINE-GOLF-HOTEL');
   });
 
-  it('withholds team text from a non-member and weighs it under privy', () => {
+  it('withholds team text from a non-member and weighs it under privy', async () => {
     const brief = assemble('brief', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, (source) => source.vault === 'personal');
     expect(brief.prompt).not.toContain('TEAM-ALPHA-BRAVO');
     expect(brief.prompt).toContain('MINE-GOLF-HOTEL');
@@ -69,7 +69,7 @@ describe('assembler', () => {
     expect(withheld?.ruleId).toBe('r-team-associate-outside');
   });
 
-  it('records raw and assembled token estimates', () => {
+  it('records raw and assembled token estimates', async () => {
     const { manifest } = assemble('brief', 'Associate', 'm', 'k', SOURCES, CLAIMS, undefined, () => true);
     expect(manifest.tokens.raw).toBeGreaterThan(0);
     expect(manifest.tokens.assembled).toBeGreaterThanOrEqual(manifest.tokens.raw);

@@ -39,14 +39,14 @@ function seed(): void {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   const dir = mkdtempSync(join(tmpdir(), 'stevens-pipe-'));
   process.env.STEVENS_DATA_DIR = dir;
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
 });
 
 describe('day-5 pipeline', () => {
-  it('proposes candidate pairs sharing entity or metric family', () => {
+  it('proposes candidate pairs sharing entity or metric family', async () => {
     expect(candidates([C_TALK], [C_DECK])).toHaveLength(1);
     expect(candidates([C_TALK], [C_MEMO])).toHaveLength(0);
     const net = { ...C_DECK, id: 'deck1-c9', metric: 'Net churn' };
@@ -54,14 +54,14 @@ describe('day-5 pipeline', () => {
     expect(candidates([C_TALK, C_TALK], [C_DECK])).toHaveLength(1);
   });
 
-  it('rejects malformed verdicts and judgements', () => {
+  it('rejects malformed verdicts and judgements', async () => {
     expect(VerdictShape.safeParse({ verdict: 'maybe', routeTo: 'Intern' }).success).toBe(false);
     expect(VerdictShape.safeParse({ verdict: 'hold', routeTo: 'Partner', note: 'x' }).success).toBe(false);
     expect(VerdictShape.safeParse({ verdict: 'hold', routeTo: 'Partner' }).success).toBe(true);
     expect(Judgement.safeParse({ relation: 'maybe', reason: '' }).success).toBe(false);
   });
 
-  it('matches privy sources by entity', () => {
+  it('matches privy sources by entity', async () => {
     const claims = [C_TALK, C_DECK, C_MEMO];
     const sources = new Map([['talk1', TALK], ['deck1', DECK], ['memo1', MEMO]]);
     expect(matchPrivy('Should we take the second Helios meeting?', 'Associate', claims, sources).map((s) => s.id)).toEqual(['memo1']);

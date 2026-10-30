@@ -11,8 +11,8 @@ function brief(id: string): Draft {
   return { id, kind: 'brief', dealId: 'helios', questionId: 'q-' + id, verdict: 'go', sentences: [], bridges: [] };
 }
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   const dir = mkdtempSync(join(tmpdir(), 'stevens-state-'));
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_FIRM_URL = 'http://127.0.0.1:9';
@@ -20,9 +20,9 @@ beforeEach(() => {
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
 });
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.STEVENS_FIRM_URL;
-  closeDb();
+  await closeDb();
 });
 
 describe('replay status', () => {

@@ -8,8 +8,8 @@ import { runMeetingTrigger } from './triggers.js';
 import { askQuestion } from './answer.js';
 import { shareClaim } from './share.js';
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   const dir = mkdtempSync(join(tmpdir(), 'stevens-solo-'));
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_FIRM_URL = 'off';
@@ -18,14 +18,14 @@ beforeEach(() => {
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
 });
 
-afterEach(() => {
+afterEach(async () => {
   delete process.env.STEVENS_FIRM_URL;
   delete process.env.STEVENS_NOW;
-  closeDb();
+  await closeDb();
 });
 
-function insertEvent(): void {
-  replaceEvents([{
+async function insertEvent(): Promise<void> {
+  await replaceEvents([{
     uid: 'solo-1', title: 'Call with a founder', startsAt: '2026-10-27T14:00:00Z',
     endsAt: null, attendees: [], location: null, description: null,
   }]);
@@ -33,7 +33,7 @@ function insertEvent(): void {
 
 describe('solo mode', () => {
   it('reports solo state with only calendar meetings', async () => {
-    insertEvent();
+    await insertEvent();
     const state = await buildPersonalState();
     expect(state.solo).toBe(true);
     expect(state.firm.reachable).toBe(false);
@@ -45,19 +45,19 @@ describe('solo mode', () => {
   });
 
   it('writes a personal-only brief for a calendar meeting without firm calls', async () => {
-    insertEvent();
-    writeIngested(
+    await insertEvent();
+    await writeIngested(
       { id: 'it-solo', origin: 'vault', originId: 'solo-note', kind: 'note', title: 'Solo note', capturedAt: '2026-10-27T10:00:00Z', status: 'ready', hasMedia: false },
       [{ id: 'sg-solo', itemId: 'it-solo', seq: 0, text: 'Churn is 2% when you count logos.' }],
       { contentHash: 'hash-solo', ingestedAt: '2026-10-27T11:00:00Z' },
     );
-    writeClaims('it-solo', [{ id: 'cl-solo', sourceId: 'it-solo', segmentId: 'sg-solo', entity: 'Helios', metric: 'churn', value: '2%', quote: 'Churn is 2% when you count logos.' }]);
-    writeIngested(
+    await writeClaims('it-solo', [{ id: 'cl-solo', sourceId: 'it-solo', segmentId: 'sg-solo', entity: 'Helios', metric: 'churn', value: '2%', quote: 'Churn is 2% when you count logos.' }]);
+    await writeIngested(
       { id: 'it-solo-2', origin: 'vault', originId: 'solo-note-2', kind: 'note', title: 'Solo note 2', capturedAt: '2026-10-27T10:00:00Z', status: 'ready', hasMedia: false },
       [{ id: 'sg-solo-2', itemId: 'it-solo-2', seq: 0, text: 'Priya promised the logo count by Friday.' }],
       { contentHash: 'hash-solo-2', ingestedAt: '2026-10-27T11:00:00Z' },
     );
-    writeClaims('it-solo-2', [{ id: 'cl-solo-2', sourceId: 'it-solo-2', segmentId: 'sg-solo-2', entity: 'Helios', quote: 'Priya promised the logo count by Friday.' }]);
+    await writeClaims('it-solo-2', [{ id: 'cl-solo-2', sourceId: 'it-solo-2', segmentId: 'sg-solo-2', entity: 'Helios', quote: 'Priya promised the logo count by Friday.' }]);
     const { briefs } = await runMeetingTrigger({ meetingsFn: async () => [] });
     expect(briefs).toHaveLength(1);
     expect(briefs[0].sentences.length).toBeGreaterThan(0);
@@ -78,7 +78,7 @@ describe('solo mode', () => {
   });
 
   it('marks the meeting brief failed after a brief write failure', async () => {
-    insertEvent();
+    await insertEvent();
     const { append } = await import('../common/ledger/store.js');
     append({ at: '2026-10-27T13:00:00Z', type: 'attempt.failed', stageKey: 'k', stage: 'brief', model: 'm', error: 'writer down', dealId: '' });
     const { buildPersonalState } = await import('./state.js');

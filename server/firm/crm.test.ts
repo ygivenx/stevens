@@ -10,23 +10,23 @@ import { loadFormD } from './connectors/formd.js';
 import { draftEscalation, recipientName } from './decision.js';
 import { buildFirmState } from './state.js';
 import { closeFirmDb, documentAcl, firmDocuments, getFirmDb, isMember, recipientFor } from './store.js';
-import { defaultReader, fileMode, runConnectorSync, testReader } from './sync.js';
+import { defaultReader, runConnectorSync, testReader } from './sync.js';
 
 const TOKEN = 'test-agent-token-crm';
 
 beforeEach(async () => {
-  closeFirmDb();
+  await closeFirmDb();
   const dir = join(mkdtempSync(join(tmpdir(), 'stevens-crm-')), 'firm');
   mkdirSync(dir, { recursive: true });
   process.env.STEVENS_DATA_DIR = dir;
   process.env.STEVENS_AGENT_TOKEN = TOKEN;
   writeFileSync(join(dir, 'meta-fake.json'), JSON.stringify({ mode: 'normal' }));
   writeFileSync(join(dir, 'meta-calls.json'), JSON.stringify({ count: 0 }));
-  seedPeople(getFirmDb(), TOKEN);
+  await seedPeople(TOKEN);
 });
 
 describe('grantee mapping', () => {
-  it('maps crm roles to principals and passes the rest through', () => {
+  it('maps crm roles to principals and passes the rest through', async () => {
     expect(granteePrincipal('dh_all_staff')).toBe('all-staff');
     expect(granteePrincipal('dh_partners')).toBe('partners');
     expect(granteePrincipal('dh_deal_team_helios')).toBe('deal-team:helios');
@@ -38,7 +38,7 @@ describe('grantee mapping', () => {
 describe('crm sync', () => {
   it('fills memberships from the reader', async () => {
     await runConnectorSync({ reader: testReader() });
-    const rows = getFirmDb().prepare(`select person_id as personId, principal from memberships order by personId, principal`).all();
+    const rows = await (await getFirmDb()).all(`select person_id as personId, principal from memberships order by personId, principal`);
     expect(rows).toContainEqual({ personId: 'p-alex', principal: 'all-staff' });
     expect(rows).toContainEqual({ personId: 'p-alex', principal: 'deal-team:helios' });
     expect(rows).toContainEqual({ personId: 'p-alex', principal: 'deal-team:meridian' });
@@ -57,7 +57,7 @@ describe('crm sync', () => {
 
   it('keeps the legal-hold body out of firm.db', async () => {
     await runConnectorSync({ reader: testReader() });
-    const row = getFirmDb().prepare(`select body, title from documents where id = 'd-granite'`).get() as unknown as { body: string | null; title: string };
+    const row = await (await getFirmDb()).get<{ body: string | null; title: string }>(`select body, title from documents where id = 'd-granite'`);
     expect(row.title).toBe('Restricted: Project Granite');
     expect(row.body).toBeNull();
     const ledgerText = readAll().map((event) => JSON.stringify(event)).join('\n');
@@ -66,16 +66,16 @@ describe('crm sync', () => {
 
   it('deletes documents missing from the reader', async () => {
     await runConnectorSync({ reader: testReader() });
-    expect(firmDocuments().some((doc) => doc.id === 'd-meridian-notes')).toBe(true);
+    expect((await firmDocuments()).some((doc) => doc.id === 'd-meridian-notes')).toBe(true);
     const snap = loadCrm();
     const smaller = fixtureCrmReader({ ...snap, documents: snap.documents.filter((doc) => doc.id !== 'd-meridian-notes') });
     await runConnectorSync({ reader: smaller });
-    expect(firmDocuments().some((doc) => doc.id === 'd-meridian-notes')).toBe(false);
+    expect((await firmDocuments()).some((doc) => doc.id === 'd-meridian-notes')).toBe(false);
   });
 
   it('downgrades a document whose grant disappears', async () => {
     await runConnectorSync({ reader: testReader() });
-    const before = getFirmDb().prepare(`select body from documents where id = 'd-beacon-memo'`).get() as unknown as { body: string };
+    const before = await (await getFirmDb()).get<{ body: string }>(`select body from documents where id = 'd-beacon-memo'`);
     expect(before.body).toContain('Beacon diligence');
     const snap = loadCrm();
     const revoked: CrmReader = {
@@ -85,8 +85,8 @@ describe('crm sync', () => {
       bodiesFor: async () => [{ id: 'd-beacon-memo', body: null, mediaPath: null }],
     };
     await runConnectorSync({ reader: revoked });
-    expect(documentAcl('d-beacon-memo')).toEqual(['legal-hold:granite']);
-    const after = getFirmDb().prepare(`select body from documents where id = 'd-beacon-memo'`).get() as unknown as { body: string | null };
+    expect(await documentAcl('d-beacon-memo')).toEqual(['legal-hold:granite']);
+    const after = await (await getFirmDb()).get<{ body: string | null }>(`select body from documents where id = 'd-beacon-memo'`);
     expect(after.body).toBeNull();
   });
 
@@ -98,30 +98,30 @@ describe('crm sync', () => {
     };
     const result = await runConnectorSync({ reader: failing });
     expect(result.crmError).toContain('connection refused');
-    expect(firmDocuments().some((doc) => doc.id === 'd-helios-record')).toBe(true);
-    const row = getFirmDb().prepare(`select last_error as message, last_error_at as at from connector_state where connector = 'crm'`).get() as unknown as { message: string; at: string };
+    expect((await firmDocuments()).some((doc) => doc.id === 'd-helios-record')).toBe(true);
+    const row = await (await getFirmDb()).get<{ message: string; at: string }>(`select last_error as message, last_error_at as at from connector_state where connector = 'crm'`);
     expect(row.message).toContain('connection refused');
     expect(row.at.length).toBeGreaterThan(0);
-    expect(firmDocuments().some((doc) => doc.connector === 'sec-form-d')).toBe(true);
+    expect((await firmDocuments()).some((doc) => doc.connector === 'sec-form-d')).toBe(true);
   });
 });
 
 describe('membership', () => {
   it('requires one shared principal and every legal hold', async () => {
     await runConnectorSync({ reader: testReader() });
-    expect(isMember('p-alex', ['deal-team:helios'])).toBe(true);
-    expect(isMember('p-alex', ['deal-team:beacon'])).toBe(false);
-    expect(isMember('p-alex', ['all-staff'])).toBe(true);
-    expect(isMember('p-jordan', ['deal-team:helios'])).toBe(false);
-    expect(isMember('p-jordan', ['legal-hold:granite'])).toBe(false);
-    expect(isMember('p-alex', [])).toBe(false);
+    expect(await isMember('p-alex', ['deal-team:helios'])).toBe(true);
+    expect(await isMember('p-alex', ['deal-team:beacon'])).toBe(false);
+    expect(await isMember('p-alex', ['all-staff'])).toBe(true);
+    expect(await isMember('p-jordan', ['deal-team:helios'])).toBe(false);
+    expect(await isMember('p-jordan', ['legal-hold:granite'])).toBe(false);
+    expect(await isMember('p-alex', [])).toBe(false);
   });
 
   it('resolves the routed role to the teammate on the deal', async () => {
     await runConnectorSync({ reader: testReader() });
-    expect(recipientFor('Partner', 'helios')).toBe('p-morgan');
-    expect(recipientFor('Partner', 'beacon')).toBe('p-jordan');
-    expect(recipientFor('Associate', 'helios')).toBe('p-alex');
+    expect(await recipientFor('Partner', 'helios')).toBe('p-morgan');
+    expect(await recipientFor('Partner', 'beacon')).toBe('p-jordan');
+    expect(await recipientFor('Associate', 'helios')).toBe('p-alex');
   });
 });
 
@@ -131,17 +131,17 @@ describe('member gating', () => {
 
   it('shows Jordan the Helios memo as privy through context', async () => {
     await runConnectorSync({ reader: testReader() });
-    const seen = agentContext(jordan, 'helios', 'brief');
+    const seen = await agentContext(jordan, 'helios', 'brief');
     expect(seen.sources.map((source) => source.id)).not.toContain('d-helios-memo');
-    const mine = agentContext(alex, 'meridian', 'brief');
+    const mine = await agentContext(alex, 'meridian', 'brief');
     expect(mine.sources.map((source) => source.id)).toContain('d-meridian-notes');
-    const outside = agentContext(alex, 'beacon', 'brief');
+    const outside = await agentContext(alex, 'beacon', 'brief');
     expect(outside.sources.map((source) => source.id)).not.toContain('d-beacon-memo');
   });
 
   it('hides outside-team documents from the firm state', async () => {
     await runConnectorSync({ reader: testReader() });
-    const state = buildFirmState({ id: 'p-jordan', name: 'Jordan Blake', role: 'Partner' });
+    const state = await buildFirmState({ id: 'p-jordan', name: 'Jordan Blake', role: 'Partner' });
     const helios = state.deals.find((deal) => deal.id === 'helios');
     expect(helios?.documents.map((doc) => doc.id)).not.toContain('d-helios-memo');
     const beacon = state.deals.find((deal) => deal.id === 'beacon');
@@ -152,7 +152,7 @@ describe('member gating', () => {
     await runConnectorSync({ reader: testReader() });
     process.env.STEVENS_REPLAY = '1';
     try {
-      const state = buildFirmState({ id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' });
+      const state = await buildFirmState({ id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' });
       expect(state.status.line).toBe('Replaying a recorded run');
     } finally {
       delete process.env.STEVENS_REPLAY;
@@ -160,15 +160,12 @@ describe('member gating', () => {
   });
 });
 
-describe('scenario file mode', () => {
-  it('uses the fixture reader when FIRM_DATABASE_URL is unset', async () => {
+describe('scenario fixtures', () => {
+  it('refuses to sync when FIRM_DATABASE_URL is unset', async () => {
     const saved = process.env.FIRM_DATABASE_URL;
     delete process.env.FIRM_DATABASE_URL;
     try {
-      const reader = defaultReader();
-      const deals = await reader.deals();
-      expect(deals.map((deal) => deal.id)).toContain('helios');
-      expect(fileMode()).toBe(true);
+      expect(() => defaultReader()).toThrow('FIRM_DATABASE_URL is not set');
     } finally {
       if (saved === undefined) delete process.env.FIRM_DATABASE_URL;
       else process.env.FIRM_DATABASE_URL = saved;
@@ -177,13 +174,13 @@ describe('scenario file mode', () => {
 
   it('carries meeting askHint from the fixture into firm.db', async () => {
     await runConnectorSync({ reader: testReader() });
-    const row = getFirmDb().prepare(`select ask_hint as askHint from meetings where id = 'm-helios-2'`).get() as unknown as { askHint: string | null };
+    const row = await (await getFirmDb()).get<{ askHint: string | null }>(`select ask_hint as askHint from meetings where id = 'm-helios-2'`);
     expect(row.askHint).toBe('Should we take the second meeting?');
     const synced = readAll().find((event) => event.type === 'connector.synced');
     expect(synced && synced.type === 'connector.synced' ? synced.upserted.meetings[0].askHint : null).toBe('Should we take the second meeting?');
   });
 
-  it('reads the scenario display contract from crm.json', () => {
+  it('reads the scenario display contract from crm.json', async () => {
     const display = scenarioDisplay();
     expect(display.roleTitles).toEqual({ Associate: 'Associate', Partner: 'Partner' });
     expect(display.reviewerNoun).toBe('a Partner');
@@ -197,7 +194,7 @@ describe('scenario file mode', () => {
     process.env.STEVENS_FIXTURES_DIR = dir;
     try {
       expect(loadFormD().filings).toEqual([]);
-      const state = buildFirmState({ id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' });
+      const state = await buildFirmState({ id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' });
       expect(state.market).toEqual([]);
       expect(state.connectors.map((connector) => connector.id)).toEqual(['crm']);
     } finally {
@@ -206,11 +203,11 @@ describe('scenario file mode', () => {
     }
   });
 
-  it('maps the agent token to the STEVENS_OWNER person', () => {
+  it('maps the agent token to the STEVENS_OWNER person', async () => {
     process.env.STEVENS_OWNER = 'p-morgan';
     try {
-      seedPeople(getFirmDb(), TOKEN);
-      expect(personForToken(getFirmDb(), TOKEN)?.id).toBe('p-morgan');
+      await seedPeople(TOKEN);
+      expect((await personForToken(TOKEN))?.id).toBe('p-morgan');
     } finally {
       delete process.env.STEVENS_OWNER;
     }
@@ -218,7 +215,7 @@ describe('scenario file mode', () => {
 
   it('returns the escalation recipient name and reviewer noun', async () => {
     await runConnectorSync({ reader: testReader() });
-    expect(recipientName(recipientFor('Partner', 'helios'))).toBe('Morgan Hale');
+    expect(await recipientName(await recipientFor('Partner', 'helios'))).toBe('Morgan Hale');
     appendFirmEvent({ at: new Date().toISOString(), type: 'escalation.drafted', escalationId: 'es-1', questionId: 'q-1', dealId: 'helios', from: 'p-alex', to: 'Partner' });
     const sent = await draftEscalation('p-alex', 'helios', 'q-1', undefined);
     expect(sent.toName).toBe('Morgan Hale');

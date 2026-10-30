@@ -42,6 +42,18 @@ SCENARIOS = {
               'record_firm': 19087, 'record_personal': 19088},
 }
 
+SCENARIO_ENV = {'helios': '.env.local', 'forge': '.env.forge', 'mercy': '.env.mercy'}
+
+
+def scenario_setup(scn):
+    for script in ('scripts/firm-crm-setup.ts', 'scripts/personal-pg-setup.ts'):
+        plus('npx tsx %s --scenario %s --reset' % (script, scn))
+        setup = subprocess.run(['npx', 'tsx', script, '--scenario', scn, '--reset'], cwd=ROOT, capture_output=True, text=True, timeout=180)
+        print(setup.stdout, end='')
+        if setup.returncode != 0:
+            return fail('%s --scenario %s failed; run stevensctl crm-db up first (%s)' % (script, scn, setup.stderr.strip()[-200:]))
+    return 0
+
 
 def scenario_arg(argv):
     if '--scenario' in argv:
@@ -129,8 +141,6 @@ def sealed_env(name, scn=None):
     }
     if 'owner_title' in cfg:
         env['STEVENS_OWNER_TITLE'] = cfg['owner_title']
-    if scn != 'helios':
-        env['FIRM_DATABASE_URL'] = ''
     return env
 
 
@@ -262,14 +272,23 @@ def cmd_doctor(argv):
                 print('ok: GET /v1/models lists %s' % ', '.join(EXPECTED_MODELS))
         except Exception as e:
             rc |= fail('GET /v1/models failed (%s); check network and key' % e)
-    for key in ('FIRM_ADMIN_DATABASE_URL', 'FIRM_DATABASE_URL'):
-        url = read_env_value(key)
-        if not url:
-            rc |= fail('%s is not set in .env.local; run stevensctl crm-db up, then npx tsx scripts/firm-crm-setup.ts' % key)
-        elif not pg_ok(url):
-            rc |= fail('%s does not connect; run stevensctl crm-db up, then npx tsx scripts/firm-crm-setup.ts' % key)
-        else:
-            print('ok: %s connects (not shown)' % key)
+    admin = read_env_value('FIRM_ADMIN_DATABASE_URL')
+    if not admin:
+        rc |= fail('FIRM_ADMIN_DATABASE_URL is not set in .env.local; run stevensctl crm-db up')
+    elif not pg_ok(admin):
+        rc |= fail('FIRM_ADMIN_DATABASE_URL does not connect; run stevensctl crm-db up')
+    else:
+        print('ok: FIRM_ADMIN_DATABASE_URL connects (not shown)')
+    for scn, env_file in SCENARIO_ENV.items():
+        for key, script in (('FIRM_DATABASE_URL', 'firm-crm-setup'), ('PERSONAL_DATABASE_URL', 'personal-pg-setup')):
+            url = read_env_value(key, env_file)
+            fix = 'npx tsx scripts/%s.ts --scenario %s' % (script, scn)
+            if not url:
+                rc |= fail('%s is not set in %s; run %s' % (key, env_file, fix))
+            elif not pg_ok(url):
+                rc |= fail('%s in %s does not connect; run stevensctl crm-db up, then %s' % (key, env_file, fix))
+            else:
+                print('ok: %s %s connects (not shown)' % (scn, key))
     for port in (5173, 5174, 8787, 8788):
         if port_free(port):
             print('ok: port %d free' % port)
@@ -417,14 +436,13 @@ def cmd_stack(argv):
         print('port %d (yours): %s' % (cfg['personal'], 'free' if port_free(cfg['personal']) else 'in use'))
         print('health firm :%d: %s' % (cfg['firm'], 'ok' if server_healthy(cfg['firm']) else 'down'))
         print('health yours :%d: %s' % (cfg['personal'], 'ok' if server_healthy(cfg['personal']) else 'down'))
-        if scn == 'helios':
-            crm_url = read_env_value('FIRM_DATABASE_URL')
-            if not crm_url:
-                print('health firm crm :5433: not configured (run stevensctl crm-db up)')
+        env_file = SCENARIO_ENV.get(scn, '.env.local')
+        for label, key in (('firm pg', 'FIRM_DATABASE_URL'), ('personal pg', 'PERSONAL_DATABASE_URL')):
+            url = read_env_value(key, env_file)
+            if not url:
+                print('health %s: not configured (run the setup scripts)' % label)
             else:
-                print('health firm crm :5433: %s' % ('ok' if pg_ok(crm_url) else 'down'))
-        else:
-            print('health firm crm: file mode (crm.json, no Postgres)')
+                print('health %s: %s' % (label, 'ok' if pg_ok(url) else 'down'))
         print('data dir: %s' % instance_data_dir(name))
         return 0
     print('unknown stack verb: %s (see stevensctl stack --help)' % verb, file=sys.stderr)
@@ -439,8 +457,8 @@ def cmd_seed(argv):
         print('Verifies the scenario manifest.json, rebuilds this instance vault from')
         print('personal/vault/, empties its inbox, truncates both process')
         print('ledgers, resets the Meta call counter and sets the fake to normal.')
-        print('Runs firm-crm-setup for helios so the firm syncs from Postgres, then restarts.')
-        print('Other scenarios run the firm on crm.json (file mode, no Postgres).\n')
+        print('Runs both setup scripts for the scenario (firm CRM + personal database, reset),')
+        print('then restarts so both processes rebuild from fixtures.\n')
         print('Examples:')
         print('  stevensctl stack up && stevensctl seed')
         print('  stevensctl stack up --scenario forge && stevensctl seed --scenario forge')
@@ -499,14 +517,9 @@ def cmd_seed(argv):
     if os.path.exists(derived):
         shutil.rmtree(derived)
     print('seed: %d fixtures verified, state fresh, fake normal, counter 0' % len(entries))
-    if scn == 'helios':
-        plus('npx tsx scripts/firm-crm-setup.ts')
-        setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
-        print(setup.stdout, end='')
-        if setup.returncode != 0:
-            return fail('firm-crm-setup failed; run stevensctl crm-db up first (%s)' % setup.stderr.strip()[-200:])
-    else:
-        print('seed: scenario %s runs the firm on crm.json (file mode, no Postgres)' % scn)
+    rc = scenario_setup(scn)
+    if rc != 0:
+        return rc
     print('seed: restarting the stack so both processes rebuild from fixtures')
     restart_argv = ['restart', '--instance', name, '--scenario', scn]
     if '--now' in argv:
@@ -1164,8 +1177,8 @@ PG_NODE = (
 )
 
 
-def read_env_value(key):
-    env_path = os.path.join(ROOT, '.env.local')
+def read_env_value(key, filename='.env.local'):
+    env_path = os.path.join(ROOT, filename)
     if not os.path.exists(env_path):
         return None
     with open(env_path) as f:
@@ -1445,14 +1458,9 @@ def cmd_record_replay(argv):
     for root, _, files in os.walk(vault_dir):
         for name in files:
             os.utime(os.path.join(root, name), (hour_ago, hour_ago))
-    if scn == 'helios':
-        plus('npx tsx scripts/firm-crm-setup.ts')
-        setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
-        print(setup.stdout, end='')
-        if setup.returncode != 0:
-            return fail('firm-crm-setup failed; run stevensctl crm-db up first')
-    else:
-        print('record-replay: scenario %s records in file mode (no Postgres)' % scn)
+    rc = scenario_setup(scn)
+    if rc != 0:
+        return rc
     env = dict(os.environ)
     env.update({
         'STEVENS_DATA_DIR': data,
@@ -1475,8 +1483,6 @@ def cmd_record_replay(argv):
     })
     if 'owner_title' in cfg:
         env['STEVENS_OWNER_TITLE'] = cfg['owner_title']
-    if scn != 'helios':
-        env['FIRM_DATABASE_URL'] = ''
     log = open(os.path.join(record, 'servers.log'), 'a')
     procs = []
     try:

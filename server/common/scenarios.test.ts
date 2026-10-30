@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DEFAULT_DISPLAY, devBlock, SCENARIOS, scenarioId } from './scenarios.js';
 
 describe('scenarios', () => {
-  it('maps every scenario to distinct ports', () => {
+  it('maps every scenario to distinct ports', async () => {
     const seen = new Set<number>();
     for (const entry of Object.values(SCENARIOS)) {
       for (const port of [entry.ports.yoursWeb, entry.ports.firmWeb, entry.ports.firm, entry.ports.personal]) {
@@ -13,7 +13,7 @@ describe('scenarios', () => {
     expect(SCENARIOS.helios.ports.personal).toBe(8788);
   });
 
-  it('reads the scenario id from the environment with a helios default', () => {
+  it('reads the scenario id from the environment with a helios default', async () => {
     const saved = process.env.STEVENS_SCENARIO;
     delete process.env.STEVENS_SCENARIO;
     try {
@@ -26,7 +26,7 @@ describe('scenarios', () => {
     }
   });
 
-  it('keeps the default display on the helios contract', () => {
+  it('keeps the default display on the helios contract', async () => {
     expect(DEFAULT_DISPLAY.roleTitles).toEqual({ Associate: 'Associate', Partner: 'Partner' });
     expect(DEFAULT_DISPLAY.reviewerNoun).toBe('a Partner');
     expect(DEFAULT_DISPLAY.labels).toEqual({
@@ -36,7 +36,7 @@ describe('scenarios', () => {
     expect(DEFAULT_DISPLAY.firmDataLabel).toBe('Fictional firm data');
   });
 
-  it('serves the dev block only under STEVENS_DEV=1', () => {
+  it('serves the dev block only under STEVENS_DEV=1', async () => {
     const savedDev = process.env.STEVENS_DEV;
     const savedScenario = process.env.STEVENS_SCENARIO;
     delete process.env.STEVENS_DEV;

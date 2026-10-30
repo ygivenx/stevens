@@ -2,7 +2,6 @@ import { serve } from '@hono/node-server';
 import { readFileSync, existsSync } from 'node:fs';
 import { join, extname, sep } from 'node:path';
 import { createApp } from '../common/app.js';
-import { openProcessDb } from '../common/db.js';
 import { readAll } from '../common/ledger/store.js';
 import { InboxAdapter } from './adapters/inbox.js';
 import { VaultAdapter, scanVault, seedVault, vaultPaths } from './adapters/vault.js';
@@ -22,10 +21,6 @@ if (!process.env.STEVENS_DATA_DIR || process.env.STEVENS_DATA_DIR === join(proce
   process.env.STEVENS_DATA_DIR = join(process.env.STEVENS_DATA_DIR, 'personal');
 }
 
-const schemaFile = join(process.cwd(), 'server', 'personal', 'db', 'schema.sql');
-
-export const db = openProcessDb('personal.db', schemaFile);
-
 const MEDIA_TYPES: Record<string, string> = { '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.mp4': 'video/mp4', '.mov': 'video/quicktime' };
 
 function devEnabled(): boolean {
@@ -38,14 +33,14 @@ export const app = createApp({
     extra.get('/api/state', async (c) => c.json(await buildPersonalState()));
     extra.get('/api/owner', (c) => c.json({ owner: process.env.STEVENS_OWNER ?? 'p-alex' }));
 
-    extra.get('/api/items/:itemId', (c) => {
-      const bundle = getItemBundle(c.req.param('itemId'));
+    extra.get('/api/items/:itemId', async (c) => {
+      const bundle = await getItemBundle(c.req.param('itemId'));
       if (!bundle) return c.json({ error: 'unknown item' }, 404);
       return c.json(bundle);
     });
 
-    extra.get('/api/media/:itemId', (c) => {
-      const path = mediaPathForItem(c.req.param('itemId'));
+    extra.get('/api/media/:itemId', async (c) => {
+      const path = await mediaPathForItem(c.req.param('itemId'));
       if (!path || !existsSync(path)) return c.json({ error: 'unknown item' }, 404);
       const body = readFileSync(path);
       c.header('Content-Type', MEDIA_TYPES[extname(path).toLowerCase()] ?? 'application/octet-stream');
@@ -96,8 +91,8 @@ export const app = createApp({
       }
     });
 
-    extra.get('/api/receipts/:draftId', (c) => {
-      return c.json(receiptsFor(c.req.param('draftId')));
+    extra.get('/api/receipts/:draftId', async (c) => {
+      return c.json(await receiptsFor(c.req.param('draftId')));
     });
   },
 });
@@ -114,11 +109,11 @@ export async function pollVault(deps: IngestDeps = {}): Promise<{ added: number;
     const scan = scanVault();
     const { added } = await ingestVaultScan(scan, deps);
     const onDisk = new Set(vaultPaths());
-    const retired = retireVaultRemoved(activeOriginIds('vault').filter((originId) => !onDisk.has(originId)));
-    setAdapterState('vault', { lastSyncAt: new Date().toISOString(), lastError: null });
+    const retired = await retireVaultRemoved((await activeOriginIds('vault')).filter((originId) => !onDisk.has(originId)));
+    await setAdapterState('vault', { lastSyncAt: new Date().toISOString(), lastError: null });
     return { added, retired };
   } catch (err) {
-    setAdapterState('vault', { lastError: err instanceof Error ? err.message : String(err) });
+    await setAdapterState('vault', { lastError: err instanceof Error ? err.message : String(err) });
     return { added: 0, retired: 0 };
   }
 }
@@ -132,9 +127,9 @@ export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: numbe
   }
   try {
     counts.readwise = (await ingestRaws(await readwise.poll(), deps)).added;
-    setAdapterState('readwise', { lastError: null });
+    await setAdapterState('readwise', { lastError: null });
   } catch (err) {
-    setAdapterState('readwise', { lastError: err instanceof Error ? err.message : String(err) });
+    await setAdapterState('readwise', { lastError: err instanceof Error ? err.message : String(err) });
   }
   try {
     counts.vault = (await pollVault(deps)).added;
@@ -155,7 +150,7 @@ export async function pollSources(deps: IngestDeps = {}): Promise<{ inbox: numbe
 
 export function bootPersonal(): () => void {
   seedVault();
-  ensureDb(readAll());
+  void ensureDb(readAll()).catch(() => {});
   if (process.env.STEVENS_REPLAY === '1') return () => {};
   void pollSources().catch(() => {});
   const stopInbox = inbox.watch((raws) => {
@@ -170,13 +165,13 @@ export function bootPersonal(): () => void {
       }).catch(() => {});
     },
     (originIds) => {
-      if (retireVaultRemoved(originIds) > 0) void runMeetingTrigger().catch(() => {});
+      void retireVaultRemoved(originIds).then((retired) => { if (retired > 0) void runMeetingTrigger().catch(() => {}); }).catch(() => {});
     },
   );
   const interval = setInterval(() => {
     void readwise.poll().then((raws) => ingestRaws(raws)).then(
-      () => setAdapterState('readwise', { lastError: null }),
-      (err: unknown) => setAdapterState('readwise', { lastError: err instanceof Error ? err.message : String(err) }),
+      () => setAdapterState('readwise', { lastError: null }).catch(() => {}),
+      (err: unknown) => setAdapterState('readwise', { lastError: err instanceof Error ? err.message : String(err) }).catch(() => {}),
     );
     void syncCalendar().then((result) => {
       if (result.changed) void runMeetingTrigger().catch(() => {});
