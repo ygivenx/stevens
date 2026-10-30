@@ -545,7 +545,7 @@ def cmd_api(argv):
     if '--help' in argv or '--as' not in argv:
         print('stevensctl api: drive the app HTTP surface as a role.\n')
         print('Usage: stevensctl api --as Associate|Partner [--via yours|firm|agent] SURFACE [--expect CODE] [--field PATH] [--save FILE] [--until PATH] [--instance NAME]\n')
-        print('Surfaces (yours :8788): health, state, items/<id>, ask, share/<claimId>, receipts/<id>.')
+        print('Surfaces (yours :8788): health, state, items/<id>, ask, chat, share/<claimId>, receipts/<id>.')
         print('Surfaces (firm :8787): health, people, state, approve/<id>, reject/<id>, media/<id>, receipts/<id>.')
         print('Surfaces (agent :8787): me, meetings, context, privy.')
         print('Legacy v2.1 surfaces (firm :8787): ingest, extract, bridge, brief, ask, switch, transcript/<id>, release/<id>.')
@@ -593,6 +593,8 @@ def cmd_api(argv):
         method, path = 'POST', '/agent/privy'
     elif not agent and via == 'yours' and surface == 'ask':
         method, path = 'POST', '/api/ask'
+    elif not agent and via == 'yours' and surface == 'chat':
+        method, path = 'POST', '/api/chat'
     elif not agent and via == 'yours' and surface and surface.startswith('share/'):
         method, path = 'POST', '/api/' + surface
     elif not agent and via == 'yours' and surface and surface.startswith('items/'):

@@ -308,9 +308,44 @@ export async function rebuildFromLedger(events: LedgerEvent[]): Promise<{ items:
     } else if (event.type === 'claims.extracted' && event.itemId) {
       await writeClaims(event.itemId, event.claims);
       claims += event.claims.length;
+    } else if (event.type === 'chat.asked') {
+      await appendChatMessage({ id: event.messageId, questionId: event.questionId, role: 'user', text: event.text, citations: null, createdAt: event.at });
+    } else if (event.type === 'chat.replied') {
+      const text = event.sentences.map((sentence) => sentence.text).join(' ');
+      await appendChatMessage({ id: event.messageId, questionId: event.questionId, role: 'assistant', text, citations: JSON.stringify(event.sentences), createdAt: event.at });
     }
   }
   return { items, claims };
+}
+
+export interface ChatRow { id: string; questionId: string; role: string; text: string; citations: string | null; createdAt: string }
+
+export async function appendChatMessage(row: ChatRow): Promise<void> {
+  const db = await getDb();
+  await db.run(
+    `insert into conversations (id, question_id, role, text, citations, created_at) values ($1, $2, $3, $4, $5, $6)
+     on conflict(id) do nothing`,
+    row.id, row.questionId, row.role, row.text, row.citations, row.createdAt,
+  );
+}
+
+export async function chatThread(questionId: string): Promise<ChatRow[]> {
+  const db = await getDb();
+  return db.all<ChatRow>(
+    `select id, question_id as "questionId", role, text, citations, created_at as "createdAt"
+     from conversations where question_id = $1 and role in ('user', 'assistant')
+     order by created_at, id`,
+    questionId,
+  );
+}
+
+export async function chatContext(questionId: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.get<{ citations: string | null }>(
+    `select citations from conversations where question_id = $1 and role = 'context' order by created_at desc limit 1`,
+    questionId,
+  );
+  return row?.citations ?? null;
 }
 
 export async function ensureDb(events: LedgerEvent[]): Promise<{ rebuilt: boolean; items: number; claims: number }> {

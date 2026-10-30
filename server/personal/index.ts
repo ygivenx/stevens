@@ -13,6 +13,9 @@ import { ingestRaws, ingestVaultScan, retireVaultRemoved, runInboxPoll, type Ing
 import { startEscalationRetry, startTriggerLoop, runMeetingTrigger } from './triggers.js';
 import { receiptsFor } from './receipts.js';
 import { shareClaim } from './share.js';
+import { chatReply } from './chat.js';
+
+if (process.env.MODEL_API_KEY && !process.env.META_API_KEY) process.env.META_API_KEY = process.env.MODEL_API_KEY;
 import { activeOriginIds, ensureDb, getItemBundle, mediaPathForItem, setAdapterState } from './store.js';
 
 if (!process.env.STEVENS_DATA_DIR || process.env.STEVENS_DATA_DIR === join(process.cwd(), 'data')) {
@@ -93,6 +96,20 @@ export const app = createApp({
 
     extra.get('/api/receipts/:draftId', async (c) => {
       return c.json(await receiptsFor(c.req.param('draftId')));
+    });
+
+    extra.post('/api/chat', async (c) => {
+      const body = (await c.req.json().catch(() => ({}))) as { questionId?: string; message?: string };
+      if (!body.questionId || !body.message) return c.json({ error: 'questionId and message are required' }, 400);
+      try {
+        const result = await chatReply(body.questionId, body.message);
+        return c.json({ sentences: result.sentences, dropped: result.dropped }, 200);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message === 'unknown question') return c.json({ error: message }, 404);
+        if (message === 'empty message' || message === 'message too long') return c.json({ error: message }, 400);
+        return c.json({ error: message }, 500);
+      }
     });
   },
 });

@@ -39,6 +39,12 @@ export type Citation =
 export interface Bridge { id: string; personalClaimId: string; workClaimId: string;
   relation: 'contradicts' | 'supports' | 'context'; reason: string }
 
+export interface Sentence { text: string; citations: Citation[] }
+
+export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; sentences: Sentence[]; at: string }
+
+export interface ChatThread { questionId: string; dealId: string; messages: ChatMessage[] }
+
 export interface Receipt {
   callId: string; purpose: Purpose; model: string; at: string; costUsd: number;
   included: { label: string; access: Access; ruleId: string }[];
@@ -120,4 +126,7 @@ export type LedgerEvent = { at: string } & (
   | { type: 'context.served'; personId: string; dealId: string; purpose: Purpose; sourceIds: string[] }
   | { type: 'attempt.failed'; stageKey: string; stage?: string; model: string; error: string; usage?: Usage; dealId?: string; questionId?: string }
   | { type: 'role.switched'; role: Role }
-  | { type: 'draft.approved' | 'draft.rejected'; draftId: string; by: Role });
+  | { type: 'draft.approved' | 'draft.rejected'; draftId: string; by: Role }
+  | { type: 'chat.started'; questionId: string; dealId: string; conversationId: number }
+  | { type: 'chat.asked'; questionId: string; messageId: string; text: string }
+  | { type: 'chat.replied'; questionId: string; messageId: string; sentences: Sentence[]; dropped: number; api: Api });
