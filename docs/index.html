@@ -36,7 +36,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <header class="hero">
 <h1>Stevens</h1>
 <p class="tag"><strong>Stevens drafts; the human decides.</strong> A chief of staff that makes what you learn count at work, without leaking either side.</p>
-<p class="meta">Solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission Wed Nov 4, 2026, 9 PM ET. Status: <span class="pill">Buffer done · video needs owner</span> Spec v3.1</p>
+<p class="meta">Solo entry for the Meta Global AI Developer Hackathon (Build for Your World). Submission Wed Nov 4, 2026, 9 PM ET. Status: <span class="pill">v3.3 done · 3 scenarios + chat · video needs owner</span> Spec v3.3</p>
 <div class="links">
 <a href="feature-map.html">Feature map</a>
 <a href="https://github.com/ygivenx/stevens/blob/main/SPEC.md">SPEC.md</a>
@@ -63,6 +63,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <li><strong>Share and approve (2:15).</strong> Alex shares the churn quote; the sheet shows exactly what crosses. It appears in Morgan's Helios record. Morgan sees the conflicts memo (Helios competes with portfolio company Lumen) and Stevens' draft decision, and approves it.</li>
 <li><strong>Close (2:50).</strong> "Your notebook stays yours. The firm's secrets stay the firm's." Tagline.</li>
 </ol>
+<p>Two more demos run on the same machinery with their own stacks and Postgres databases: <strong>forge</strong> (Rae Delgado, staff engineer across three teams — her AI-evals reading punctures a vendor's 41% deflection claim) and <strong>mercy</strong> (Dr. Amara Osei, oncologist — a Nature paper she bookmarked yesterday changes a tumor-board review; all clinical data fictional). Each scenario keeps one firm and one personal Postgres database, written through the ingestion layer. After the first answer, the owner can ask follow-ups in a chat thread under the Answer block.</p>
 </section>
 
 <section class="card">
@@ -118,7 +119,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 
 <section class="card">
 <h2>Stretch (gated)</h2>
-<p><strong>Follow-up chat in Stevens · yours</strong>, through <code>@earendil-works/pi-durable</code> pinned to exactly <code>1.4.0</code>, with tools over the owner's notebook and the firm context already fetched. It starts only if day 14's exit check passes by end of Sun Nov 1 and the user confirms. It is first to cut.</p>
+<p><strong>Follow-up chat in Stevens · yours</strong> shipped Oct 30: through <code>@earendil-works/pi-durable</code> pinned to exactly <code>1.4.0</code>, with tools over the owner's notebook and the firm context already fetched, every sentence cited. The thread sits under the Answer block.</p>
 <p><strong>Preference learning</strong> is design only. Not built in this hackathon.</p>
 </section>
 
@@ -146,7 +147,12 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <tr><td>R2</td><td>Thu Oct 29</td><td>Solo mode and calendar; live Readwise check needs the owner token</td><td><span class="pill">code done</span></td></tr>
 <tr><td>R3</td><td>Fri Oct 30</td><td>Firm CRM on Postgres: roles, grants, RLS, membership in policy, crm-db + drills in stevensctl</td><td><span class="pill">done</span></td></tr>
 <tr><td>R4</td><td>Sat Oct 31</td><td>Seed additions, judge path (recorded demo), docs</td><td><span class="pill">done</span></td></tr>
-<tr><td>15</td><td>Mon Nov 2</td><td>Failure drills (16/16 green), honesty labels, docs; rough cut and stretch go/no-go need the owner</td><td><span class="pill">code done</span></td></tr>
+<tr><td>S1</td><td>Fri Oct 30</td><td>Scenario infrastructure: data-driven UI, dev switcher bar, stevensctl --scenario, media generator</td><td><span class="pill">done</span></td></tr>
+<tr><td>P1</td><td>Fri Oct 30</td><td>v3.3: async store layer, firm + personal Postgres per scenario, sqlite offline backend, parity tests</td><td><span class="pill">done</span></td></tr>
+<tr><td>S2</td><td>Fri Oct 30</td><td>forge fixtures + pipeline: Compass deflection bridge, hold + escalation, share, EM approves; replay recorded</td><td><span class="pill">done</span></td></tr>
+<tr><td>S3</td><td>Fri Oct 30</td><td>mercy fixtures + pipeline: M-2417 biomarker bridge; replay recorded</td><td><span class="pill">done</span></td></tr>
+<tr><td>C1</td><td>Fri Oct 30</td><td>Stretch chat shipped: pi-durable threads, notebook tools, cited replies, live-verified on forge</td><td><span class="pill">done</span></td></tr>
+<tr><td>15</td><td>Mon Nov 2</td><td>Failure drills (16/16 green), honesty labels, docs; rough cut needs the owner</td><td><span class="pill">code done</span></td></tr>
 <tr><td>16</td><td>Tue Nov 3</td><td>Final video; buffer</td><td><span class="pill">planned</span></td></tr>
 <tr><td>–</td><td>Wed Nov 4</td><td>Submit by midday; 9 PM ET hard deadline</td><td><span class="pill">planned</span></td></tr>
 </table>
@@ -156,7 +162,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 <section class="card">
 <h2>Links</h2>
 <ul>
-<li><a href="feature-map.html">Feature map</a> — UI surfaces <code>beta</code> via 7 Chromium flows, all 3 journeys PASS; stretch chat <code>deferred</code>, ready pending confirmation; the rest <code>planned</code> (stretch chat <code>deferred</code>).</li>
+<li><a href="feature-map.html">Feature map</a> — predates the v3.2+ scenario work and is stale; the map sources were never committed. Suite state at last merge: 190/190 green; forge + mercy browser flows 9/9 each; replays recorded for all three scenarios.</li>
 <li><a href="https://github.com/ygivenx/stevens/blob/main/SPEC.md">SPEC.md</a> — source of truth for product, models, contracts, build order, and validation.</li>
 <li><a href="https://github.com/ygivenx/stevens/blob/main/AGENTS.md">AGENTS.md</a> — project rules, including the phase-0 exit check.</li>
 <li><a href="https://github.com/ygivenx/stevens/blob/main/spikes/day1/README.md">Day-1 spike log</a> — both gates, the Wonder A/B, and the tool-call check, with IDs, costs, and rerun commands.</li>
@@ -165,7 +171,7 @@ footer{margin-top:28px;font-size:13px;color:var(--mute)}
 </section>
 
 <footer>
-<p>Stevens site, 2026-10-28. v3.1 is built: real personal sources, solo mode, Postgres firm CRM, recorded demo, failure drills. Remaining for the user: the demo video, the stretch go/no-go, a live Readwise check, the real glasses shoot. All content is taken from SPEC.md; all personal and firm data is fictional except public SEC Form D filings.</p>
+<p>Stevens site, 2026-10-30. v3.3 is built: three scenarios on firm + personal Postgres, recorded replays, follow-up chat. Remaining for the user: the demo video, a live Readwise check, the real glasses shoot. All content is taken from SPEC.md; all personal and firm data is fictional except public SEC Form D filings.</p>
 </footer>
 </div>
 </body>
