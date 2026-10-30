@@ -1,0 +1,17 @@
+{
+  "people": [
+    {"id": "p-rae", "name": "Rae Delgado", "role": "Associate"},
+    {"id": "p-theo", "name": "Theo Osei", "role": "Partner"}
+  ],
+  "deals": [],
+  "dealTeam": [],
+  "meetings": [],
+  "documents": [],
+  "portfolio": [],
+  "display": {
+    "roleTitles": {"Associate": "Staff Engineer", "Partner": "EM"},
+    "reviewerNoun": "the EM",
+    "labels": {"sourcePrefix": "Eng drive", "team": "Team", "restricted": "Leads", "workColumn": "The request says", "personalColumn": "You read", "unit": "requests"},
+    "firmDataLabel": "Fictional firm data"
+  }
+}

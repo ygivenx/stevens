@@ -19,8 +19,17 @@ export function closeFirmDb(): void {
   handle = null;
 }
 
+export function ensureMeetingAskHint(): void {
+  const db = getFirmDb();
+  const columns = db.prepare(`pragma table_info(meetings)`).all() as unknown as { name: string }[];
+  if (!columns.some((column) => column.name === 'ask_hint')) {
+    db.exec(`alter table meetings add column ask_hint text`);
+  }
+}
+
 export function syncCrmSnapshot(snap: CrmSnapshot): void {
   const db = getFirmDb();
+  ensureMeetingAskHint();
   db.exec('BEGIN');
   try {
     const upsertPerson = db.prepare(
@@ -36,10 +45,10 @@ export function syncCrmSnapshot(snap: CrmSnapshot): void {
     const joinTeam = db.prepare(`insert or ignore into deal_team (deal_id, person_id) values (?, ?)`);
     for (const row of snap.dealTeam) joinTeam.run(row.dealId, row.personId);
     const upsertMeeting = db.prepare(
-      `insert into meetings (id, deal_id, title, starts_at) values (?, ?, ?, ?)
-       on conflict(id) do update set deal_id = excluded.deal_id, title = excluded.title, starts_at = excluded.starts_at`,
+      `insert into meetings (id, deal_id, title, starts_at, ask_hint) values (?, ?, ?, ?, ?)
+       on conflict(id) do update set deal_id = excluded.deal_id, title = excluded.title, starts_at = excluded.starts_at, ask_hint = excluded.ask_hint`,
     );
-    for (const meeting of snap.meetings) upsertMeeting.run(meeting.id, meeting.dealId, meeting.title, meeting.startsAt);
+    for (const meeting of snap.meetings) upsertMeeting.run(meeting.id, meeting.dealId, meeting.title, meeting.startsAt, meeting.askHint ?? null);
     const upsertPortfolio = db.prepare(
       `insert into portfolio (company, sector) values (?, ?)
        on conflict(company) do update set sector = excluded.sector`,

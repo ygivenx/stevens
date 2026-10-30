@@ -44,7 +44,7 @@ export async function writeMeetingBrief(dealId: string, company: string, slice: 
   }
   const resolved = resolveSentences(written.sentences, claimById, sourceById);
   const draft: Draft = {
-    id: draftIdFor('br', key), kind: 'brief', dealId, viewerId: process.env.STEVENS_OWNER ?? 'p-alex', viewerRole: viewer,
+    id: draftIdFor('br', key), kind: 'brief', dealId, company, viewerId: process.env.STEVENS_OWNER ?? 'p-alex', viewerRole: viewer,
     sentences: resolved.kept, droppedSentences: resolved.dropped, bridges,
     status: 'draft',
   };

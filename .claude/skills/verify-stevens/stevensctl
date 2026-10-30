@@ -27,12 +27,63 @@ def fail(message):
     return 1
 
 
+SCENARIOS = {
+    'helios': {'yours_web': 5173, 'firm_web': 5174, 'firm': 8787, 'personal': 8788,
+               'fixtures': 'fixtures', 'owner': 'p-alex', 'owner_name': 'Alex Rivera',
+               'deal': 'helios', 'question': 'Should we take the second meeting?', 'reviewer': 'p-morgan',
+               'record_firm': 18887, 'record_personal': 18888},
+    'forge': {'yours_web': 5273, 'firm_web': 5274, 'firm': 8887, 'personal': 8888,
+              'fixtures': 'fixtures/forge', 'owner': 'p-rae', 'owner_name': 'Rae Delgado', 'owner_title': 'Staff Engineer',
+              'deal': 'compass', 'question': 'Should Compass ship the support copilot?', 'reviewer': 'p-theo',
+              'record_firm': 18987, 'record_personal': 18988},
+    'mercy': {'yours_web': 5373, 'firm_web': 5374, 'firm': 8987, 'personal': 8988,
+              'fixtures': 'fixtures/mercy', 'owner': 'p-amara', 'owner_name': 'Dr. Amara Osei', 'owner_title': 'Oncologist',
+              'deal': 'm-2417', 'question': 'Should we change the plan for case M-2417?', 'reviewer': 'p-helen',
+              'record_firm': 19087, 'record_personal': 19088},
+}
+
+
+def scenario_arg(argv):
+    if '--scenario' in argv:
+        i = argv.index('--scenario')
+        if i + 1 >= len(argv):
+            return None
+        return argv[i + 1]
+    return os.environ.get('STEVENS_SCENARIO')
+
+
+def scenario_file(name):
+    return os.path.join(instance_dir(name), 'scenario')
+
+
+def instance_scenario(name, argv):
+    explicit = scenario_arg(argv)
+    if explicit:
+        return explicit
+    path = scenario_file(name)
+    if os.path.exists(path):
+        with open(path) as f:
+            stored = f.read().strip()
+        if stored:
+            return stored
+    return 'helios'
+
+
+def scenario_config(name):
+    if name not in SCENARIOS:
+        return None
+    return SCENARIOS[name]
+
+
 def instance_name(argv):
     if '--instance' in argv:
         i = argv.index('--instance')
         if i + 1 >= len(argv):
             return None
         return argv[i + 1]
+    explicit = scenario_arg(argv)
+    if explicit:
+        return explicit
     return os.environ.get('STEVENS_VERIFY_INSTANCE', 'default')
 
 
@@ -52,19 +103,35 @@ def instance_data_dir(name):
     return os.path.join(instance_dir(name), 'data')
 
 
-def sealed_env(name):
+def sealed_env(name, scn=None):
     data = instance_data_dir(name)
-    return {
+    scn = scn or instance_scenario(name, [])
+    cfg = scenario_config(scn) or SCENARIOS['helios']
+    env = {
         'STEVENS_DATA_DIR': data,
+        'STEVENS_SCENARIO': scn,
+        'STEVENS_FIXTURES_DIR': os.path.join(ROOT, cfg['fixtures']),
         'STEVENS_VAULT_DIR': os.path.join(data, 'personal', 'vault'),
         'STEVENS_VAULT_EXCLUDE': 'Archive',
         'STEVENS_INBOX_DIR': os.path.join(data, 'personal', 'inbox'),
         'STEVENS_CALENDAR_ICS': '',
         'READWISE_TOKEN': '',
-        'STEVENS_FIRM_URL': 'http://localhost:8787',
-        'STEVENS_OWNER': 'p-alex',
+        'STEVENS_FIRM_URL': 'http://localhost:%d' % cfg['firm'],
+        'STEVENS_OWNER': cfg['owner'],
+        'STEVENS_OWNER_NAME': cfg['owner_name'],
         'STEVENS_BACKFILL_DAYS': '3650',
+        'FIRM_PORT': str(cfg['firm']),
+        'PERSONAL_PORT': str(cfg['personal']),
+        'FIRM_WEB_PORT': str(cfg['firm_web']),
+        'PERSONAL_WEB_PORT': str(cfg['yours_web']),
+        'FIRM_API_URL': 'http://localhost:%d' % cfg['firm'],
+        'PERSONAL_API_URL': 'http://localhost:%d' % cfg['personal'],
     }
+    if 'owner_title' in cfg:
+        env['STEVENS_OWNER_TITLE'] = cfg['owner_title']
+    if scn != 'helios':
+        env['FIRM_DATABASE_URL'] = ''
+    return env
 
 
 def port_free(port):
@@ -92,15 +159,16 @@ def read_agent_token():
     return None
 
 
-def viewer_id(role):
+def viewer_id(role, scn='helios'):
+    cfg = scenario_config(scn) or SCENARIOS['helios']
     if role == 'Associate':
-        return 'p-alex'
+        return cfg['owner']
     if role == 'Partner':
-        return 'p-morgan'
+        return cfg['reviewer']
     return role
 
 
-def http_json(method, path, role=None, timeout=30, data=None, base='http://localhost:8787', agent=False, viewer=False):
+def http_json(method, path, role=None, timeout=30, data=None, base='http://localhost:8787', agent=False, viewer=False, scn='helios'):
     headers = {}
     if agent:
         if role != 'nobody':
@@ -109,7 +177,7 @@ def http_json(method, path, role=None, timeout=30, data=None, base='http://local
                 headers['X-Stevens-Agent'] = token
     elif viewer:
         if role and role != 'nobody':
-            headers['X-Viewer-Id'] = viewer_id(role)
+            headers['X-Viewer-Id'] = viewer_id(role, scn)
     elif role:
         headers['X-Viewer-Role'] = role
     body = None
@@ -130,8 +198,9 @@ def server_healthy(port):
         return False
 
 
-def stack_healthy():
-    return server_healthy(8787) and server_healthy(8788)
+def stack_healthy(scn=None):
+    cfg = scenario_config(scn or 'helios') or SCENARIOS['helios']
+    return server_healthy(cfg['firm']) and server_healthy(cfg['personal'])
 
 
 def check_tool(name, want, fix):
@@ -236,23 +305,30 @@ def cmd_stack(argv):
     name = instance_name(argv)
     if name is None or '--help' in argv or not argv or argv[0].startswith('--'):
         print('stevensctl stack: run the local stack for one instance.\n')
-        print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME] [--now ISO]\n')
-        print('up starts npm run dev (yours :5173+:8788, firm :5174+:8787) and waits for health;')
+        print('Usage: stevensctl stack up|down|logs|restart|status [--instance NAME] [--scenario helios|forge|mercy] [--now ISO]\n')
+        print('up starts npm run dev (helios yours :5173+:8788, firm :5174+:8787; forge :5273+:8888')
+        print('and :5274+:8887; mercy :5373+:8988 and :5374+:8987) and waits for health;')
         print('the stack is sealed: STEVENS_DATA_DIR points at this instance, sources point')
         print('at fixtures, and real tokens are unset, so verify flows never touch owner data;')
         print('down stops only this instance; logs tails its log; status prints health.\n')
         print('Examples:')
         print('  export STEVENS_VERIFY_INSTANCE=day2')
         print('  stevensctl stack up')
+        print('  stevensctl stack up --scenario forge')
         print('  stevensctl stack status')
         return 0 if '--help' in argv else 2
+    scn = instance_scenario(name, argv)
+    cfg = scenario_config(scn)
+    if cfg is None:
+        return fail('unknown scenario %s (helios|forge|mercy)' % scn)
+    ports = (cfg['yours_web'], cfg['firm_web'], cfg['firm'], cfg['personal'])
     verb = argv[0]
     if verb == 'up':
         if stack_running(name):
             print('stack already up for instance %s' % name)
             return 0
-        if not all(port_free(port) for port in (5173, 5174, 8787, 8788)):
-            return fail('ports 5173/5174/8787/8788 are held by another stack; stop it or pick another machine (fixed ports, one stack at a time)')
+        if not all(port_free(port) for port in ports):
+            return fail('ports %s are held by another stack; stop it first' % '/'.join(str(p) for p in ports))
         now = None
         if '--now' in argv:
             i = argv.index('--now')
@@ -271,16 +347,19 @@ def cmd_stack(argv):
                 json.dump({'mode': 'normal'}, f)
             with open(os.path.join(processdir_path, 'meta-calls.json'), 'w') as f:
                 json.dump({'count': 0}, f)
-        env.update(sealed_env(name))
+        env.update(sealed_env(name, scn))
         plus('STEVENS_DATA_DIR=%s (sealed: fixtures only, real sources unset)' % data)
+        plus('scenario %s (fixtures %s)' % (scn, cfg['fixtures']))
         if now:
             env['STEVENS_NOW'] = now
             plus('STEVENS_NOW=%s' % now)
+        with open(scenario_file(name), 'w') as f:
+            f.write(scn)
         proc = subprocess.Popen(['npm', 'run', 'dev'], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env)
         with open(stack_pidfile(name), 'w') as f:
             f.write(str(proc.pid))
         for _ in range(60):
-            if stack_healthy():
+            if stack_healthy(scn):
                 print('stack up: instance %s healthy (pgid %d)' % (name, proc.pid))
                 return 0
             time.sleep(2)
@@ -324,24 +403,28 @@ def cmd_stack(argv):
         if rc != 0:
             return rc
         for _ in range(30):
-            if all(port_free(port) for port in (5173, 5174, 8787, 8788)):
+            if all(port_free(port) for port in ports):
                 break
             time.sleep(1)
-        return cmd_stack(['up', '--instance', name] + now_args)
+        return cmd_stack(['up', '--instance', name, '--scenario', scn] + now_args)
     if verb == 'status':
         print('instance: %s' % name)
+        print('scenario: %s' % scn)
         print('stack process: %s' % ('up' if stack_running(name) else 'down'))
-        print('port 5173 (yours web): %s' % ('free' if port_free(5173) else 'in use'))
-        print('port 5174 (firm web): %s' % ('free' if port_free(5174) else 'in use'))
-        print('port 8787 (firm): %s' % ('free' if port_free(8787) else 'in use'))
-        print('port 8788 (yours): %s' % ('free' if port_free(8788) else 'in use'))
-        print('health firm :8787: %s' % ('ok' if server_healthy(8787) else 'down'))
-        print('health yours :8788: %s' % ('ok' if server_healthy(8788) else 'down'))
-        crm_url = read_env_value('FIRM_DATABASE_URL')
-        if not crm_url:
-            print('health firm crm :5433: not configured (run stevensctl crm-db up)')
+        print('port %d (yours web): %s' % (cfg['yours_web'], 'free' if port_free(cfg['yours_web']) else 'in use'))
+        print('port %d (firm web): %s' % (cfg['firm_web'], 'free' if port_free(cfg['firm_web']) else 'in use'))
+        print('port %d (firm): %s' % (cfg['firm'], 'free' if port_free(cfg['firm']) else 'in use'))
+        print('port %d (yours): %s' % (cfg['personal'], 'free' if port_free(cfg['personal']) else 'in use'))
+        print('health firm :%d: %s' % (cfg['firm'], 'ok' if server_healthy(cfg['firm']) else 'down'))
+        print('health yours :%d: %s' % (cfg['personal'], 'ok' if server_healthy(cfg['personal']) else 'down'))
+        if scn == 'helios':
+            crm_url = read_env_value('FIRM_DATABASE_URL')
+            if not crm_url:
+                print('health firm crm :5433: not configured (run stevensctl crm-db up)')
+            else:
+                print('health firm crm :5433: %s' % ('ok' if pg_ok(crm_url) else 'down'))
         else:
-            print('health firm crm :5433: %s' % ('ok' if pg_ok(crm_url) else 'down'))
+            print('health firm crm: file mode (crm.json, no Postgres)')
         print('data dir: %s' % instance_data_dir(name))
         return 0
     print('unknown stack verb: %s (see stevensctl stack --help)' % verb, file=sys.stderr)
@@ -352,28 +435,36 @@ def cmd_seed(argv):
     name = instance_name(argv)
     if name is None or '--help' in argv:
         print('stevensctl seed: stage fixtures + fresh ledger for this instance.\n')
-        print('Verifies fixtures/manifest.json, rebuilds this instance vault from')
-        print('fixtures/personal/vault/, empties its inbox, truncates both process')
+        print('Usage: stevensctl seed [--instance NAME] [--scenario helios|forge|mercy]\n')
+        print('Verifies the scenario manifest.json, rebuilds this instance vault from')
+        print('personal/vault/, empties its inbox, truncates both process')
         print('ledgers, resets the Meta call counter and sets the fake to normal.')
-        print('Runs firm-crm-setup so the firm syncs from Postgres, then restarts.\n')
+        print('Runs firm-crm-setup for helios so the firm syncs from Postgres, then restarts.')
+        print('Other scenarios run the firm on crm.json (file mode, no Postgres).\n')
         print('Examples:')
         print('  stevensctl stack up && stevensctl seed')
+        print('  stevensctl stack up --scenario forge && stevensctl seed --scenario forge')
         return 0
+    scn = instance_scenario(name, argv)
+    cfg = scenario_config(scn)
+    if cfg is None:
+        return fail('unknown scenario %s (helios|forge|mercy)' % scn)
+    base = os.path.join(ROOT, cfg['fixtures'])
     if not stack_running(name):
         print('seed refuses: this instance stack is not up (run stevensctl stack up first).', file=sys.stderr)
         return 2
-    manifest = os.path.join(ROOT, 'fixtures', 'manifest.json')
+    manifest = os.path.join(base, 'manifest.json')
     if not os.path.exists(manifest):
-        return fail('fixtures/manifest.json is missing; cannot seed')
+        return fail('%s/manifest.json is missing; cannot seed' % cfg['fixtures'])
     with open(manifest) as f:
         entries = json.load(f)
     for entry in entries:
-        blob = os.path.join(ROOT, 'fixtures', entry['file'])
+        blob = os.path.join(base, entry['file'])
         if not os.path.exists(blob):
             return fail('fixture blob %s is missing; cannot seed' % entry['file'])
-    vault_src = os.path.join(ROOT, 'fixtures', 'personal', 'vault')
+    vault_src = os.path.join(base, 'personal', 'vault')
     if not os.path.isdir(vault_src):
-        return fail('fixtures/personal/vault/ is missing; cannot seed')
+        return fail('%s/personal/vault/ is missing; cannot seed' % cfg['fixtures'])
     datadir = instance_data_dir(name)
     os.makedirs(datadir, exist_ok=True)
     plus('rebuild instance vault + inbox, truncate both ledgers, fake mode normal')
@@ -408,13 +499,16 @@ def cmd_seed(argv):
     if os.path.exists(derived):
         shutil.rmtree(derived)
     print('seed: %d fixtures verified, state fresh, fake normal, counter 0' % len(entries))
-    plus('npx tsx scripts/firm-crm-setup.ts')
-    setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
-    print(setup.stdout, end='')
-    if setup.returncode != 0:
-        return fail('firm-crm-setup failed; run stevensctl crm-db up first (%s)' % setup.stderr.strip()[-200:])
+    if scn == 'helios':
+        plus('npx tsx scripts/firm-crm-setup.ts')
+        setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
+        print(setup.stdout, end='')
+        if setup.returncode != 0:
+            return fail('firm-crm-setup failed; run stevensctl crm-db up first (%s)' % setup.stderr.strip()[-200:])
+    else:
+        print('seed: scenario %s runs the firm on crm.json (file mode, no Postgres)' % scn)
     print('seed: restarting the stack so both processes rebuild from fixtures')
-    restart_argv = ['restart', '--instance', name]
+    restart_argv = ['restart', '--instance', name, '--scenario', scn]
     if '--now' in argv:
         restart_argv += ['--now', argv[argv.index('--now') + 1]]
     return cmd_stack(restart_argv)
@@ -449,14 +543,14 @@ def cmd_api(argv):
         print('  stevensctl api --as Associate ingest --expect 200')
         return 0 if '--help' in argv else 2
     role = argv[argv.index('--as') + 1]
-    if role not in ('Associate', 'Partner', 'p-alex', 'p-morgan', 'nobody'):
-        print('--as must be Associate, Partner, p-alex, p-morgan, or nobody.', file=sys.stderr)
+    if role not in ('Associate', 'Partner', 'p-alex', 'p-morgan', 'p-rae', 'p-theo', 'p-amara', 'p-helen', 'nobody'):
+        print('--as must be Associate, Partner, a person id, or nobody.', file=sys.stderr)
         return 2
     via = argv[argv.index('--via') + 1] if '--via' in argv else 'firm'
     if via not in ('yours', 'firm', 'agent'):
         print('--via must be yours, firm, or agent.', file=sys.stderr)
         return 2
-    skip = {'--as', '--via', '--expect', '--field', '--save', '--until', '--instance', '--data'}
+    skip = {'--as', '--via', '--expect', '--field', '--save', '--until', '--instance', '--scenario', '--data'}
     surface = None
     i = 0
     while i < len(argv):
@@ -467,7 +561,11 @@ def cmd_api(argv):
             surface = argv[i]
             break
         i += 1
-    base = 'http://localhost:8788' if via == 'yours' else 'http://localhost:8787'
+    scn = scenario_arg(argv) or 'helios'
+    cfg = scenario_config(scn)
+    if cfg is None:
+        return fail('unknown scenario %s (helios|forge|mercy)' % scn)
+    base = 'http://localhost:%d' % (cfg['personal'] if via == 'yours' else cfg['firm'])
     agent = via == 'agent'
     firm_viewer = via == 'firm' and not agent
     methods = {'health': ('GET', '/api/health'), 'state': ('GET', '/api/state'), 'ingest': ('POST', '/api/ingest'), 'extract': ('POST', '/api/extract'), 'bridge': ('POST', '/api/bridge'), 'brief': ('POST', '/api/brief'), 'ask': ('POST', '/api/ask'), 'switch': ('POST', '/api/switch')}
@@ -477,7 +575,7 @@ def cmd_api(argv):
     elif agent and surface == 'meetings':
         method, path = 'GET', '/agent/meetings?withinHours=72'
     elif agent and surface == 'context':
-        method, path = 'GET', '/agent/context?dealId=helios&purpose=answer'
+        method, path = 'GET', '/agent/context?dealId=' + cfg['deal'] + '&purpose=answer'
     elif agent and surface == 'privy':
         method, path = 'POST', '/agent/privy'
     elif not agent and via == 'yours' and surface == 'ask':
@@ -526,7 +624,7 @@ def cmd_api(argv):
                 raw_headers['X-Stevens-Agent'] = token
         elif firm_viewer:
             if role != 'nobody':
-                raw_headers['X-Viewer-Id'] = viewer_id(role)
+                raw_headers['X-Viewer-Id'] = viewer_id(role, scn)
         else:
             raw_headers['X-Viewer-Role'] = role
         req = urllib.request.Request(base + path, headers=raw_headers, method=method)
@@ -543,7 +641,7 @@ def cmd_api(argv):
     deadline = time.time() + 30
     while True:
         try:
-            status, body = http_json(method, path, role, timeout=300, data=data, base=base, agent=agent, viewer=firm_viewer)
+            status, body = http_json(method, path, role, timeout=300, data=data, base=base, agent=agent, viewer=firm_viewer, scn=scn)
         except urllib.error.HTTPError as e:
             try:
                 body = json.load(e)
@@ -662,23 +760,37 @@ def cmd_browser(argv):
     name = instance_name(argv) or 'default'
     if '--help' in argv or not argv:
         print('stevensctl browser: drive UI flows with headless Chromium.\n')
-        print('Usage: stevensctl browser run <flow> [--instance NAME]')
-        print('       stevensctl browser snapshot [--tab TAB] [--instance NAME]\n')
+        print('Usage: stevensctl browser run <flow> [--instance NAME] [--scenario helios|forge|mercy]')
+        print('       stevensctl browser snapshot [--tab TAB] [--instance NAME] [--scenario helios|forge|mercy]\n')
         print('Flows: associate-today, associate-ask, associate-share, associate-receipts,')
         print('associate-captures, partner-inbox, partner-approve, partner-sources, demo-two-screens.')
         print('Precondition: seeded stack with the pipeline run (ingest through ask).\n')
         print('Examples:')
         print('  stevensctl browser run associate-today')
+        print('  stevensctl browser run associate-today --scenario forge')
         print('  stevensctl browser snapshot')
         return 0
-    if not stack_healthy():
-        print('browser refuses: the local stack is not up.', file=sys.stderr)
+    scn = instance_scenario(name, argv)
+    cfg = scenario_config(scn)
+    if cfg is None:
+        return fail('unknown scenario %s (helios|forge|mercy)' % scn)
+    if not stack_healthy(scn):
+        print('browser refuses: the %s stack is not up.' % scn, file=sys.stderr)
         return 2
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'browser.mjs')
-    cmd = ['node', script] + [a for a in argv if not a.startswith('--instance')] + ['--evidence', evidence_dir(name)]
+    drop_idx = set()
     if '--instance' in argv:
         drop = argv.index('--instance')
-        cmd = ['node', script] + [a for i, a in enumerate(argv) if i not in (drop, drop + 1)] + ['--evidence', evidence_dir(name)]
+        drop_idx.update((drop, drop + 1))
+    if '--scenario' in argv:
+        drop = argv.index('--scenario')
+        drop_idx.update((drop, drop + 1))
+    rest = [a for i, a in enumerate(argv) if i not in drop_idx]
+    flow = argv[argv.index('--flow') + 1] if '--flow' in argv else (argv[1] if len(argv) > 1 and argv[0] == 'run' else '')
+    side_port = cfg['firm_web'] if flow.startswith('partner-') else cfg['yours_web']
+    cmd = ['node', script] + rest + ['--scenario', scn, '--evidence', evidence_dir(name)]
+    if '--url' not in argv:
+        cmd += ['--url', 'http://localhost:%d' % side_port]
     plus(' '.join(cmd))
     proc = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
     print(proc.stdout, end='')
@@ -717,7 +829,7 @@ def cmd_report(argv):
     files = sorted(os.listdir(evdir)) if os.path.exists(evdir) else []
     print('# Verification report: %s' % name)
     print('\n## Stack')
-    print('up' if stack_healthy() else 'down')
+    print('up' if stack_healthy(instance_scenario(name, argv)) else 'down')
     print('\n## Evidence (%s)' % evdir)
     for entry in files:
         print('- %s' % entry)
@@ -737,7 +849,7 @@ def cmd_report(argv):
 def cmd_drop(argv):
     if '--help' in argv or not argv:
         print('stevensctl drop: land a glasses capture in this instance inbox.\n')
-        print('Usage: stevensctl drop talk|slide [--instance NAME]\n')
+        print('Usage: stevensctl drop talk|slide [--instance NAME] [--scenario helios|forge|mercy]\n')
         print('Copies the staged fixture into this instance inbox/; the watcher')
         print('ingests it with no UI action. Needs this instance stack up.\n')
         print('Examples:')
@@ -750,10 +862,14 @@ def cmd_drop(argv):
         print('unknown capture: %s (talk|slide).' % name, file=sys.stderr)
         return 2
     inst = instance_name(argv) or 'default'
+    scn = instance_scenario(inst, argv)
+    cfg = scenario_config(scn)
+    if cfg is None:
+        return fail('unknown scenario %s (helios|forge|mercy)' % scn)
     if not stack_running(inst):
         print('drop refuses: this instance stack is not up (run stevensctl stack up first).', file=sys.stderr)
         return 2
-    src = os.path.join(ROOT, 'fixtures', 'personal', fixtures[name])
+    src = os.path.join(ROOT, cfg['fixtures'], 'personal', fixtures[name])
     if not os.path.exists(src):
         return fail('fixture %s is missing; cannot drop' % fixtures[name])
     inbox = os.path.join(instance_data_dir(inst), 'personal', 'inbox')
@@ -1279,14 +1395,17 @@ def record_state(port, viewer=None):
 def cmd_record_replay(argv):
     if '--help' in argv:
         print('stevensctl record-replay: record the fixture-only demo ledgers.\n')
+        print('Usage: stevensctl record-replay [--scenario helios|forge|mercy]\n')
         print('Runs the full flow (sync, talk, slide, brief, ask, share, approve) against')
         print('a fresh data dir with fixtures only, then commits nothing: it writes')
-        print('fixtures/replay/{firm,personal}.jsonl plus now.txt for review.\n')
+        print('<fixtures>/replay/{firm,personal}.jsonl plus now.txt for review.\n')
         print('Refuses to run when owner sources are configured: a non-empty READWISE_TOKEN')
         print('or STEVENS_CALENDAR_ICS, or a STEVENS_VAULT_DIR outside /tmp/stevens-verify.')
-        print('Needs Postgres up (stevensctl crm-db up) and ports 18887/18888 free.\n')
+        print('helios needs Postgres up (stevensctl crm-db up); other scenarios record')
+        print('in file mode. Needs the scenario record ports free (helios 18887/18888).\n')
         print('Examples:')
         print('  stevensctl record-replay')
+        print('  stevensctl record-replay --scenario forge')
         return 0
     if os.environ.get('READWISE_TOKEN'):
         print('record-replay refuses: READWISE_TOKEN is set (owner data).', file=sys.stderr)
@@ -1298,10 +1417,16 @@ def cmd_record_replay(argv):
     if vault and not vault.startswith('/tmp/stevens-verify/'):
         print('record-replay refuses: STEVENS_VAULT_DIR points outside /tmp/stevens-verify.', file=sys.stderr)
         return 2
-    for port in (RECORD_FIRM_PORT, RECORD_PERSONAL_PORT):
+    scn = scenario_arg(argv) or 'helios'
+    cfg = scenario_config(scn)
+    if cfg is None:
+        return fail('unknown scenario %s (helios|forge|mercy)' % scn)
+    firm_port, personal_port = cfg['record_firm'], cfg['record_personal']
+    base = os.path.join(ROOT, cfg['fixtures'])
+    for port in (firm_port, personal_port):
         if not port_free(port):
-            return fail('port %d is held; record-replay needs 18887 and 18888 free' % port)
-    record = os.path.join('/tmp/stevens-verify', 'record')
+            return fail('port %d is held; record-replay needs %d and %d free' % (port, firm_port, personal_port))
+    record = os.path.join('/tmp/stevens-verify', 'record-' + scn)
     data = os.path.join(record, 'data')
     if os.path.isdir(record):
         shutil.rmtree(record)
@@ -1315,40 +1440,50 @@ def cmd_record_replay(argv):
     inbox = os.path.join(data, 'personal', 'inbox')
     os.makedirs(inbox, exist_ok=True)
     vault_dir = os.path.join(data, 'personal', 'vault')
-    shutil.copytree(os.path.join(ROOT, 'fixtures', 'personal', 'vault'), vault_dir)
+    shutil.copytree(os.path.join(base, 'personal', 'vault'), vault_dir)
     hour_ago = time.time() - 3600
     for root, _, files in os.walk(vault_dir):
         for name in files:
             os.utime(os.path.join(root, name), (hour_ago, hour_ago))
-    plus('npx tsx scripts/firm-crm-setup.ts')
-    setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
-    print(setup.stdout, end='')
-    if setup.returncode != 0:
-        return fail('firm-crm-setup failed; run stevensctl crm-db up first')
+    if scn == 'helios':
+        plus('npx tsx scripts/firm-crm-setup.ts')
+        setup = subprocess.run(['npx', 'tsx', 'scripts/firm-crm-setup.ts'], cwd=ROOT, capture_output=True, text=True, timeout=120)
+        print(setup.stdout, end='')
+        if setup.returncode != 0:
+            return fail('firm-crm-setup failed; run stevensctl crm-db up first')
+    else:
+        print('record-replay: scenario %s records in file mode (no Postgres)' % scn)
     env = dict(os.environ)
     env.update({
         'STEVENS_DATA_DIR': data,
+        'STEVENS_SCENARIO': scn,
+        'STEVENS_FIXTURES_DIR': base,
         'STEVENS_NOW': REPLAY_NOW,
         'STEVENS_DEV': '1',
-        'STEVENS_FIRM_URL': 'http://localhost:%d' % RECORD_FIRM_PORT,
+        'STEVENS_FIRM_URL': 'http://localhost:%d' % firm_port,
         'STEVENS_AGENT_TOKEN': 'test-record',
         'STEVENS_VAULT_DIR': vault_dir,
         'STEVENS_VAULT_EXCLUDE': 'Archive',
         'STEVENS_INBOX_DIR': inbox,
         'STEVENS_CALENDAR_ICS': '',
         'READWISE_TOKEN': '',
-        'STEVENS_OWNER': 'p-alex',
-        'FIRM_PORT': str(RECORD_FIRM_PORT),
-        'PERSONAL_PORT': str(RECORD_PERSONAL_PORT),
+        'STEVENS_OWNER': cfg['owner'],
+        'STEVENS_OWNER_NAME': cfg['owner_name'],
+        'FIRM_PORT': str(firm_port),
+        'PERSONAL_PORT': str(personal_port),
         'NODE_OPTIONS': '--disable-warning=ExperimentalWarning',
     })
+    if 'owner_title' in cfg:
+        env['STEVENS_OWNER_TITLE'] = cfg['owner_title']
+    if scn != 'helios':
+        env['FIRM_DATABASE_URL'] = ''
     log = open(os.path.join(record, 'servers.log'), 'a')
     procs = []
     try:
         for entry in ('server/firm/index.ts', 'server/personal/index.ts'):
             plus('npx tsx %s' % entry)
             procs.append(subprocess.Popen(['npx', 'tsx', entry], cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, start_new_session=True, env=env))
-        for port in (RECORD_FIRM_PORT, RECORD_PERSONAL_PORT):
+        for port in (firm_port, personal_port):
             for _ in range(60):
                 try:
                     status, _ = record_http('GET', port, '/api/health')
@@ -1360,36 +1495,36 @@ def cmd_record_replay(argv):
             else:
                 return fail('server :%d never turned healthy; see %s/servers.log' % (port, record))
         for name in ('talk.wav', 'slide.jpg'):
-            shutil.copyfile(os.path.join(ROOT, 'fixtures', 'personal', name), os.path.join(inbox, name))
+            shutil.copyfile(os.path.join(base, 'personal', name), os.path.join(inbox, name))
         plus('dropped talk.wav and slide.jpg; waiting for ready')
         state = None
         for _ in range(150):
-            state = record_state(RECORD_PERSONAL_PORT)
+            state = record_state(personal_port)
             ready = [item['originId'] for item in state['items'] if item['status'] == 'ready' and item['origin'] == 'glasses']
             if 'talk.wav' in ready and 'slide.jpg' in ready:
                 break
             time.sleep(2)
         else:
             return fail('talk and slide never reached ready; see %s/servers.log' % record)
-        plus('captures ready; waiting for the Helios brief')
+        plus('captures ready; waiting for the first brief')
         briefed = None
         for _ in range(120):
-            state = record_state(RECORD_PERSONAL_PORT)
+            state = record_state(personal_port)
             briefed = [meeting for meeting in state['meetings'] if meeting.get('briefId')]
             if briefed:
                 break
             time.sleep(2)
         else:
             return fail('no meeting brief appeared; see %s/servers.log' % record)
-        plus('POST /api/ask (helios)')
-        status, body = record_http('POST', RECORD_PERSONAL_PORT, '/api/ask',
-                                   {'dealId': 'helios', 'question': 'Should we take the second meeting?'})
+        plus('POST /api/ask (%s)' % scn)
+        status, body = record_http('POST', personal_port, '/api/ask',
+                                   {'dealId': cfg['deal'], 'question': cfg['question']})
         if status != 202:
             return fail('ask failed: %d %s' % (status, body))
         question_id = json.loads(body)['questionId']
         plus('waiting for the answer and the escalation')
         for _ in range(120):
-            state = record_state(RECORD_PERSONAL_PORT)
+            state = record_state(personal_port)
             answers = [draft for draft in state['drafts'] if draft['kind'] == 'answer' and draft.get('questionId') == question_id]
             escalated = [e for e in state['escalations'] if e['questionId'] == question_id and e['status'] == 'sent']
             if answers and escalated:
@@ -1398,13 +1533,13 @@ def cmd_record_replay(argv):
         else:
             return fail('answer or escalation never landed; see %s/servers.log' % record)
         claim_id = state['claims'][0]['id']
-        plus('POST /api/share/%s (helios)' % claim_id)
-        status, body = record_http('POST', RECORD_PERSONAL_PORT, '/api/share/' + claim_id, {'dealId': 'helios'})
+        plus('POST /api/share/%s (%s)' % (claim_id, scn))
+        status, body = record_http('POST', personal_port, '/api/share/' + claim_id, {'dealId': cfg['deal']})
         if status != 201:
             return fail('share failed: %d %s' % (status, body))
         plus('waiting for the release')
         for _ in range(60):
-            firm = record_state(RECORD_FIRM_PORT, viewer='p-morgan')
+            firm = record_state(firm_port, viewer=cfg['reviewer'])
             if any(entry['kind'] == 'released-quote' for entry in firm['inbox']):
                 break
             time.sleep(2)
@@ -1413,8 +1548,8 @@ def cmd_record_replay(argv):
         decisions = [draft for draft in firm['drafts'] if draft['kind'] == 'decision']
         if not decisions:
             return fail('no decision draft to approve; see %s/servers.log' % record)
-        plus('POST /api/approve/%s as p-morgan' % decisions[0]['id'])
-        status, body = record_http('POST', RECORD_FIRM_PORT, '/api/approve/' + decisions[0]['id'], {}, viewer='p-morgan')
+        plus('POST /api/approve/%s as %s' % (decisions[0]['id'], cfg['reviewer']))
+        status, body = record_http('POST', firm_port, '/api/approve/' + decisions[0]['id'], {}, viewer=cfg['reviewer'])
         if status != 200:
             return fail('approve failed: %d %s' % (status, body))
     finally:
@@ -1423,7 +1558,7 @@ def cmd_record_replay(argv):
                 os.killpg(proc.pid, signal.SIGTERM)
             except (ProcessLookupError, PermissionError):
                 pass
-    replay = os.path.join(ROOT, 'fixtures', 'replay')
+    replay = os.path.join(base, 'replay')
     os.makedirs(replay, exist_ok=True)
     for processdir, name in (('firm', 'firm.jsonl'), ('personal', 'personal.jsonl')):
         with open(os.path.join(data, processdir, 'ledger.jsonl')) as f:
@@ -1431,15 +1566,15 @@ def cmd_record_replay(argv):
         for banned in ('/Users/', '/home/', 'postgres://', 'READWISE_TOKEN'):
             if banned in content:
                 return fail('recorded %s mentions %s; refusing to write it' % (name, banned))
-        content = content.replace(inbox + '/', 'fixtures/personal/')
+        content = content.replace(inbox + '/', cfg['fixtures'] + '/personal/')
         if '/tmp/' in content:
             return fail('recorded %s still mentions /tmp; refusing to write it' % name)
         with open(os.path.join(replay, name), 'w') as f:
             f.write(content)
-        plus('wrote fixtures/replay/%s' % name)
+        plus('wrote %s/replay/%s' % (cfg['fixtures'], name))
     with open(os.path.join(replay, 'now.txt'), 'w') as f:
         f.write(REPLAY_NOW + '\n')
-    print('record-replay: fixtures/replay written from a fixture-only run; review and commit it')
+    print('record-replay: %s/replay written from a fixture-only run; review and commit it' % cfg['fixtures'])
     return 0
 
 
@@ -1472,7 +1607,8 @@ def cmd_firm(argv):
         return fail('instance %s is not up; run stack up first' % name)
     with open(pidfile) as f:
         pgid = int(f.read().strip())
-    firm_port = int(os.environ.get('FIRM_PORT', '8787'))
+    scn_cfg = scenario_config(instance_scenario(name, argv)) or SCENARIOS['helios']
+    firm_port = int(os.environ.get('FIRM_PORT', str(scn_cfg['firm'])))
     if argv[0] == 'down':
         pids = firm_child_pids(pgid)
         if not pids:

@@ -2,7 +2,8 @@ import { serve } from '@hono/node-server';
 import { join, sep } from 'node:path';
 import { createApp } from '../common/app.js';
 import { personForToken, seedPeople } from './agent-auth.js';
-import { agentContext, agentFromHeader, agentMedia, agentMeetings, isAgentPurpose } from './agent.js';
+import { agentContext, agentFromHeader, agentMedia, agentMeetings, agentMeta, isAgentPurpose } from './agent.js';
+import { scenarioDisplay } from './connectors/crm.js';
 import { draftEscalation } from './decision.js';
 import { inboundRelease } from './release.js';
 import { runPrivy } from './privy.js';
@@ -40,8 +41,15 @@ export const app = createApp({
     });
 
     agent.get('/api/people', (c) => {
-      const rows = getFirmDb().prepare(`select id, name, role from people order by name`).all();
-      return c.json(rows);
+      const rows = getFirmDb().prepare(`select id, name, role from people order by name`).all() as unknown as { id: string; name: string; role: 'Associate' | 'Partner' }[];
+      const display = scenarioDisplay();
+      return c.json(rows.map((row) => ({ ...row, title: display.roleTitles[row.role] ?? row.role })));
+    });
+
+    agent.get('/agent/meta', (c) => {
+      const person = agentFromHeader(c.req.header('X-Stevens-Agent'));
+      if (!person) return c.json({ error: 'unknown agent' }, 401);
+      return c.json(agentMeta());
     });
 
     agent.get('/api/state', (c) => {

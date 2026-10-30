@@ -54,7 +54,7 @@ export interface Manifest {
 }
 
 export interface Draft {
-  id: string; kind: 'brief' | 'answer' | 'decision'; dealId?: string; question?: string; questionId?: string;
+  id: string; kind: 'brief' | 'answer' | 'decision'; dealId?: string; company?: string; question?: string; questionId?: string;
   viewerId?: string; viewerRole: Role;
   sentences: { text: string; citations: Citation[] }[]; droppedSentences: number;
   bridges?: Bridge[]; verdict?: Verdict; status: 'draft' | 'approved' | 'rejected' }
@@ -62,9 +62,20 @@ export interface Draft {
 export type Origin = 'glasses' | 'readwise' | 'vault';
 export type ItemKind = 'audio' | 'photo' | 'video' | 'highlight' | 'note';
 
-export interface Person { id: string; name: string; role: Role }
+export interface Person { id: string; name: string; role: Role; title?: string }
 
-export interface Meeting { id: string; dealId: string; company: string; title: string; startsAt: string; origin: 'firm' | 'calendar' }
+export interface Meeting { id: string; dealId: string; company: string; title: string; startsAt: string; origin: 'firm' | 'calendar'; askHint?: string }
+
+export interface ScenarioDisplay {
+  roleTitles: Record<Role, string>;
+  reviewerNoun: string;
+  labels: { sourcePrefix: string; team: string; restricted: string; workColumn: string; personalColumn: string; unit: string };
+  firmDataLabel: string;
+}
+
+export interface ScenarioDevEntry { id: string; name: string; yoursUrl: string; firmUrl: string }
+
+export interface ScenarioDev { scenario: string; scenarios: ScenarioDevEntry[] }
 
 export interface RawItem {
   origin: Origin; originId: string; kind: ItemKind; title: string; capturedAt: string;
@@ -93,12 +104,12 @@ export type LedgerEvent = { at: string } & (
       provenance?: { title: string; origin: string; capturedAt: string; speaker?: string; at?: string } }
   | { type: 'connector.synced'; connector: 'crm'; cursor: string;
       upserted: { people: { id: string; name: string; title: string }[]; deals: { id: string; company: string; sector: string; stage: string; askUsd: number }[];
-        meetings: { id: string; dealId: string; title: string; startsAt: string }[];
+        meetings: { id: string; dealId: string; title: string; startsAt: string; askHint?: string }[];
         documents: { id: string; dealId: string | null; kind: string; title: string; createdAt: string; body: string | null; mediaPath: string | null; acl: string[] }[] };
       deletedDocumentIds: string[]; grants: { documentId: string; grantee: string }[];
       memberships: { personId: string; principal: string }[]; portfolio: { company: string; sector: string }[] }
   | { type: 'verdict.received'; questionId: string; dealId: string; verdict: Verdict; failedClosed: boolean }
-  | { type: 'escalation.sent' | 'escalation.queued'; questionId: string; dealId: string; to: Role | null }
+  | { type: 'escalation.sent' | 'escalation.queued'; questionId: string; dealId: string; to: Role | null; toName?: string; reviewerNoun?: string }
   | { type: 'share.sent'; claimId: string; dealId: string; documentId: string }
   | { type: 'item.ingested'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; api?: Api }
   | { type: 'item.revised'; item: Item; segments: Segment[]; contentHash: string; mediaPath?: string; supersedes: string; api?: Api }

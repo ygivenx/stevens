@@ -1,4 +1,4 @@
-import type { Claim, Draft, Item, Meeting, Person, Receipt, Role, Segment, SourceRef } from '../../shared/data.js';
+import type { Claim, Draft, Item, Meeting, Person, Receipt, Role, ScenarioDev, ScenarioDisplay, Segment, SourceRef } from '../../shared/data.js';
 
 export interface PersonalState {
   owner: Person;
@@ -13,9 +13,11 @@ export interface PersonalState {
   claims: Claim[];
   sources: SourceRef[];
   shares: { claimId: string; dealId: string; sharedAt: string }[];
-  escalations: { questionId: string; dealId: string; to: Role | null; status: 'sent' | 'queued' }[];
+  escalations: { questionId: string; dealId: string; to: Role | null; toName?: string; reviewerNoun?: string; status: 'sent' | 'queued' }[];
   firm: { reachable: boolean; checkedAt: string };
+  display: ScenarioDisplay;
   simulated: string[];
+  dev?: ScenarioDev;
 }
 
 export interface ItemBundle {

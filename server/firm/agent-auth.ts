@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
 import type { Role } from '../../shared/data.js';
+import { loadCrm } from './connectors/crm.js';
 
 export interface AgentPerson {
   id: string;
@@ -13,14 +14,23 @@ export function tokenDigest(token: string): string {
 }
 
 export function seedPeople(db: DatabaseSync, agentToken: string | undefined): void {
-  db.prepare(
-    `insert into people (id, name, role, agent_token_sha256) values ('p-alex', 'Alex Rivera', 'Associate', ?)
+  const ownerId = process.env.STEVENS_OWNER ?? 'p-alex';
+  let people: { id: string; name: string; role: string }[];
+  try {
+    people = loadCrm().people;
+  } catch {
+    people = [
+      { id: 'p-alex', name: 'Alex Rivera', role: 'Associate' },
+      { id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' },
+    ];
+  }
+  const upsert = db.prepare(
+    `insert into people (id, name, role, agent_token_sha256) values (?, ?, ?, ?)
      on conflict(id) do update set name = excluded.name, role = excluded.role, agent_token_sha256 = excluded.agent_token_sha256`,
-  ).run(agentToken ? tokenDigest(agentToken) : null);
-  db.prepare(
-    `insert into people (id, name, role, agent_token_sha256) values ('p-morgan', 'Morgan Hale', 'Partner', null)
-     on conflict(id) do update set name = excluded.name, role = excluded.role`,
-  ).run();
+  );
+  for (const person of people) {
+    upsert.run(person.id, person.name, person.role, person.id === ownerId && agentToken ? tokenDigest(agentToken) : null);
+  }
 }
 
 export function personForToken(db: DatabaseSync, token: string | undefined): AgentPerson | null {

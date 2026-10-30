@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, Check, Clock, MinusCircle, X } from 'lucide-react';
+import type { ScenarioDev } from '../../shared/data.js';
 
 export function Button({ children, onClick, disabled, testid, tone }: { children: ReactNode; onClick: () => void; disabled?: boolean; testid?: string; tone?: 'primary' | 'plain' | 'brass' }) {
   const tones: Record<string, string> = {
@@ -191,5 +192,26 @@ export function FailedLine({ message }: { message: string }) {
       <MinusCircle size={14} aria-hidden />
       {message}
     </p>
+  );
+}
+
+export function ScenarioBar({ dev, side, query }: { dev: ScenarioDev; side: 'yours' | 'firm'; query?: string }) {
+  const hash = typeof window === 'undefined' ? '' : window.location.hash;
+  return (
+    <div data-testid="scenario-bar" className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-brass/50 bg-brass/5 px-3 py-2 text-xs">
+      <span className="font-extrabold uppercase tracking-[0.14em] text-brass-deep">Dev · scenario</span>
+      {dev.scenarios.map((entry) => (
+        <a
+          key={entry.id}
+          href={(side === 'yours' ? entry.yoursUrl : entry.firmUrl) + '/' + (query ?? '') + '#/' + hash.replace(/^#\/?/, '')}
+          className={
+            'rounded-full px-3 py-1 font-semibold ' +
+            (entry.id === dev.scenario ? 'bg-ink text-paper' : 'border border-hairline text-smoke hover:text-ink')
+          }
+        >
+          {entry.name}
+        </a>
+      ))}
+    </div>
   );
 }

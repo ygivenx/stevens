@@ -2,13 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readAll } from '../common/ledger/store.js';
-import { seedPeople } from './agent-auth.js';
+import { append as appendFirmEvent, readAll } from '../common/ledger/store.js';
+import { personForToken, seedPeople } from './agent-auth.js';
 import { agentContext } from './agent.js';
-import { fixtureCrmReader, granteePrincipal, loadCrm, type CrmReader } from './connectors/crm.js';
+import { fixtureCrmReader, granteePrincipal, loadCrm, scenarioDisplay, type CrmReader } from './connectors/crm.js';
+import { loadFormD } from './connectors/formd.js';
+import { draftEscalation, recipientName } from './decision.js';
 import { buildFirmState } from './state.js';
 import { closeFirmDb, documentAcl, firmDocuments, getFirmDb, isMember, recipientFor } from './store.js';
-import { runConnectorSync, testReader } from './sync.js';
+import { defaultReader, fileMode, runConnectorSync, testReader } from './sync.js';
 
 const TOKEN = 'test-agent-token-crm';
 
@@ -155,5 +157,71 @@ describe('member gating', () => {
     } finally {
       delete process.env.STEVENS_REPLAY;
     }
+  });
+});
+
+describe('scenario file mode', () => {
+  it('uses the fixture reader when FIRM_DATABASE_URL is unset', async () => {
+    const saved = process.env.FIRM_DATABASE_URL;
+    delete process.env.FIRM_DATABASE_URL;
+    try {
+      const reader = defaultReader();
+      const deals = await reader.deals();
+      expect(deals.map((deal) => deal.id)).toContain('helios');
+      expect(fileMode()).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.FIRM_DATABASE_URL;
+      else process.env.FIRM_DATABASE_URL = saved;
+    }
+  });
+
+  it('carries meeting askHint from the fixture into firm.db', async () => {
+    await runConnectorSync({ reader: testReader() });
+    const row = getFirmDb().prepare(`select ask_hint as askHint from meetings where id = 'm-helios-2'`).get() as unknown as { askHint: string | null };
+    expect(row.askHint).toBe('Should we take the second meeting?');
+    const synced = readAll().find((event) => event.type === 'connector.synced');
+    expect(synced && synced.type === 'connector.synced' ? synced.upserted.meetings[0].askHint : null).toBe('Should we take the second meeting?');
+  });
+
+  it('reads the scenario display contract from crm.json', () => {
+    const display = scenarioDisplay();
+    expect(display.roleTitles).toEqual({ Associate: 'Associate', Partner: 'Partner' });
+    expect(display.reviewerNoun).toBe('a Partner');
+    expect(display.labels.unit).toBe('deals');
+    expect(display.firmDataLabel).toBe('Fictional firm data');
+  });
+
+  it('serves an empty market when the Form D fixture is missing', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stevens-noformd-'));
+    const saved = process.env.STEVENS_FIXTURES_DIR;
+    process.env.STEVENS_FIXTURES_DIR = dir;
+    try {
+      expect(loadFormD().filings).toEqual([]);
+      const state = buildFirmState({ id: 'p-morgan', name: 'Morgan Hale', role: 'Partner' });
+      expect(state.market).toEqual([]);
+      expect(state.connectors.map((connector) => connector.id)).toEqual(['crm']);
+    } finally {
+      if (saved === undefined) delete process.env.STEVENS_FIXTURES_DIR;
+      else process.env.STEVENS_FIXTURES_DIR = saved;
+    }
+  });
+
+  it('maps the agent token to the STEVENS_OWNER person', () => {
+    process.env.STEVENS_OWNER = 'p-morgan';
+    try {
+      seedPeople(getFirmDb(), TOKEN);
+      expect(personForToken(getFirmDb(), TOKEN)?.id).toBe('p-morgan');
+    } finally {
+      delete process.env.STEVENS_OWNER;
+    }
+  });
+
+  it('returns the escalation recipient name and reviewer noun', async () => {
+    await runConnectorSync({ reader: testReader() });
+    expect(recipientName(recipientFor('Partner', 'helios'))).toBe('Morgan Hale');
+    appendFirmEvent({ at: new Date().toISOString(), type: 'escalation.drafted', escalationId: 'es-1', questionId: 'q-1', dealId: 'helios', from: 'p-alex', to: 'Partner' });
+    const sent = await draftEscalation('p-alex', 'helios', 'q-1', undefined);
+    expect(sent.toName).toBe('Morgan Hale');
+    expect(sent.reviewerNoun).toBe('a Partner');
   });
 });

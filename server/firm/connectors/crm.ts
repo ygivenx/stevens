@@ -1,15 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import type { ScenarioDisplay } from '../../../shared/data.js';
+import { DEFAULT_DISPLAY } from '../../common/scenarios.js';
 import type { Connector, ConnectorDocument } from './connector.js';
 
 interface CrmFixture {
   people: { id: string; name: string; role: string }[];
   deals: { id: string; company: string; sector: string; stage: string; askUsd: number }[];
   dealTeam: { dealId: string; personId: string }[];
-  meetings: { id: string; dealId: string; title: string; startsAt: string }[];
+  meetings: { id: string; dealId: string; title: string; startsAt: string; askHint?: string }[];
   documents: { id: string; dealId?: string; kind: ConnectorDocument['kind']; title: string; createdAt: string; body?: string; mediaPath?: string; acl: string[] }[];
   portfolio: { company: string; sector: string }[];
+  display?: ScenarioDisplay;
 }
 
 export interface CrmSnapshot extends CrmFixture {}
@@ -19,9 +22,17 @@ export function loadCrm(): CrmSnapshot {
   return JSON.parse(readFileSync(join(dir, 'enterprise', 'crm.json'), 'utf8')) as CrmSnapshot;
 }
 
+export function scenarioDisplay(): ScenarioDisplay {
+  try {
+    return loadCrm().display ?? DEFAULT_DISPLAY;
+  } catch {
+    return DEFAULT_DISPLAY;
+  }
+}
+
 export interface CrmPerson { id: string; name: string; title: string }
 export interface CrmDeal { id: string; company: string; sector: string; stage: string; askUsd: number }
-export interface CrmMeeting { id: string; dealId: string; title: string; startsAt: string }
+export interface CrmMeeting { id: string; dealId: string; title: string; startsAt: string; askHint?: string }
 export interface CrmDocument { id: string; dealId: string | null; kind: string; title: string; createdAt: string; updatedAt: string; body: string | null; mediaPath: string | null }
 export interface CrmGrant { documentId: string; grantee: string }
 export interface CrmMembership { personId: string; principal: string }

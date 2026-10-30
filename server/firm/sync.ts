@@ -8,7 +8,7 @@ import { PgCrmReader, fixtureCrmReader, granteePrincipal, loadCrm, type CrmReade
 import { SecFormDConnector, loadFormD } from './connectors/formd.js';
 import type { ConnectorDocument } from './connectors/connector.js';
 import {
-  crmDocumentIds, deleteDocument, documentAcl, documentBody, ensureMemberships, firmDocuments, getFirmDb,
+  crmDocumentIds, deleteDocument, documentAcl, documentBody, ensureMeetingAskHint, ensureMemberships, firmDocuments, getFirmDb,
   saveReleaseProvenance, setConnectorError, setConnectorState, syncCrmSnapshot, syncDealTeam, syncFilings, syncMemberships, upsertDocument,
 } from './store.js';
 
@@ -26,8 +26,12 @@ function fixturesDir(): string {
 
 export function defaultReader(): CrmReader {
   const url = process.env.FIRM_DATABASE_URL;
-  if (!url) throw new Error('FIRM_DATABASE_URL is not set');
+  if (!url) return fixtureCrmReader(loadCrm());
   return new PgCrmReader(url);
+}
+
+export function fileMode(): boolean {
+  return !process.env.FIRM_DATABASE_URL;
 }
 
 export function testReader(): CrmReader {
@@ -76,23 +80,26 @@ function changedById<T extends { id: string }>(fresh: T[], current: T[]): T[] {
 }
 
 export async function runConnectorSync(deps: SyncDeps = {}): Promise<{ documents: number; extracted: number; crmError?: string }> {
-  const reader = deps.reader ?? (() => { try { return defaultReader(); } catch (err) { return null; } })();
+  const reader = deps.reader ?? (() => { try { return defaultReader(); } catch { return null; } })();
   let crmError: string | undefined;
   let docs: ConnectorDocument[] = [];
   if (!reader) {
-    crmError = 'FIRM_DATABASE_URL is not set';
+    crmError = fileMode() ? 'CRM fixtures are missing' : 'FIRM_DATABASE_URL is unreachable';
     setConnectorError('crm', crmError, nowIso());
   } else {
     try {
+      ensureMeetingAskHint();
       const cursor = lastCursor();
-      const [people, deals, meetings, portfolio, changed, ids, grants, memberships] = await Promise.all([
+      const [people, deals, readerMeetings, portfolio, changed, ids, grants, memberships] = await Promise.all([
         reader.people(), reader.deals(), reader.meetings(), reader.portfolio(),
         reader.documents(cursor), reader.documentIds(), reader.grants(), reader.memberships(),
       ]);
+      const hintById = new Map(loadCrm().meetings.map((meeting) => [meeting.id, meeting.askHint]));
+      const meetings = readerMeetings.map((meeting) => ({ ...meeting, askHint: meeting.askHint ?? hintById.get(meeting.id) }));
       const db = getFirmDb();
       const currentPeople = db.prepare(`select id, name, role as title from people`).all() as unknown as { id: string; name: string; title: string }[];
       const currentDeals = db.prepare(`select id, company, sector, stage, ask_usd as askUsd from deals`).all() as unknown as { id: string; company: string; sector: string; stage: string; askUsd: number }[];
-      const currentMeetings = db.prepare(`select id, deal_id as dealId, title, starts_at as startsAt from meetings`).all() as unknown as { id: string; dealId: string; title: string; startsAt: string }[];
+      const currentMeetings = db.prepare(`select id, deal_id as dealId, title, starts_at as startsAt, ask_hint as askHint from meetings`).all() as unknown as { id: string; dealId: string; title: string; startsAt: string; askHint?: string }[];
       const changedIds = new Set(changed.map((doc) => doc.id));
       for (const id of ids) {
         const now = aclFor(id, grants);

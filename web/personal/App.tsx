@@ -8,7 +8,7 @@ import {
 } from './client.js';
 import {
   Button, Card, Chip, Kicker, Avatar, VerdictPill, QuoteBlock,
-  StatusLine, Skeleton, Toast, Drawer, Sheet, Rule, HonestyBadge, FailedLine,
+  StatusLine, Skeleton, Toast, Drawer, Sheet, Rule, HonestyBadge, FailedLine, ScenarioBar,
 } from '../ui/components.js';
 
 type Route = 'today' | 'captures' | 'shared' | 'sources';
@@ -104,6 +104,7 @@ export default function App() {
           </div>
         </aside>
         <div className="min-w-0 flex-1">
+      {state?.dev && <div className="pt-4"><ScenarioBar dev={state.dev} side="yours" /></div>}
       <TopBar state={state} />
       {error !== '' && <p className="mt-3 rounded-lg border border-oxblood/20 bg-oxblood-soft/50 px-3 py-2 text-sm text-oxblood">{error}</p>}
       <nav className="mb-6 flex gap-2 border-b border-hairline lg:hidden" aria-label="Sections">
@@ -162,6 +163,8 @@ export default function App() {
         <ShareSheet
           claimId={shareFor.claimId}
           dealId={shareFor.dealId}
+          company={state.meetings.find((m) => m.dealId === shareFor.dealId)?.company ?? state.drafts.find((d) => d.kind === 'brief' && d.dealId === shareFor.dealId)?.company ?? 'firm'}
+          teamLabel={state.display.labels.team.charAt(0).toLowerCase() + state.display.labels.team.slice(1)}
           claimsById={claimsById}
           sourcesById={sourcesById}
           onClose={() => setShareFor(null)}
@@ -186,9 +189,9 @@ function TopBar({ state }: { state: PersonalState | null }) {
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[14px] border border-hairline bg-paper/90 px-4 py-3 shadow-[0_10px_30px_-20px_rgba(28,26,21,0.3)] backdrop-blur lg:mt-0">
         <div className="flex items-center gap-2.5">
-          <Avatar name="Alex Rivera" />
+          <Avatar name={state?.owner.name ?? 'Stevens'} />
           <div className="leading-tight">
-            <p className="text-sm font-bold">Alex Rivera · Associate</p>
+            <p className="text-sm font-bold">{state ? state.owner.name + ' · ' + (state.owner.title ?? state.owner.role) : 'Stevens'}</p>
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-smoke">Simulated sign-in</p>
           </div>
         </div>
@@ -281,7 +284,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
 }) {
   const brief = state.drafts.find((d) => d.id === meeting.briefId) ?? state.drafts.find((d) => d.kind === 'brief' && d.dealId === meeting.dealId);
   const answers = state.drafts.filter((d) => d.kind === 'answer' && d.dealId === meeting.dealId);
-  const [question, setQuestion] = useState('Should we take the second meeting?');
+  const [question, setQuestion] = useState(meeting.askHint ?? '');
   const [asking, setAsking] = useState(false);
   const team = meeting.team ?? [];
 
@@ -305,7 +308,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
           <CalendarDays size={19} aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="eyebrow text-brass">{meeting.origin === 'calendar' ? 'From your calendar' : meeting.company + ' · second meeting'}</p>
+          <p className="eyebrow text-brass">{meetingEyebrow(meeting)}</p>
           <h2 className="mt-1 font-display text-[26px] leading-tight">{meeting.title}</h2>
           <p className="mt-1 text-sm font-medium text-smoke">{formatMeetingTime(meeting.startsAt)}</p>
         </div>
@@ -341,6 +344,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
               dealId={meeting.dealId}
               claimsById={claimsById}
               sourcesById={sourcesById}
+              display={state.display}
               onShare={onShare}
             />
           ))}
@@ -349,7 +353,7 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
               <Kicker>From your notes and reading</Kicker>
             </div>
           )}
-          <SentenceList sentences={brief.sentences} claimsById={claimsById} sourcesById={sourcesById} />
+          <SentenceList sentences={brief.sentences} claimsById={claimsById} sourcesById={sourcesById} display={state.display} />
           <SuggestedQuestion sentences={brief.sentences} />
           <BriefFooter brief={brief} now={state.now} onReceipts={() => onReceipts(brief.id)} />
         </div>
@@ -371,14 +375,16 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
             {asking ? 'Asking…' : 'Ask'}
           </Button>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button
-            onClick={() => setQuestion('Should we take the second meeting?')}
-            className="rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-smoke hover:text-ink"
-          >
-            Should we take the second meeting?
-          </button>
-        </div>
+        {meeting.askHint && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              onClick={() => setQuestion(meeting.askHint as string)}
+              className="rounded-full border border-hairline px-3 py-1 text-xs font-semibold text-smoke hover:text-ink"
+            >
+              {meeting.askHint}
+            </button>
+          </div>
+        )}
         <p className="mt-2 text-xs text-smoke">{state.solo ? 'Answered from your notebook. No firm is connected.' : 'Your question goes to the firm\u2019s privy check. Nothing from your notebook does.'}</p>
       </div>
       {answers.map((answer) => (
@@ -388,11 +394,12 @@ function MeetingCard({ meeting, state, claimsById, sourcesById, onAsk, onShare, 
   );
 }
 
-function BridgeBlock({ bridge, dealId, claimsById, sourcesById, onShare }: {
+function BridgeBlock({ bridge, dealId, claimsById, sourcesById, display, onShare }: {
   bridge: { personalClaimId: string; workClaimId: string; relation: string; reason: string };
   dealId: string;
   claimsById: Map<string, Claim>;
   sourcesById: Map<string, SourceRef>;
+  display: PersonalState['display'];
   onShare: (claimId: string, dealId: string) => void;
 }) {
   const personal = claimsById.get(bridge.personalClaimId);
@@ -406,11 +413,11 @@ function BridgeBlock({ bridge, dealId, claimsById, sourcesById, onShare }: {
       <div className="grid md:grid-cols-2">
         <div className="border-b border-hairline bg-navy-soft/40 p-5 md:border-b-0 md:border-r">
           <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-navy">
-            <Building2 size={13} aria-hidden /> The deck says
+            <Building2 size={13} aria-hidden /> {display.labels.workColumn}
           </p>
           <p className="mt-2.5 font-display text-[17px] italic leading-relaxed">“{work.quote}”</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <Chip tone="enterprise">{sourceChip(workSource)}</Chip>
+            <Chip tone="enterprise">{sourceChip(workSource, display)}</Chip>
           </div>
           {workSource && <p className="mt-1.5 text-xs font-medium text-smoke">{workSource.title}</p>}
           {workSource?.kind === 'deck-photo' && (
@@ -419,7 +426,7 @@ function BridgeBlock({ bridge, dealId, claimsById, sourcesById, onShare }: {
         </div>
         <div className="bg-oxblood-soft/30 p-5">
           <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-oxblood">
-            <Ear size={13} aria-hidden /> You heard
+            <Ear size={13} aria-hidden /> {display.labels.personalColumn}
           </p>
           <p className="mt-2.5 font-display text-[17px] italic leading-relaxed">“{personal.quote}”</p>
           <p className="mt-2 text-xs font-medium text-smoke">{provenanceLine(personal, personalSource)}</p>
@@ -443,12 +450,19 @@ function BridgeBlock({ bridge, dealId, claimsById, sourcesById, onShare }: {
   );
 }
 
-function sourceChip(source: SourceRef | undefined): string {
+function meetingEyebrow(meeting: { origin: string; company: string; title: string }): string {
+  if (meeting.origin === 'calendar') return 'From your calendar';
+  if (meeting.title.startsWith(meeting.company + ' ')) return meeting.company + ' · ' + meeting.title.slice(meeting.company.length + 1);
+  return meeting.title;
+}
+
+function sourceChip(source: SourceRef | undefined, display: PersonalState['display']): string {
+  const labels = display.labels;
   if (!source) return 'The firm';
   if (source.kind === 'market-comps') return 'Public filing · SEC Form D';
   if (source.connector === 'sec-form-d') return 'Public filing · SEC Form D';
-  if (source.aclLabel === 'Partners') return 'Firm CRM · Partners';
-  return 'Firm CRM · Deal team';
+  if (source.aclLabel === 'Partners') return labels.sourcePrefix + ' · ' + labels.restricted;
+  return labels.sourcePrefix + ' · ' + labels.team;
 }
 
 function provenanceLine(claim: Claim, source: SourceRef | undefined): string {
@@ -500,10 +514,11 @@ function AudioReplay({ personal }: { personal: Claim }) {
   );
 }
 
-function SentenceList({ sentences, claimsById, sourcesById }: {
+function SentenceList({ sentences, claimsById, sourcesById, display }: {
   sentences: Draft['sentences'];
   claimsById: Map<string, Claim>;
   sourcesById: Map<string, SourceRef>;
+  display: PersonalState['display'];
 }) {
   const [open, setOpen] = useState<number | null>(null);
   if (sentences.length === 0) return <p className="font-display text-lg italic text-smoke">Nothing relevant in the record.</p>;
@@ -524,7 +539,7 @@ function SentenceList({ sentences, claimsById, sourcesById }: {
           ))}
           {open !== null && Math.floor(open / 10) === i && (
             <span className="mt-2 block rounded-md border border-hairline bg-paper p-3 text-sm">
-              {(sentence.citations[open % 10] && <CitationDetail citation={sentence.citations[open % 10]} claimsById={claimsById} sourcesById={sourcesById} />) ?? null}
+              {(sentence.citations[open % 10] && <CitationDetail citation={sentence.citations[open % 10]} claimsById={claimsById} sourcesById={sourcesById} display={display} />) ?? null}
             </span>
           )}
         </li>
@@ -533,10 +548,11 @@ function SentenceList({ sentences, claimsById, sourcesById }: {
   );
 }
 
-function CitationDetail({ citation, claimsById, sourcesById }: {
+function CitationDetail({ citation, claimsById, sourcesById, display }: {
   citation: Draft['sentences'][number]['citations'][number];
   claimsById: Map<string, Claim>;
   sourcesById: Map<string, SourceRef>;
+  display: PersonalState['display'];
 }) {
   if (citation.kind === 'Inference') return <span className="text-smoke">Stevens&apos; read from the cited lines.</span>;
   const claim = claimsById.get(citation.claimId);
@@ -546,7 +562,7 @@ function CitationDetail({ citation, claimsById, sourcesById }: {
     <span className="space-y-1.5">
       <span className="block font-display italic">“{citation.quote}”</span>
       <span className="flex flex-wrap gap-1.5">
-        <Chip tone={personal ? 'personal' : 'enterprise'}>{personal ? 'Your notebook · Only you' : sourceChip(source)}</Chip>
+        <Chip tone={personal ? 'personal' : 'enterprise'}>{personal ? 'Your notebook · Only you' : sourceChip(source, display)}</Chip>
         {source && <span className="text-xs text-smoke">{source.title}</span>}
       </span>
     </span>
@@ -597,16 +613,16 @@ function AnswerCard({ answer, state, claimsById, sourcesById, onReceipts }: {
     <div data-testid="answer" className="mt-6 rounded-md border border-hairline bg-paper p-4">
       <div className="flex items-center gap-2">
         <VerdictPill verdict={verdict} />
-        {answer.verdict?.routeTo && <span className="text-sm text-smoke">until a {answer.verdict.routeTo} reviews</span>}
+        {answer.verdict?.routeTo && <span className="text-sm text-smoke">until {escalation?.reviewerNoun ?? state.display.reviewerNoun} reviews</span>}
       </div>
       <div className="mt-3">
-        <SentenceList sentences={answer.sentences} claimsById={claimsById} sourcesById={sourcesById} />
+        <SentenceList sentences={answer.sentences} claimsById={claimsById} sourcesById={sourcesById} display={state.display} />
       </div>
       <p className="mt-3 text-sm text-smoke">{state.solo ? 'Answered from your notebook. No firm is connected.' : 'Stevens weighed information you are not privy to.'}</p>
       {escalation && (
         <p data-testid="escalation" className="mt-2 text-sm">
           {escalation.status === 'sent' ? (
-            <span>Sent to Morgan Hale · nothing enclosed · {formatClock(state.now)}</span>
+            <span>Sent to {escalation.toName ?? 'the ' + (escalation.to ? (state.display.roleTitles[escalation.to] ?? escalation.to) : 'reviewer')} · nothing enclosed · {formatClock(state.now)}</span>
           ) : (
             <span>Queued — can&apos;t reach the firm, will retry</span>
           )}
@@ -804,7 +820,7 @@ function NoteCard({ bundle }: { bundle: ItemBundle }) {
 
 function SharedView({ state, claimsById }: { state: PersonalState | null; claimsById: Map<string, Claim> }) {
   if (!state) return <Skeleton label="Loading shared…" />;
-  if (state.shares.length === 0) return <Card><p className="text-smoke">Nothing shared yet. Sharing sends one quote to the Helios record.</p></Card>;
+  if (state.shares.length === 0) return <Card><p className="text-smoke">Nothing shared yet. Sharing sends one quote to the firm record.</p></Card>;
   return (
     <div className="space-y-4">
       {state.shares.map((share) => {
@@ -843,9 +859,11 @@ function SourcesView({ state }: { state: PersonalState | null }) {
   );
 }
 
-function ShareSheet({ claimId, dealId, claimsById, sourcesById, onClose, onDone }: {
+function ShareSheet({ claimId, dealId, company, teamLabel, claimsById, sourcesById, onClose, onDone }: {
   claimId: string;
   dealId: string;
+  company: string;
+  teamLabel: string;
   claimsById: Map<string, Claim>;
   sourcesById: Map<string, SourceRef>;
   onClose: () => void;
@@ -872,8 +890,8 @@ function ShareSheet({ claimId, dealId, claimsById, sourcesById, onClose, onDone 
       <div className="mt-3">
         <QuoteBlock quote={claim.quote} provenance={(source?.title ?? 'Your notebook') + (claim.speaker ? ' · ' + claim.speaker : '') + (claim.at ? ' · ' + claim.at : '')} />
       </div>
-      <p className="mt-3 text-sm">It becomes part of the Helios record, visible to the deal team.</p>
-      <p className="mt-1 text-sm text-smoke">The rest of the talk stays in your notebook.</p>
+      <p className="mt-3 text-sm">It becomes part of the {company} record, visible to the {teamLabel}.</p>
+      <p className="mt-1 text-sm text-smoke">Everything else stays in your notebook.</p>
       <div className="mt-4 flex justify-end gap-2">
         <Button tone="plain" onClick={onClose}>Cancel</Button>
         <Button tone="brass" testid="share-confirm" onClick={confirm} disabled={sending}>{sending ? 'Sharing…' : 'Share'}</Button>

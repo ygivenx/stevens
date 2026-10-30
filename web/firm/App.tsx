@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Building2, Check, Inbox as InboxIcon, Landmark, LogIn, Scale, ShieldCheck, X } from 'lucide-react';
-import type { Claim, Draft, SourceRef } from '../../shared/data.js';
+import type { Claim, Draft, Person, SourceRef } from '../../shared/data.js';
 import {
   getState, getPeople, approveDraft, rejectDraft, getReceipts, mediaUrl, watchEvents,
-  currentViewerId, setViewerId, formatClock, millions,
+  currentViewerId, setViewerId, storedViewerId, formatClock, millions,
   type FirmState, type FirmInboxEntry,
 } from './client.js';
 import {
   Button, Card, Chip, Kicker, Avatar, QuoteBlock,
-  StatusLine, Skeleton, Toast, Drawer, HonestyBadge, FailedLine,
+  StatusLine, Skeleton, Toast, Drawer, HonestyBadge, FailedLine, ScenarioBar,
 } from '../ui/components.js';
 
 type Route = 'signin' | 'inbox' | 'deal' | 'sources';
@@ -36,7 +36,7 @@ export default function App() {
   const hash = useHash();
   const route = parseRoute(hash);
   const [state, setState] = useState<FirmState | null>(null);
-  const [people, setPeople] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [receiptsFor, setReceiptsFor] = useState<string | null>(null);
@@ -51,11 +51,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    getPeople().then(setPeople).catch(() => {});
-    const params = new URLSearchParams(window.location.search);
-    const as = params.get('as');
+    const as = new URLSearchParams(window.location.search).get('as');
     if (as) setViewerId(as);
-    load();
+    getPeople().then((list) => {
+      setPeople(list);
+      if (!storedViewerId()) {
+        const fallback = list.find((person) => person.role === 'Partner') ?? list[0];
+        if (fallback) setViewerId(fallback.id);
+      }
+      load();
+    }).catch(() => {
+      load();
+    });
   }, [load, hash]);
 
   useEffect(() => watchEvents(load), [load]);
@@ -93,12 +100,13 @@ export default function App() {
             </nav>
             {state && (
               <div className="mt-4 rounded-xl bg-ivory/80 p-3 text-[11px] leading-relaxed text-smoke">
-                {state.deals.length} deals · {state.inbox.length} in the inbox
+                {state.deals.length} {state.display.labels.unit} · {state.inbox.length} in the inbox
               </div>
             )}
           </div>
         </aside>
         <div className="min-w-0 flex-1">
+          {state?.dev && <div className="pt-4"><ScenarioBar dev={state.dev} side="firm" /></div>}
           <TopBar state={state} people={people} onSwitch={load} />
           {error !== '' && <p className="mt-3 rounded-lg border border-oxblood/20 bg-oxblood-soft/50 px-3 py-2 text-sm text-oxblood">{error}</p>}
           {route.name === 'signin' && <SigninView people={people} go={go} onToast={setToast} />}
@@ -149,7 +157,7 @@ function SideNav({ label, testid, active, onClick, icon }: { label: string; test
   );
 }
 
-function TopBar({ state, people, onSwitch }: { state: FirmState | null; people: { id: string; name: string; role: string }[]; onSwitch: () => void }) {
+function TopBar({ state, people, onSwitch }: { state: FirmState | null; people: Person[]; onSwitch: () => void }) {
   const current = currentViewerId();
   return (
     <header className="pb-5 pt-8">
@@ -159,9 +167,9 @@ function TopBar({ state, people, onSwitch }: { state: FirmState | null; people: 
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-3 rounded-[14px] border border-hairline bg-paper/90 px-4 py-3 shadow-[0_10px_30px_-20px_rgba(28,26,21,0.3)] backdrop-blur lg:mt-0">
         <div className="flex items-center gap-2.5">
-          <Avatar name={state?.viewer.name ?? 'Morgan Hale'} />
+          <Avatar name={state?.viewer.name ?? 'Stevens'} />
           <div className="leading-tight">
-            <p className="text-sm font-bold">{state ? state.viewer.name + ' · ' + state.viewer.role : 'Signing in…'}</p>
+            <p className="text-sm font-bold">{state ? state.viewer.name + ' · ' + (state.viewer.title ?? state.viewer.role) : 'Signing in…'}</p>
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-smoke">Simulated sign-in</p>
           </div>
         </div>
@@ -175,7 +183,7 @@ function TopBar({ state, people, onSwitch }: { state: FirmState | null; people: 
               className="rounded-full border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink"
             >
               {people.map((person) => (
-                <option key={person.id} value={person.id}>{person.name} · {person.role}</option>
+                <option key={person.id} value={person.id}>{person.name} · {person.title ?? person.role}</option>
               ))}
             </select>
           </label>
@@ -196,7 +204,7 @@ function TopBar({ state, people, onSwitch }: { state: FirmState | null; people: 
   );
 }
 
-function SigninView({ people, go, onToast }: { people: { id: string; name: string; role: string }[]; go: (path: string) => void; onToast: (m: string) => void }) {
+function SigninView({ people, go, onToast }: { people: Person[]; go: (path: string) => void; onToast: (m: string) => void }) {
   if (people.length === 0) return <Skeleton label="Loading people…" />;
   return (
     <Card testid="signin">
@@ -214,7 +222,7 @@ function SigninView({ people, go, onToast }: { people: { id: string; name: strin
             <Avatar name={person.name} />
             <span>
               <span className="block text-sm font-bold">{person.name}</span>
-              <span className="block text-xs text-smoke">{person.role}</span>
+              <span className="block text-xs text-smoke">{person.title ?? person.role}</span>
             </span>
             <LogIn size={15} aria-hidden className="ml-auto text-smoke" />
           </button>
@@ -251,7 +259,7 @@ function InboxView({ state, claimsById, sourcesById, go, onReceipts, onDone }: {
       {state.inbox.map((entry) => entry.kind === 'escalation' ? (
         <EscalationCard key={entry.id} entry={entry} state={state} go={go} onDone={onDone} />
       ) : (
-        <ReleasedQuoteCard key={entry.id} entry={entry} />
+        <ReleasedQuoteCard key={entry.id} entry={entry} state={state} />
       ))}
       <DecisionsSection state={state} claimsById={claimsById} sourcesById={sourcesById} go={go} onReceipts={onReceipts} onDone={onDone} />
     </div>
@@ -264,10 +272,8 @@ function EscalationCard({ entry, state, go, onDone }: {
   go: (path: string) => void;
   onDone: (message: string) => void;
 }) {
-  void state;
   void onDone;
-  const deal = { company: dealCompany(entry.dealId) };
-  void deal;
+  const company = companyOf(state, entry.dealId);
   return (
     <Card testid="inbox-escalation" lift>
       <div className="flex items-start gap-3">
@@ -276,14 +282,14 @@ function EscalationCard({ entry, state, go, onDone }: {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-[15px] leading-relaxed">
-            <span className="font-bold">{entry.from.name}</span> asked about <span className="font-bold">{companyFor(entry.dealId)}</span>. Stevens recommends: <span className="font-bold">hold until you review.</span>
+            <span className="font-bold">{entry.from.name}</span> asked about <span className="font-bold">{company}</span>. Stevens recommends: <span className="font-bold">hold until you review.</span>
           </p>
           <p className="mt-1.5 text-sm text-smoke">Enclosed from {entry.from.name.split(' ')[0]}&apos;s notebook: nothing.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {entry.decisionDraftId && (
               <Button tone="plain" testid="open-decision" onClick={() => go('inbox')}>Read the draft decision</Button>
             )}
-            <Button tone="plain" onClick={() => go('deals/' + entry.dealId)}>Open the {companyFor(entry.dealId)} record</Button>
+            <Button tone="plain" onClick={() => go('deals/' + entry.dealId)}>Open the {company} record</Button>
           </div>
         </div>
         <span className="shrink-0 text-xs text-smoke">{formatClock(entry.at)}</span>
@@ -292,18 +298,11 @@ function EscalationCard({ entry, state, go, onDone }: {
   );
 }
 
-function companyFor(dealId: string): string {
-  if (dealId === 'helios') return 'Helios';
-  if (dealId === 'meridian') return 'Meridian';
-  if (dealId === 'beacon') return 'Beacon';
-  return dealId;
+function companyOf(state: FirmState, dealId: string): string {
+  return state.deals.find((deal) => deal.id === dealId)?.company ?? dealId;
 }
 
-function dealCompany(dealId: string): string {
-  return companyFor(dealId);
-}
-
-function ReleasedQuoteCard({ entry }: { entry: Extract<FirmInboxEntry, { kind: 'released-quote' }> }) {
+function ReleasedQuoteCard({ entry, state }: { entry: Extract<FirmInboxEntry, { kind: 'released-quote' }>; state: FirmState }) {
   const provenance = entry.provenance.title + (entry.provenance.speaker ? ' · ' + entry.provenance.speaker : '') + (entry.provenance.at ? ' · ' + entry.provenance.at : '');
   return (
     <Card testid="released-quote" lift>
@@ -315,7 +314,7 @@ function ReleasedQuoteCard({ entry }: { entry: Extract<FirmInboxEntry, { kind: '
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <Chip tone="ok">Shared by {entry.from.name}</Chip>
-        <span className="text-xs text-smoke">{companyFor(entry.dealId)} · {formatClock(entry.at)}</span>
+        <span className="text-xs text-smoke">{companyOf(state, entry.dealId)} · {formatClock(entry.at)}</span>
       </div>
     </Card>
   );
@@ -361,20 +360,20 @@ function DecisionCard({ draft, state, claimsById, sourcesById, go, onReceipts, o
         onDone('Rejected and logged.');
       }
     } catch {
-      onDone('Could not record that. Only a Partner decides.');
+      onDone('Could not record that. Only ' + state.display.reviewerNoun + ' decides.');
     }
     setBusy(null);
   }
   return (
     <div data-testid="decision">
       <Card lift>
-        <Kicker>Draft decision · {companyFor(draft.dealId ?? '')}</Kicker>
+        <Kicker>Draft decision · {companyOf(state, draft.dealId ?? '')}</Kicker>
         <ol className="mt-3 space-y-3">
           {(draft.sentences ?? []).map((sentence, i) => (
             <li key={i} className="text-[15px] leading-relaxed">
               <span>{sentence.text} </span>
               {sentence.citations.map((citation, j) => (
-                <CitationMarker key={j} index={j} citation={citation} claimsById={claimsById} sourcesById={sourcesById} />
+                <CitationMarker key={j} index={j} citation={citation} claimsById={claimsById} sourcesById={sourcesById} display={state.display} />
               ))}
             </li>
           ))}
@@ -396,7 +395,7 @@ function DecisionCard({ draft, state, claimsById, sourcesById, go, onReceipts, o
         )}
         {draft.dealId && (
           <button onClick={() => go('deals/' + draft.dealId)} className="mt-3 text-xs font-semibold text-brass-deep underline hover:text-brass">
-            Open the {companyFor(draft.dealId)} record
+            Open the {companyOf(state, draft.dealId)} record
           </button>
         )}
       </Card>
@@ -404,11 +403,12 @@ function DecisionCard({ draft, state, claimsById, sourcesById, go, onReceipts, o
   );
 }
 
-function CitationMarker({ index, citation, claimsById, sourcesById }: {
+function CitationMarker({ index, citation, claimsById, sourcesById, display }: {
   index: number;
   citation: Draft['sentences'][number]['citations'][number];
   claimsById: Map<string, Claim>;
   sourcesById: Map<string, SourceRef>;
+  display: FirmState['display'];
 }) {
   const [open, setOpen] = useState(false);
   if (citation.kind === 'Inference') {
@@ -429,7 +429,7 @@ function CitationMarker({ index, citation, claimsById, sourcesById }: {
         <span className="mt-2 block rounded-md border border-hairline bg-ivory/70 p-3 text-sm">
           <span className="block font-display italic">“{citation.quote}”</span>
           <span className="mt-1.5 flex flex-wrap gap-1.5">
-            {source && <Chip tone="enterprise">{chipFor(source)}</Chip>}
+            {source && <Chip tone="enterprise">{chipFor(source, display)}</Chip>}
             {source && <span className="text-xs text-smoke">{source.title}</span>}
           </span>
         </span>
@@ -438,11 +438,21 @@ function CitationMarker({ index, citation, claimsById, sourcesById }: {
   );
 }
 
-function chipFor(source: SourceRef): string {
+function lowerFirst(text: string): string {
+  return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function ruleHeading(display: FirmState['display']): string {
+  const team = lowerFirst(display.labels.team);
+  return team.charAt(0).toUpperCase() + team.slice(1) + ' sees, ' + lowerFirst(display.labels.restricted) + ' weigh, walls hold';
+}
+
+function chipFor(source: SourceRef, display: FirmState['display']): string {
+  const labels = display.labels;
   if (source.kind === 'market-comps') return 'Public filing · SEC Form D';
-  if (source.kind === 'released-quote') return 'Shared by the deal team';
-  if (source.aclLabel === 'Partners') return 'Firm CRM · Partners';
-  return 'Firm CRM · Deal team';
+  if (source.kind === 'released-quote') return 'Shared by the ' + lowerFirst(labels.team);
+  if (source.aclLabel === 'Partners') return labels.sourcePrefix + ' · ' + labels.restricted;
+  return labels.sourcePrefix + ' · ' + labels.team;
 }
 
 function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDone }: {
@@ -454,12 +464,12 @@ function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDo
   onReceipts: (draftId: string) => void;
   onDone: (message: string) => void;
 }) {
-  if (!state) return <Skeleton label="Loading the deal…" />;
+  if (!state) return <Skeleton label="Loading the record…" />;
   const deal = state.deals.find((entry) => entry.id === dealId);
   if (!deal) {
     return (
       <Card>
-        <p className="text-smoke">No such deal.</p>
+        <p className="text-smoke">No such record.</p>
         <div className="mt-3"><Button tone="plain" onClick={() => go('inbox')}>Back to Inbox</Button></div>
       </Card>
     );
@@ -479,7 +489,7 @@ function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDo
         <p className="eyebrow text-brass">{deal.sector} · {deal.stage}</p>
         <h2 className="mt-1 font-display text-4xl">{deal.company}</h2>
         <p className="mt-1 text-sm text-smoke">
-          {deal.askUsd != null ? 'Raising ' + millions(deal.askUsd) : 'Terms undisclosed'} · {deal.team.map((m) => m.name).join(' · ')}
+          {deal.askUsd != null ? 'Raising ' + millions(deal.askUsd) + ' · ' : ''}{deal.team.map((m) => m.name).join(' · ')}
         </p>
         <div className="mt-3 flex items-center gap-2">
           <div className="flex -space-x-2">
@@ -497,7 +507,7 @@ function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDo
             <li key={doc.id} className="flex flex-wrap items-center gap-2 text-sm">
               <Building2 size={14} aria-hidden className="text-smoke" />
               <span className="font-semibold">{doc.title}</span>
-              <Chip tone={doc.aclLabel === 'Partners' ? 'enterprise' : 'mute'}>{chipFor(doc)}</Chip>
+              <Chip tone={doc.aclLabel === 'Partners' ? 'enterprise' : 'mute'}>{chipFor(doc, state.display)}</Chip>
               {doc.kind === 'deck-photo' && (
                 <img src={mediaUrl(doc.id)} alt={doc.title} className="mt-2 max-h-56 w-full rounded-lg border border-hairline object-cover" loading="lazy" />
               )}
@@ -508,7 +518,7 @@ function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDo
       </Card>
       {sharedQuotes.length > 0 && (
         <Card>
-          <Kicker>Shared with the deal team</Kicker>
+          <Kicker>Shared with the {lowerFirst(state.display.labels.team)}</Kicker>
           <div className="mt-3 space-y-3">
             {sharedQuotes.map((doc) => {
               const inboxed = inboxQuotes.find((entry) => entry.id === doc.id);
@@ -519,6 +529,7 @@ function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDo
           </div>
         </Card>
       )}
+      {market.length > 0 && (
       <Card>
         <Kicker>Market</Kicker>
         <h3 className="mt-1 font-display text-2xl">What public filings say</h3>
@@ -536,6 +547,7 @@ function DealView({ state, dealId, claimsById, sourcesById, go, onReceipts, onDo
           </div>
         ))}
       </Card>
+      )}
       <DecisionsSection state={state} claimsById={claimsById} sourcesById={sourcesById} go={go} onReceipts={onReceipts} onDone={onDone} />
     </div>
   );
@@ -584,18 +596,18 @@ function SourcesView({ state }: { state: FirmState | null }) {
       </Card>
       <Card>
         <Kicker>The rule</Kicker>
-        <h3 className="mt-1 font-display text-2xl">Team sees, partners weigh, walls hold</h3>
+        <h3 className="mt-1 font-display text-2xl">{ruleHeading(state.display)}</h3>
         <table className="mt-3 w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-smoke">
               <th className="py-1.5 pr-3">Source</th>
-              <th className="py-1.5 pr-3">Associate</th>
-              <th className="py-1.5">Partner</th>
+              <th className="py-1.5 pr-3">{state.display.roleTitles.Associate}</th>
+              <th className="py-1.5">{state.display.roleTitles.Partner}</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-t border-hairline"><td className="py-2 pr-3">Deal team</td><td className="py-2 pr-3">Read and quote</td><td className="py-2">Read and quote</td></tr>
-            <tr className="border-t border-hairline"><td className="py-2 pr-3">Partners only</td><td className="py-2 pr-3">Effect only, never content</td><td className="py-2">Read and quote</td></tr>
+            <tr className="border-t border-hairline"><td className="py-2 pr-3">{state.display.labels.team}</td><td className="py-2 pr-3">Read and quote</td><td className="py-2">Read and quote</td></tr>
+            <tr className="border-t border-hairline"><td className="py-2 pr-3">{state.display.labels.restricted} only</td><td className="py-2 pr-3">Effect only, never content</td><td className="py-2">Read and quote</td></tr>
             <tr className="border-t border-hairline"><td className="py-2 pr-3">Legal hold</td><td className="py-2 pr-3">Nothing</td><td className="py-2">Nothing</td></tr>
             <tr className="border-t border-hairline"><td className="py-2 pr-3">Your notebook</td><td className="py-2 pr-3">Only you</td><td className="py-2">Only the owner</td></tr>
           </tbody>
