@@ -3,6 +3,8 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { scenarioStores } from '../server/common/scenarios.js';
+import { anchorStartsAt } from '../server/common/anchor.js';
+import { assertValidNow } from '../server/common/clock.js';
 
 interface CrmFixture {
   people: { id: string; name: string; role: string }[];
@@ -66,6 +68,7 @@ async function main(): Promise<void> {
     console.log('Usage: npx tsx scripts/firm-crm-setup.ts [--scenario helios|forge|mercy] [--reset]\n');
     console.log('Idempotent. Creates the database, roles, grants and RLS from server/firm/crm/schema.sql,');
     console.log('loads the scenario crm.json as rows, and writes FIRM_DATABASE_URL to the scenario env file.');
+    console.log('Meeting times anchor to STEVENS_NOW when set, else the real clock, so every setup stays demo-ready.');
     console.log('--reset also truncates the Stevens projection tables (people, deals, meetings, documents,');
     console.log('memberships, connector_state, filings, release_provenance).');
     console.log('Needs FIRM_ADMIN_DATABASE_URL (localhost only) in the environment or .env.local.');
@@ -84,6 +87,10 @@ async function main(): Promise<void> {
   const fixturesRoot = process.env.STEVENS_FIXTURES_DIR
     ?? (id === 'helios' ? join(process.cwd(), 'fixtures') : join(process.cwd(), 'fixtures', id));
   const crm = JSON.parse(readFileSync(join(fixturesRoot, 'enterprise', 'crm.json'), 'utf8')) as CrmFixture;
+  assertValidNow(process.env.STEVENS_NOW);
+  const clockMs = process.env.STEVENS_NOW ? Date.parse(process.env.STEVENS_NOW) : Date.now();
+  const anchored = anchorStartsAt(crm.meetings.map((meeting) => meeting.startsAt), clockMs);
+  crm.meetings.forEach((meeting, i) => { meeting.startsAt = anchored[i]; });
   const maint = new Client({ connectionString: adminUrl.replace(/\/[^/]*$/, '/postgres') });
   await maint.connect();
   try {
@@ -169,7 +176,7 @@ async function main(): Promise<void> {
       const targets = ['people', 'deals', 'deal_team', 'meetings', 'documents', 'document_acl', 'portfolio', 'filings', 'release_provenance', 'connector_state', 'memberships'].filter((name) => names.has(name));
       if (targets.length > 0) await client.query(`truncate ${targets.map((name) => `"${name}"`).join(', ')}`);
     }
-    console.log('crm setup: ' + crm.documents.length + ' documents, ' + crm.people.length + ' people, ' + crm.deals.length + ' deals' + (stevensIsNew ? '; ' + stevens + ' password written to ' + stores.envFile : '') + (args.includes('--reset') ? '; projection truncated' : ''));
+    console.log('crm setup: ' + crm.documents.length + ' documents, ' + crm.people.length + ' people, ' + crm.deals.length + ' deals, meetings from ' + anchored[0] + (stevensIsNew ? '; ' + stevens + ' password written to ' + stores.envFile : '') + (args.includes('--reset') ? '; projection truncated' : ''));
   } finally {
     await client.end();
   }

@@ -5,3 +5,8 @@ export function nowIso(): string {
 export function nowMs(): number {
   return Date.parse(nowIso());
 }
+
+export function assertValidNow(raw: string | undefined): void {
+  if (raw === undefined || raw === '') return;
+  if (Number.isNaN(Date.parse(raw))) throw new Error('STEVENS_NOW=' + raw + ' is not a valid ISO timestamp');
+}

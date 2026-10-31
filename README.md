@@ -6,7 +6,7 @@ Future knowledge workers won't mostly write; they'll read, listen and absorb. St
 
 Stevens is named after the butler in *The Remains of the Day*: he prepares you before the delegation arrives, and he is discreet about everything. **Stevens drafts; the human decides.**
 
-Built solo for the Meta Global AI Developer Hackathon (Build for Your World). Status: v3.1 works per [SPEC.md](SPEC.md), on real personal sources with a real Postgres firm CRM. Submission due Nov 4, 2026.
+Built solo for the Meta Global AI Developer Hackathon (Build for Your World). Status: v3.3 works per [SPEC.md](SPEC.md): three demo scenarios, each on its own firm + personal Postgres databases, plus follow-up chat. Submission due Nov 4, 2026.
 
 ## The access rule
 
@@ -75,13 +75,31 @@ npm run dev
 
 `crm-db up` bootstraps Postgres 18 in the `pw` sandbox (idempotent, nothing else touched) and writes the admin URL to `.env.local`, never printed. `firm-crm-setup` builds the roles and loads `fixtures/enterprise/crm.json` as rows and grants. Then open http://localhost:5174/?as=p-morgan: Morgan sees the Helios and Beacon deals, Jordan sees Beacon and Meridian, and the legal-hold note stays out of every Stevens store. `STEVENS_DEV=1 stevensctl crm revoke <document> <principal>` downgrades a document within a minute.
 
-## Recorded demo (no key, no Postgres)
+## Recorded demos (no key, no Postgres)
 
 ```bash
-npm run demo
+npm run demo -- --scenario helios   # yours :5173, firm :5174
+npm run demo -- --scenario forge    # yours :5273, firm :5274
+npm run demo -- --scenario mercy    # yours :5373, firm :5374
 ```
 
-`npm run demo` rebuilds both databases from the committed, fixture-only ledgers in `fixtures/replay/`, pins the clock, serves both apps, and opens `web/demo.html` with the Associate and Partner laptops side by side. Both status lines read "Replaying a recorded run". To re-record after changing the flow: `stevensctl record-replay`, which refuses to run when any real source is configured, then review and commit `fixtures/replay/`.
+Each command replays a committed, fixture-only run: cards, bridges, the hold + escalation, the share, the approval, and (forge) a sample chat thread. Both status lines read "Replaying a recorded run". The replay carries its own date, so there is nothing to select. To re-record after changing the flow: `stevensctl record-replay --scenario <id>`, which refuses to run when any real source is configured, then review and commit that scenario's `replay/`.
+
+The three arcs: **helios** (Alex the associate spots a churn-definition gap before the Helios second meeting), **forge** (Rae the staff engineer's AI-evals reading punctures a vendor's 41% deflection claim), **mercy** (Dr. Osei's bookmarked Nature paper changes a tumor-board review; all clinical data fictional).
+
+## Live demos (Postgres + API key)
+
+```bash
+npm run dev          # helios, same ports as above
+npm run dev:forge
+npm run dev:mercy
+```
+
+Live stacks run the real pipeline against six Postgres databases (one firm + one personal per scenario). First boot for a scenario needs its databases built: `npx tsx scripts/firm-crm-setup.ts --scenario <id>` and `npx tsx scripts/personal-pg-setup.ts --scenario <id>` (or one `stevensctl seed --scenario <id>`, which runs both with `--reset` and restarts). Setup anchors the fixture meetings to the effective clock, so a fresh setup is always demo-ready for about half a day; re-run setup if the cards stop appearing.
+
+Pick the demo date with `STEVENS_NOW`: `STEVENS_NOW=2026-10-28T14:00:00-04:00 npm run dev:mercy`. An invalid value fails at boot with the value in the message. `stevensctl stack up --scenario <id> --now <ISO>` pins a verify instance the same way and remembers the pin across restarts; `seed` forwards it to setup so dates stay coherent.
+
+Follow-up chat runs only on live stacks (one turn costs a few cents). A full live run of one scenario costs on the order of a dollar; the recorded demos cost nothing.
 
 ## Repo map
 
