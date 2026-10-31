@@ -45,10 +45,13 @@ SCENARIOS = {
 SCENARIO_ENV = {'helios': '.env.local', 'forge': '.env.forge', 'mercy': '.env.mercy'}
 
 
-def scenario_setup(scn):
+def scenario_setup(scn, now=None):
     for script in ('scripts/firm-crm-setup.ts', 'scripts/personal-pg-setup.ts'):
         plus('npx tsx %s --scenario %s --reset' % (script, scn))
-        setup = subprocess.run(['npx', 'tsx', script, '--scenario', scn, '--reset'], cwd=ROOT, capture_output=True, text=True, timeout=180)
+        env = dict(os.environ)
+        if now:
+            env['STEVENS_NOW'] = now
+        setup = subprocess.run(['npx', 'tsx', script, '--scenario', scn, '--reset'], cwd=ROOT, capture_output=True, text=True, timeout=180, env=env)
         print(setup.stdout, end='')
         if setup.returncode != 0:
             return fail('%s --scenario %s failed; run stevensctl crm-db up first (%s)' % (script, scn, setup.stderr.strip()[-200:]))
@@ -64,8 +67,42 @@ def scenario_arg(argv):
     return os.environ.get('STEVENS_SCENARIO')
 
 
+def seed_now(name, argv):
+    if '--now' in argv:
+        i = argv.index('--now')
+        if i + 1 >= len(argv):
+            return 'invalid'
+        if not check_now(argv[i + 1]):
+            return 'invalid'
+        return argv[i + 1]
+    return instance_now(name)
+
+
 def scenario_file(name):
     return os.path.join(instance_dir(name), 'scenario')
+
+
+def instance_now_file(name):
+    return os.path.join(instance_dir(name), 'now')
+
+
+def instance_now(name):
+    path = instance_now_file(name)
+    if os.path.exists(path):
+        with open(path) as f:
+            stored = f.read().strip()
+        if stored:
+            return stored
+    return None
+
+
+def check_now(value):
+    try:
+        datetime.datetime.fromisoformat(value)
+        return True
+    except ValueError:
+        return False
+
 
 
 def instance_scenario(name, argv):
@@ -354,6 +391,12 @@ def cmd_stack(argv):
             if i + 1 >= len(argv):
                 return fail('stack up --now needs an ISO timestamp')
             now = argv[i + 1]
+            if not check_now(now):
+                return fail('stack up --now needs an ISO timestamp, got %s' % now)
+            with open(instance_now_file(name), 'w') as f:
+                f.write(now + '\n')
+        elif os.path.exists(instance_now_file(name)):
+            os.remove(instance_now_file(name))
         logpath = stack_logfile(name)
         plus('npm run dev > %s' % logpath)
         log = open(logpath, 'a')
@@ -418,6 +461,8 @@ def cmd_stack(argv):
         now_args = []
         if '--now' in argv:
             now_args = ['--now', argv[argv.index('--now') + 1]]
+        elif instance_now(name):
+            now_args = ['--now', instance_now(name)]
         rc = cmd_stack(['down', '--instance', name])
         if rc != 0:
             return rc
@@ -453,11 +498,12 @@ def cmd_seed(argv):
     name = instance_name(argv)
     if name is None or '--help' in argv:
         print('stevensctl seed: stage fixtures + fresh ledger for this instance.\n')
-        print('Usage: stevensctl seed [--instance NAME] [--scenario helios|forge|mercy]\n')
+        print('Usage: stevensctl seed [--instance NAME] [--scenario helios|forge|mercy] [--now ISO]\n')
         print('Verifies the scenario manifest.json, rebuilds this instance vault from')
         print('personal/vault/, empties its inbox, truncates both process')
         print('ledgers, resets the Meta call counter and sets the fake to normal.')
         print('Runs both setup scripts for the scenario (firm CRM + personal database, reset),')
+        print('anchoring meeting times to --now when given, else the instance pin, else the real clock,')
         print('then restarts so both processes rebuild from fixtures.\n')
         print('Examples:')
         print('  stevensctl stack up && stevensctl seed')
@@ -517,13 +563,16 @@ def cmd_seed(argv):
     if os.path.exists(derived):
         shutil.rmtree(derived)
     print('seed: %d fixtures verified, state fresh, fake normal, counter 0' % len(entries))
-    rc = scenario_setup(scn)
+    now = seed_now(name, argv)
+    if now == 'invalid':
+        return fail('seed --now needs an ISO timestamp')
+    rc = scenario_setup(scn, now)
     if rc != 0:
         return rc
     print('seed: restarting the stack so both processes rebuild from fixtures')
     restart_argv = ['restart', '--instance', name, '--scenario', scn]
-    if '--now' in argv:
-        restart_argv += ['--now', argv[argv.index('--now') + 1]]
+    if now:
+        restart_argv += ['--now', now]
     return cmd_stack(restart_argv)
 
 
@@ -1473,7 +1522,7 @@ def cmd_record_replay(argv):
     for root, _, files in os.walk(vault_dir):
         for name in files:
             os.utime(os.path.join(root, name), (hour_ago, hour_ago))
-    rc = scenario_setup(scn)
+    rc = scenario_setup(scn, REPLAY_NOW)
     if rc != 0:
         return rc
     env = dict(os.environ)

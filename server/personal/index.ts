@@ -1,8 +1,10 @@
 import { serve } from '@hono/node-server';
 import { loadEnvFiles } from '../common/env.js';
+import { assertValidNow } from '../common/clock.js';
 import { readFileSync, existsSync } from 'node:fs';
 
 loadEnvFiles();
+assertValidNow(process.env.STEVENS_NOW);
 import { join, extname, sep } from 'node:path';
 import { createApp } from '../common/app.js';
 import { readAll } from '../common/ledger/store.js';

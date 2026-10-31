@@ -1,8 +1,10 @@
 import { serve } from '@hono/node-server';
 import { loadEnvFiles } from '../common/env.js';
+import { assertValidNow } from '../common/clock.js';
 import { join, sep } from 'node:path';
 
 loadEnvFiles();
+assertValidNow(process.env.STEVENS_NOW);
 import { createApp } from '../common/app.js';
 import { personForToken, seedPeople } from './agent-auth.js';
 import { agentContext, agentFromHeader, agentMedia, agentMeetings, agentMeta, isAgentPurpose } from './agent.js';
